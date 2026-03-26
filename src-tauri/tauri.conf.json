@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicerdicer/tauri/refs/heads/v2/crates/tauri-schema-generator/schemas/config.schema.json",
+  "productName": "ProductaFlows",
+  "version": "0.1.0",
+  "identifier": "com.productaflows.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ProductaFlows",
+        "width": 1400,
+        "height": 900
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

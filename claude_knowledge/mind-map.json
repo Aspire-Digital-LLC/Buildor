@@ -1,0 +1,47 @@
+{
+  "title": "ProductaFlows Knowledge Base",
+  "description": "Index of all knowledge files. Claude should read this file at the start of every session to understand what knowledge is available and find relevant context by keyword matching.",
+  "instructions": "Match your current task against the keywords below to identify which files to read. If no keywords match, scan the descriptions. After any session that produces new learnings, update this map via the /document skill.",
+  "files": [
+    {
+      "file": "codebase_structure.md",
+      "description": "Project directory layout, module boundaries, and file organization conventions",
+      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file"]
+    },
+    {
+      "file": "tech_stack.md",
+      "description": "Technology choices, versions, dependencies, and rationale for each",
+      "keywords": ["stack", "dependencies", "libraries", "framework", "version", "package", "tauri", "react", "rust"]
+    },
+    {
+      "file": "architecture.md",
+      "description": "System architecture, data flow, component relationships, and design patterns",
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window"]
+    },
+    {
+      "file": "decisions.md",
+      "description": "Architecture and design decisions with rationale (why X over Y)",
+      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected"]
+    },
+    {
+      "file": "gotchas.md",
+      "description": "Surprising behaviors, bugs encountered, and non-obvious pitfalls",
+      "keywords": ["gotcha", "bug", "surprising", "pitfall", "workaround", "issue", "broken", "unexpected"]
+    },
+    {
+      "file": "patterns.md",
+      "description": "Established code patterns, conventions, and reusable approaches in this project",
+      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template"]
+    },
+    {
+      "file": "local_learnings.md",
+      "description": "OS-specific, tooling, and machine-specific issues and solutions (gitignored)",
+      "keywords": ["local", "OS", "windows", "mac", "linux", "tooling", "environment", "setup", "install"]
+    },
+    {
+      "file": "project_status.md",
+      "description": "Current project phase, completed work, in-progress features, and known issues",
+      "keywords": ["status", "progress", "done", "todo", "current", "phase", "roadmap", "what's done", "what's next"]
+    }
+  ]
+}

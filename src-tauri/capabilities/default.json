@@ -1,0 +1,19 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for ProductaFlows",
+  "windows": ["main", "breakout-*"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-create",
+    "core:window:allow-close",
+    "core:window:allow-set-title",
+    "core:webview:default",
+    "core:event:default",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "shell:default",
+    "dialog:default",
+    "dialog:allow-open"
+  ]
+}
