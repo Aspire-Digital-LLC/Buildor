@@ -64,3 +64,57 @@ Architectural and design decisions with rationale. Each entry explains why X was
 **Rejected**: App-internal storage only
 
 **Why**: Teams need to share, version, and review workflow changes. A git repo provides PRs, history, and branch protection for free. The app auto-pulls on launch to keep everyone current.
+
+---
+
+## Tab-Based Workspace over Router Pages
+
+**Choice**: VS Code-style tabs where each open panel is a tab scoped to a project
+**Rejected**: React Router single-panel navigation (one panel visible at a time)
+
+**Why**: Developers need multiple panels open simultaneously — Code Viewer for one project, Source Control for another. Sidebar icons become project-aware launchers (click → dropdown of loaded projects → opens a tab). Tabs have close buttons, show "Panel - RepoName" titles. This matches the mental model of "I have 5 worktrees across 2 projects" rather than "I'm looking at one thing at a time."
+
+---
+
+## Start Session as the Primary Workflow Entry Point
+
+**Choice**: "Start Session" modal as the main way to begin work — creates a worktree with structured naming
+**Rejected**: Manually creating worktrees and branches
+
+**Why**: The developer's focus is: open Claude, for a project, for a worktree, off a branch. The session modal captures this in one flow: pick project, pick base branch, pick type (bug/feature/issue/docs/release), optionally link a GitHub issue, auto-generate branch name via Haiku slug, create worktree, optionally launch Claude Chat. Structured branch naming (`{type}-{base}/{issue#}/{slug}`) ensures consistency across the team.
+
+---
+
+## Worktree-per-Session Model
+
+**Choice**: Each development session creates a git worktree as its isolated workspace
+**Rejected**: Working directly on branches in the main checkout
+
+**Why**: Worktrees provide true isolation — multiple sessions can run in parallel without conflicts. Each worktree gets its own Claude Code instance scoped to its directory. Cleanup is simple: remove the worktree. The Worktree Manager shows all open sessions grouped by project with close individual/per-project/global options.
+
+---
+
+## Haiku Subagent for Slug Generation
+
+**Choice**: Spawn a Claude Code Haiku subagent to generate branch name slugs from issue descriptions
+**Rejected**: Manual slug entry, or simple string truncation
+
+**Why**: Haiku is cheap and fast. It produces meaningful, readable slugs from natural language descriptions or GitHub issue titles. Runs through Claude Code (subscription auth), no separate API key needed. The alternative — asking the user to type a slug — adds friction to the session creation flow.
+
+---
+
+## GitHub Issue Downloads Scoped to Session Lifecycle
+
+**Choice**: Downloaded issue data (text, images) stored in `~/.productaflows/projects/{name}/sessions/{worktree-slug}/`, destroyed when session closes
+**Rejected**: Storing issue data in the repo or keeping it permanently
+
+**Why**: Issue context is only needed during the active session. Storing it in the app's data directory (not the repo) avoids pollution. Tying cleanup to session close ensures no orphaned artifacts. Images are downloaded locally so Claude can analyze them without network dependencies during the session.
+
+---
+
+## Version in Native Title Bar
+
+**Choice**: Version displayed in Tauri's native window title bar ("ProductaFlows v0.0.1")
+**Rejected**: Custom rendered title bar within the webview
+
+**Why**: A custom title bar created a duplicate bar below the native one — confusing and wasteful of vertical space. The native title bar is free, always visible, and consistent with OS conventions. Version comes from tauri.conf.json, synced with the VERSION file.

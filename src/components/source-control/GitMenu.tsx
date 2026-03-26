@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useProjectStore, useGitStore } from '@/stores';
+import { useTabContext } from '@/contexts/TabContext';
 import {
   gitMerge,
   gitRebase,
@@ -32,7 +33,9 @@ export function GitMenu() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const { activeProject } = useProjectStore();
+  const { projectName } = useTabContext();
+  const { projects } = useProjectStore();
+  const activeProject = projects.find((p) => p.name === projectName) || null;
   const { refreshStatus } = useGitStore();
   const repoPath = activeProject?.repoPath;
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { GitStatus, Branch } from '@/types';
+import { readFileContent } from '@/utils/commands/filesystem';
 import {
   getGitStatus,
   getFileDiffContent,
@@ -40,6 +41,7 @@ interface GitState {
   pull: (repoPath: string) => Promise<void>;
   discardFile: (repoPath: string, filePath: string) => Promise<void>;
   viewDiff: (repoPath: string, filePath: string, staged: boolean) => Promise<void>;
+  viewUntrackedDiff: (repoPath: string, filePath: string) => Promise<void>;
   closeDiff: () => void;
   setCommitMessage: (msg: string) => void;
 }
@@ -172,6 +174,24 @@ export const useGitStore = create<GitState>((set, get) => ({
           staged,
           before,
           after,
+          language: detectLanguage(filePath),
+        },
+      });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  viewUntrackedDiff: async (repoPath, filePath) => {
+    try {
+      const fullPath = repoPath.replace(/\\/g, '/') + '/' + filePath;
+      const content = await readFileContent(fullPath);
+      set({
+        diff: {
+          filePath,
+          staged: false,
+          before: '',
+          after: content,
           language: detectLanguage(filePath),
         },
       });

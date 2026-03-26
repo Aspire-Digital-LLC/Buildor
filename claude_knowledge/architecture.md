@@ -89,3 +89,65 @@ All windows share one Rust backend process
 - App manages all pipeline state — no tokens spent on task management
 - Haiku routing keeps skill injection cost minimal
 - Context files are scoped — each phase only sees what it needs
+
+---
+
+## Tab System (replacing Router)
+
+The main window uses a tab-based workspace instead of single-panel routing:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ [Code Viewer - OptiAI] [SC - SideProject] [SC - OptiAI] │  ← tabs
+├────┬────────────────────────────────────────────────────┤
+│    │                                                     │
+│ S  │  Active tab content                                 │
+│ I  │                                                     │
+│ D  │  (each tab is scoped to a project/worktree)         │
+│ E  │                                                     │
+│ B  │                                                     │
+│ A  │                                                     │
+│ R  │                                                     │
+│    │                                                     │
+├────┴────────────────────────────────────────────────────┤
+│ [Start Session]                                          │  ← bottom bar
+└─────────────────────────────────────────────────────────┘
+```
+
+- Sidebar icons are **launchers**: click → dropdown of loaded projects → opens a new tab
+- Each tab has a title like "Code Viewer - RepoName", an X to close
+- Multiple tabs can be open for different projects/panels simultaneously
+- Tab state managed in Zustand, not React Router
+
+## Session Lifecycle
+
+```
+Start Session (modal)
+  → Pick project
+  → Pick base branch
+  → Pick type (bug/feature/issue/docs/release)
+  → Optional: GitHub issue number (downloads issue + images)
+  → Haiku subagent generates slug
+  → Branch: {type}-{base}/{issue#}/{slug}
+  → git worktree add
+  → Animation → Session created
+  → Optional: Launch Claude Chat (breakout window, 50% screen)
+
+During Session:
+  → Claude Chat window scoped to worktree directory
+  → Source Control tab scoped to worktree
+  → Code Viewer tab scoped to worktree
+  → Issue data in ~/.productaflows/projects/{name}/sessions/{slug}/
+
+Close Session:
+  → git worktree remove
+  → Delete session data (issue downloads)
+  → Close associated tabs and Claude window
+```
+
+## Worktree Manager
+
+Displays open sessions/worktrees grouped by project:
+- Only shows projects that have open worktrees
+- Close individual worktree, all in a project, or global close all
+- Each entry shows: branch name, worktree path, type badge

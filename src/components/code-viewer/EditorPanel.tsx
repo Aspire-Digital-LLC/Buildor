@@ -1,10 +1,13 @@
 import Editor from '@monaco-editor/react';
 import { useFileTreeStore } from '@/stores';
 import { useProjectStore } from '@/stores';
+import { useTabContext } from '@/contexts/TabContext';
 
 export function EditorPanel() {
   const { selectedFilePath, fileContent, fileLanguage, isLoadingFile } = useFileTreeStore();
-  const { activeProject } = useProjectStore();
+  const { projectName } = useTabContext();
+  const { projects } = useProjectStore();
+  const activeProject = projects.find((p) => p.name === projectName) || null;
 
   if (!selectedFilePath) {
     return (

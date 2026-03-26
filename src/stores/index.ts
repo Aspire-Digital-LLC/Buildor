@@ -4,3 +4,4 @@ export { useFlowStore } from './flowStore';
 export { useClaudeStore } from './claudeStore';
 export { useWindowStore } from './windowStore';
 export { useFileTreeStore } from './fileTreeStore';
+export { useTabStore } from './tabStore';

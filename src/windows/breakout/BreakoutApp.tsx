@@ -5,6 +5,12 @@ import { FlowBuilder } from '../../components/flow-builder/FlowBuilder';
 import { ClaudeChat } from '../../components/claude-chat/ClaudeChat';
 import { CommandPalette } from '../../components/command-palette/CommandPalette';
 import { WorktreeManager } from '../../components/worktree-manager/WorktreeManager';
+import { ProjectSwitcher } from '../../components/project-switcher/ProjectSwitcher';
+import { PlaceholderPanel } from '../../components/shared/PlaceholderPanel';
+
+function SettingsPanel() {
+  return <PlaceholderPanel title="Settings" description="Coming soon" />;
+}
 
 const panelMap: Record<PanelType, React.ComponentType> = {
   'source-control': SourceControl,
@@ -13,6 +19,8 @@ const panelMap: Record<PanelType, React.ComponentType> = {
   'claude-chat': ClaudeChat,
   'command-palette': CommandPalette,
   'worktree-manager': WorktreeManager,
+  'projects': ProjectSwitcher,
+  'settings': SettingsPanel,
 };
 
 const panelLabels: Record<PanelType, string> = {
@@ -22,6 +30,8 @@ const panelLabels: Record<PanelType, string> = {
   'claude-chat': 'Claude Chat',
   'command-palette': 'Command Palette',
   'worktree-manager': 'Worktree Manager',
+  'projects': 'Projects',
+  'settings': 'Settings',
 };
 
 interface BreakoutAppProps {

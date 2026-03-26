@@ -2,9 +2,10 @@ interface UntrackedListProps {
   files: string[];
   onStage: (path: string) => void;
   onStageAll: () => void;
+  onClickFile?: (path: string) => void;
 }
 
-export function UntrackedList({ files, onStage, onStageAll }: UntrackedListProps) {
+export function UntrackedList({ files, onStage, onStageAll, onClickFile }: UntrackedListProps) {
   if (files.length === 0) return null;
 
   return (
@@ -38,10 +39,12 @@ export function UntrackedList({ files, onStage, onStageAll }: UntrackedListProps
       {files.map((file) => (
         <div
           key={file}
+          onClick={() => onClickFile?.(file)}
           style={{
             display: 'flex',
             alignItems: 'center',
             padding: '3px 12px',
+            cursor: onClickFile ? 'pointer' : 'default',
             fontSize: 13,
             color: '#adbac7',
             fontFamily: "'Cascadia Code', 'Consolas', monospace",
@@ -69,7 +72,10 @@ export function UntrackedList({ files, onStage, onStageAll }: UntrackedListProps
             {file}
           </span>
           <button
-            onClick={() => onStage(file)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStage(file);
+            }}
             title="Stage file"
             style={{
               background: 'transparent',

@@ -4,7 +4,16 @@ export type PanelType =
   | 'flow-builder'
   | 'claude-chat'
   | 'command-palette'
-  | 'worktree-manager';
+  | 'worktree-manager'
+  | 'projects'
+  | 'settings';
+
+export interface Tab {
+  id: string;
+  panelType: PanelType;
+  projectName?: string;
+  title: string;
+}
 
 export interface WindowConfig {
   label: string;

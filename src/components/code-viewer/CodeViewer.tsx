@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import { useProjectStore, useFileTreeStore } from '@/stores';
+import { useTabContext } from '@/contexts/TabContext';
 import { FileTree } from './FileTree';
 import { EditorPanel } from './EditorPanel';
 
 export function CodeViewer() {
-  const { activeProject } = useProjectStore();
+  const { projectName } = useTabContext();
+  const { projects } = useProjectStore();
+  const activeProject = projects.find((p) => p.name === projectName) || null;
   const { tree, isLoadingTree, loadTree, clearSelection } = useFileTreeStore();
 
   useEffect(() => {
