@@ -351,10 +351,11 @@ export function ClaudeChatWindow() {
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
     await stopSession(sessionId);
-    setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Session stopped.' }] }]);
     setSessionId(null);
     setIsSending(false);
-  }, [sessionId]);
+    // Auto-restart so user can keep typing
+    if (workingDir) startClaude(workingDir);
+  }, [sessionId, workingDir]);
 
   // Show/hide slash command menu based on input
   const handleInputChange = (value: string) => {
@@ -402,14 +403,10 @@ export function ClaudeChatWindow() {
       setShowModelPicker(false);
       return;
     }
-    // Escape interrupts while Claude is thinking
+    // Escape interrupts while Claude is thinking — auto-restarts session
     if (e.key === 'Escape' && isSending && sessionId) {
       e.preventDefault();
-      stopSession(sessionId).then(() => {
-        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Interrupted.' }] }]);
-        setSessionId(null);
-        setIsSending(false);
-      });
+      handleStop();
       return;
     }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -577,15 +574,15 @@ export function ClaudeChatWindow() {
             />
             {isSending ? (
               <button onClick={handleStop} style={{
-                background: '#da3633', border: 'none', color: '#fff',
+                background: '#d29922', border: 'none', color: '#fff',
                 borderRadius: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-              }} title="Stop (Esc)">
+              }} title="Interrupt (Esc)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="#fff" strokeWidth="2" />
-                  <rect x="8" y="8" width="8" height="8" rx="1" fill="#fff" />
+                  <rect x="5" y="4" width="4" height="16" rx="1" fill="#fff" />
+                  <rect x="15" y="4" width="4" height="16" rx="1" fill="#fff" />
                 </svg>
-                Stop
+                Pause
               </button>
             ) : (
               <button onClick={handleSend} disabled={!input.trim()} style={{
