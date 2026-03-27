@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Project } from '@/types';
+import { logEvent } from '@/utils/commands/logging';
 import {
   listProjects,
   addProject as addProjectCmd,
@@ -57,8 +58,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         activeProject: activeWithBranch,
         isLoading: false,
       });
+      logEvent({ functionArea: 'project', level: 'info', operation: 'load-projects', message: `Loaded ${projectsWithBranch.length} project(s)` }).catch(() => {});
     } catch (e) {
       set({ error: String(e), isLoading: false });
+      logEvent({ functionArea: 'project', level: 'error', operation: 'load-projects', message: String(e) }).catch(() => {});
     }
   },
 
@@ -66,6 +69,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       await setActiveProjectCmd(project.name);
       set({ activeProject: project, error: null });
+      logEvent({ functionArea: 'project', level: 'info', operation: 'set-active', message: `Set active project: ${project.name}` }).catch(() => {});
     } catch (e) {
       set({ error: String(e) });
     }
@@ -75,8 +79,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       await addProjectCmd(name, path);
       await get().loadProjects();
+      logEvent({ functionArea: 'project', level: 'info', operation: 'add-project', message: `Added project: ${name} (${path})` }).catch(() => {});
     } catch (e) {
       set({ error: String(e) });
+      logEvent({ functionArea: 'project', level: 'error', operation: 'add-project', message: `Failed to add ${name}: ${String(e)}` }).catch(() => {});
       throw e; // Re-throw so the UI can show the error
     }
   },
@@ -89,6 +95,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         set({ activeProject: null });
       }
       await get().loadProjects();
+      logEvent({ functionArea: 'project', level: 'info', operation: 'remove-project', message: `Removed project: ${name}` }).catch(() => {});
     } catch (e) {
       set({ error: String(e) });
     }

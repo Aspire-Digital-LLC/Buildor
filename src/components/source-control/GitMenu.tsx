@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { logEvent } from '@/utils/commands/logging';
 import { useProjectStore, useGitStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import {
@@ -66,12 +67,35 @@ export function GitMenu() {
   };
 
   const runAndRefresh = async (fn: () => Promise<unknown>, successMsg: string) => {
+    const startTime = new Date().toISOString();
     try {
       await fn();
       await refreshStatus(repoPath);
+      const endTime = new Date().toISOString();
+      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
       setFeedback(successMsg);
+      logEvent({
+        repo: repoPath || undefined,
+        functionArea: 'source-control',
+        level: 'info',
+        operation: 'git-menu',
+        message: successMsg,
+        endTime,
+        durationMs,
+      }).catch(() => {});
     } catch (e) {
+      const endTime = new Date().toISOString();
+      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
       setFeedback(`Error: ${e}`);
+      logEvent({
+        repo: repoPath || undefined,
+        functionArea: 'source-control',
+        level: 'error',
+        operation: 'git-menu',
+        message: String(e),
+        endTime,
+        durationMs,
+      }).catch(() => {});
     }
     setModal('none');
     setOpen(false);

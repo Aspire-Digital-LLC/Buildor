@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GitStatus, Branch } from '@/types';
 import { readFileContent } from '@/utils/commands/filesystem';
+import { logEvent } from '@/utils/commands/logging';
 import {
   getGitStatus,
   getFileDiffContent,
@@ -71,8 +72,10 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const status = await getGitStatus(repoPath);
       set({ status, isLoading: false });
+      logEvent({ repo: repoPath, functionArea: 'source-control', level: 'debug', operation: 'refresh-status', message: `${status.staged.length} staged, ${status.unstaged.length} unstaged, ${status.untracked.length} untracked` }).catch(() => {});
     } catch (e) {
       set({ error: String(e), isLoading: false });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'refresh-status', message: String(e) }).catch(() => {});
     }
   },
 
@@ -88,36 +91,44 @@ export const useGitStore = create<GitState>((set, get) => ({
   stageFiles: async (repoPath, files) => {
     try {
       await gitStage(repoPath, files);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'stage', message: `Staged ${files.length} file(s): ${files.join(', ')}` }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'stage', message: String(e) }).catch(() => {});
     }
   },
 
   unstageFiles: async (repoPath, files) => {
     try {
       await gitUnstage(repoPath, files);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'unstage', message: `Unstaged ${files.length} file(s): ${files.join(', ')}` }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'unstage', message: String(e) }).catch(() => {});
     }
   },
 
   stageAll: async (repoPath) => {
     try {
       await gitStageAll(repoPath);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'stage-all', message: 'Staged all files' }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'stage-all', message: String(e) }).catch(() => {});
     }
   },
 
   unstageAll: async (repoPath) => {
     try {
       await gitUnstageAll(repoPath);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'unstage-all', message: 'Unstaged all files' }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'unstage-all', message: String(e) }).catch(() => {});
     }
   },
 
@@ -130,10 +141,12 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const hash = await gitCommit(repoPath, commitMessage);
       set({ commitMessage: '', error: null });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'commit', message: `Committed: ${commitMessage} (${hash})` }).catch(() => {});
       await get().refreshStatus(repoPath);
       return hash;
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'commit', message: String(e) }).catch(() => {});
       throw e;
     }
   },
@@ -141,27 +154,33 @@ export const useGitStore = create<GitState>((set, get) => ({
   push: async (repoPath) => {
     try {
       await gitPush(repoPath);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'push', message: 'Pushed to remote' }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'push', message: String(e) }).catch(() => {});
     }
   },
 
   pull: async (repoPath) => {
     try {
       await gitPull(repoPath);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'pull', message: 'Pulled from remote' }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'pull', message: String(e) }).catch(() => {});
     }
   },
 
   discardFile: async (repoPath, filePath) => {
     try {
       await gitDiscardFile(repoPath, filePath);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'discard', message: `Discarded changes: ${filePath}` }).catch(() => {});
       await get().refreshStatus(repoPath);
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'discard', message: String(e) }).catch(() => {});
     }
   },
 
@@ -177,8 +196,10 @@ export const useGitStore = create<GitState>((set, get) => ({
           language: detectLanguage(filePath),
         },
       });
+      logEvent({ repo: repoPath, functionArea: 'source-control', level: 'debug', operation: 'view-diff', message: `Viewing diff: ${filePath} (${staged ? 'staged' : 'unstaged'})` }).catch(() => {});
     } catch (e) {
       set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'view-diff', message: String(e) }).catch(() => {});
     }
   },
 
