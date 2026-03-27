@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
   { panelType: 'source-control', icon: icons.sourceControl, label: 'Source Control', requiresProject: true },
   { panelType: 'code-viewer', icon: icons.codeViewer, label: 'Code Viewer', requiresProject: true },
   { panelType: 'flow-builder', icon: icons.flowBuilder, label: 'Flow Builder', requiresProject: false },
-  { panelType: 'claude-chat', icon: icons.claudeChat, label: 'Claude Chat', requiresProject: false },
+  { panelType: 'claude-chat', icon: icons.claudeChat, label: 'Claude Chat', requiresProject: true },
   { panelType: 'command-palette', icon: icons.commandPalette, label: 'Command Palette', requiresProject: false },
   { panelType: 'worktree-manager', icon: icons.worktrees, label: 'Worktrees', requiresProject: false },
 ];
@@ -200,8 +200,8 @@ export function Sidebar() {
         openTab('settings');
         return;
       }
-      // Code Viewer and Source Control show grouped dropdown (projects + branches + worktrees)
-      if (item.panelType === 'code-viewer' || item.panelType === 'source-control') {
+      // Code Viewer, Source Control, and Claude Chat show grouped dropdown
+      if (item.panelType === 'code-viewer' || item.panelType === 'source-control' || item.panelType === 'claude-chat') {
         const rect = e.currentTarget.getBoundingClientRect();
         setDropdown({ panelType: item.panelType, rect });
         listSessions().then((s) => setSessions(s)).catch(() => setSessions([]));
@@ -366,7 +366,7 @@ export function Sidebar() {
             border: '1px solid #30363d',
             borderRadius: 8,
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-            width: (dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control') ? 280 : 220,
+            width: (dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control' || dropdown.panelType === 'claude-chat') ? 280 : 220,
             maxHeight: 400,
             overflowY: 'auto',
             zIndex: 200,
@@ -381,10 +381,10 @@ export function Sidebar() {
             letterSpacing: '0.5px',
             borderBottom: '1px solid #21262d',
           }}>
-            {dropdown.panelType === 'code-viewer' ? 'Browse Code' : dropdown.panelType === 'source-control' ? 'Source Control' : 'Select Project'}
+            {dropdown.panelType === 'code-viewer' ? 'Browse Code' : dropdown.panelType === 'source-control' ? 'Source Control' : dropdown.panelType === 'claude-chat' ? 'Claude Chat' : 'Select Project'}
           </div>
 
-          {(dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control') ? (
+          {(dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control' || dropdown.panelType === 'claude-chat') ? (
             /* Grouped by project with checked-out branch + worktrees */
             projects.map((project) => {
               const projectSessions = sessions.filter(

@@ -7,12 +7,12 @@ export interface SlashCommand {
 }
 
 const COMMANDS: SlashCommand[] = [
-  { name: '/model', description: 'Switch AI model', icon: '🧠' },
-  { name: '/login', description: 'Sign in to Anthropic', icon: '🔑' },
-  { name: '/logout', description: 'Sign out from Anthropic', icon: '🚪' },
-  { name: '/clear', description: 'Clear chat and restart session', icon: '🗑️' },
-  { name: '/cost', description: 'Show running cost', icon: '💰' },
-  { name: '/help', description: 'Show available commands', icon: '❓' },
+  { name: '/model', description: 'Switch AI model' },
+  { name: '/login', description: 'Sign in to Anthropic' },
+  { name: '/logout', description: 'Sign out from Anthropic' },
+  { name: '/clear', description: 'Clear chat and restart session' },
+  { name: '/cost', description: 'Show running cost' },
+  { name: '/help', description: 'Show available commands' },
 ];
 
 interface SlashCommandMenuProps {
@@ -90,7 +90,6 @@ export function SlashCommandMenu({ filter, onSelect, onClose, selectedIndex }: S
             onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
             onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
           >
-            <span style={{ fontSize: 16, flexShrink: 0 }}>{cmd.icon}</span>
             <div>
               <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace", fontWeight: 600 }}>
                 {cmd.name}

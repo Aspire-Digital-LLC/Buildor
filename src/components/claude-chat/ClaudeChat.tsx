@@ -2,23 +2,30 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
-import { startClaudeSession, sendClaudeMessage } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
 import { logEvent } from '@/utils/commands/logging';
-
-interface OutputLine {
-  text: string;
-  type: 'stdout' | 'system';
-}
+import { parseStreamEvent } from '@/utils/parseClaudeStream';
+import { ChatMessage, type ParsedMessage } from './ChatMessage';
+import { SlashCommandMenu, ModelPicker, getFilteredCommands } from './SlashCommandMenu';
 
 export function ClaudeChat() {
-  const { projectName } = useTabContext();
+  const { projectName, browsePath, browseBranch } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
+  const repoPath = browsePath || activeProject?.repoPath;
 
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [output, setOutput] = useState<OutputLine[]>([]);
+  const [messages, setMessages] = useState<ParsedMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStarting, setIsStarting] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isVerbose, setIsVerbose] = useState(false);
+  const [model, setModel] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,37 +34,44 @@ export function ClaudeChat() {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [output]);
+  }, [messages]);
 
-  // Listen to Claude output events
+  // Listen to events
   useEffect(() => {
     if (!sessionId) return;
 
     const unlistenOutput = listen<string>(`claude-output-${sessionId}`, (event) => {
-      setOutput((prev) => [...prev, { text: event.payload, type: 'stdout' }]);
+      const parsed = parseStreamEvent(event.payload, sessionId);
+      if (parsed) {
+        if (parsed.model && !model) setModel(parsed.model);
+        if (parsed.isResult) {
+          setIsSending(false);
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }
+        setMessages((prev) => [...prev, parsed]);
+      }
     });
 
-    const unlistenDone = listen<string>(`claude-done-${sessionId}`, () => {
-      setOutput((prev) => [...prev, { text: '', type: 'system' }]);
+    const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
+      setSessionId(null);
+      setIsSending(false);
     });
 
     return () => {
       unlistenOutput.then((fn) => fn());
-      unlistenDone.then((fn) => fn());
+      unlistenExit.then((fn) => fn());
     };
-  }, [sessionId]);
+  }, [sessionId, model]);
 
-  const handleStart = useCallback(async () => {
-    if (!activeProject) return;
+  const startClaude = async (dir: string, modelOverride?: string) => {
     setIsStarting(true);
-    setOutput([{ text: `Starting Claude in ${activeProject.repoPath}...`, type: 'system' }]);
-
     try {
-      const sid = await startClaudeSession(activeProject.repoPath);
+      const sid = await startClaudeSession(dir, modelOverride || selectedModel);
       setSessionId(sid);
-      setOutput((prev) => [...prev, { text: `Session started (${sid.slice(0, 8)})`, type: 'system' }]);
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
       logEvent({
-        repo: activeProject.repoPath,
+        repo: dir,
         functionArea: 'claude-chat',
         level: 'info',
         operation: 'session-start',
@@ -65,207 +79,295 @@ export function ClaudeChat() {
       }).catch(() => {});
       inputRef.current?.focus();
     } catch (e) {
-      setOutput((prev) => [...prev, { text: `Failed to start: ${String(e)}`, type: 'system' }]);
-      logEvent({
-        repo: activeProject.repoPath,
-        functionArea: 'claude-chat',
-        level: 'error',
-        operation: 'session-start',
-        message: `Failed to start Claude: ${String(e)}`,
-      }).catch(() => {});
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
     }
     setIsStarting(false);
-  }, [activeProject]);
+  };
+
+  // Auto-start when component mounts with a valid path
+  useEffect(() => {
+    if (repoPath && !sessionId && !isStarting) {
+      startClaude(repoPath);
+    }
+  }, [repoPath]);
+
+  const handleSlashCommand = useCallback(async (command: string) => {
+    setInput('');
+    setShowSlashMenu(false);
+
+    if (command === '/model') { setShowModelPicker(true); return; }
+    if (command === '/login') {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Opening login...' }] }]);
+      try {
+        const result = await runClaudeCli(['login']);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: result || 'Login complete.' }] }]);
+      } catch (e) {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Login failed: ${String(e)}` }] }]);
+      }
+      return;
+    }
+    if (command === '/logout') {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Logging out...' }] }]);
+      try {
+        const result = await runClaudeCli(['logout']);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: result || 'Logged out.' }] }]);
+      } catch (e) {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Logout failed: ${String(e)}` }] }]);
+      }
+      return;
+    }
+    if (command === '/clear') {
+      if (sessionId) await stopSession(sessionId);
+      setMessages([]);
+      setSessionId(null);
+      setIsSending(false);
+      setModel(null);
+      if (repoPath) {
+        setMessages([{ role: 'system', content: [{ type: 'text', text: 'Chat cleared. Restarting...' }] }]);
+        startClaude(repoPath);
+      }
+      return;
+    }
+    if (command === '/cost') {
+      const costs = messages.filter((m) => m.costUsd && m.costUsd > 0);
+      const total = costs.reduce((sum, m) => sum + (m.costUsd || 0), 0);
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Total cost: $${total.toFixed(4)} across ${costs.length} turn(s)` }] }]);
+      return;
+    }
+    if (command === '/help') {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Commands:\n/model — Switch AI model\n/login — Sign in\n/logout — Sign out\n/clear — Clear & restart\n/cost — Show cost\n/help — This list' }] }]);
+      return;
+    }
+  }, [sessionId, repoPath, messages, selectedModel]);
+
+  const handleModelSelect = useCallback(async (modelId: string) => {
+    setShowModelPicker(false);
+    setSelectedModel(modelId);
+    const conversationHistory = messages
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.some((c) => c.type === 'text' && c.text)))
+      .map((m) => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const text = m.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+        return `${role}: ${text}`;
+      }).join('\n\n');
+
+    const modelLabel = modelId.replace('claude-', '').replace(/-/g, ' ');
+    setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Switching to ${modelLabel}...` }] }]);
+    if (sessionId) { await stopSession(sessionId); setSessionId(null); }
+    setModel(null);
+    if (repoPath) {
+      setIsStarting(true);
+      try {
+        const sid = await startClaudeSession(repoPath, modelId);
+        setSessionId(sid);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
+        if (conversationHistory.trim()) {
+          await sendClaudeMessage(sid, `[Context from previous session]\n\n${conversationHistory}\n\n[Continue naturally on ${modelId}.]`);
+          setIsSending(true);
+        }
+        inputRef.current?.focus();
+      } catch (e) {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
+      }
+      setIsStarting(false);
+    }
+  }, [sessionId, repoPath, messages]);
 
   const handleSend = useCallback(async () => {
-    if (!sessionId || !input.trim()) return;
+    if (!sessionId || !input.trim() || isSending) return;
     const msg = input.trim();
+    if (msg.startsWith('/')) {
+      const cmdName = msg.split(' ')[0].toLowerCase();
+      if (getFilteredCommands(cmdName).some((c) => c.name === cmdName)) {
+        handleSlashCommand(cmdName);
+        return;
+      }
+    }
     setInput('');
-    setOutput((prev) => [...prev, { text: `> ${msg}`, type: 'system' }]);
+    setIsSending(true);
+    setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
     try {
       await sendClaudeMessage(sessionId, msg);
     } catch (e) {
-      setOutput((prev) => [...prev, { text: `Error sending: ${String(e)}`, type: 'system' }]);
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
+      setIsSending(false);
     }
-  }, [sessionId, input]);
+    inputRef.current?.focus();
+  }, [sessionId, input, isSending, handleSlashCommand]);
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
-    try {
-      const { stopSession } = await import('@/utils/commands/claude');
-      await stopSession(sessionId);
-      setOutput((prev) => [...prev, { text: '\n--- Session stopped ---', type: 'system' }]);
-      setSessionId(null);
-    } catch (e) {
-      setOutput((prev) => [...prev, { text: `Error stopping: ${String(e)}`, type: 'system' }]);
-    }
+    await stopSession(sessionId);
+    setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Session stopped.' }] }]);
+    setSessionId(null);
+    setIsSending(false);
   }, [sessionId]);
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (value.startsWith('/') && !value.includes(' ')) {
+      setShowSlashMenu(true);
+      setSlashIndex(0);
+    } else {
+      setShowSlashMenu(false);
+    }
+    setShowModelPicker(false);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (showSlashMenu) {
+      const filtered = getFilteredCommands(input);
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex((i) => (i > 0 ? i - 1 : filtered.length - 1)); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex((i) => (i < filtered.length - 1 ? i + 1 : 0)); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && filtered.length > 0)) { e.preventDefault(); filtered[slashIndex] && handleSlashCommand(filtered[slashIndex].name); return; }
+      if (e.key === 'Escape') { setShowSlashMenu(false); return; }
+    }
+    if (showModelPicker && e.key === 'Escape') { setShowModelPicker(false); return; }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
 
   if (!activeProject) {
     return (
-      <div style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#6e7681',
-        fontSize: 14,
-      }}>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6e7681', fontSize: 14 }}>
         Select a project to start a Claude session
       </div>
     );
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
-      <div style={{
-        padding: '8px 12px',
-        borderBottom: '1px solid #21262d',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#e0e0e0' }}>Claude Chat</span>
-          <span style={{
-            fontSize: 11,
-            color: '#8b949e',
-            background: '#21262d',
-            padding: '1px 6px',
-            borderRadius: 10,
-          }}>
-            {activeProject.name}
-          </span>
-          {sessionId && (
-            <span style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: '#3fb950',
-              display: 'inline-block',
-            }} />
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {!sessionId ? (
-            <button
-              onClick={handleStart}
-              disabled={isStarting}
-              style={{
-                background: '#238636',
-                border: 'none',
-                color: '#fff',
-                borderRadius: 6,
-                padding: '5px 14px',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: isStarting ? 'default' : 'pointer',
-                opacity: isStarting ? 0.6 : 1,
-              }}
-            >
-              {isStarting ? 'Starting...' : 'Start Claude'}
-            </button>
-          ) : (
-            <button
-              onClick={handleStop}
-              style={{
-                background: '#21262d',
-                border: '1px solid #da3633',
-                color: '#f85149',
-                borderRadius: 6,
-                padding: '5px 12px',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              Stop
-            </button>
-          )}
-        </div>
-      </div>
+  const branchLabel = browseBranch || activeProject.currentBranch || 'main';
 
-      {/* Output area */}
-      <div
-        ref={outputRef}
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: 12,
-          background: '#010409',
-          fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-          fontSize: 13,
-          lineHeight: 1.6,
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {output.length === 0 && !sessionId && (
-          <div style={{ color: '#484f58', textAlign: 'center', padding: 40 }}>
-            Click "Start Claude" to begin a session in {activeProject.name}
+  return (
+    <div style={{ display: 'flex', height: '100%' }}>
+      {/* Chat area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid #21262d',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          background: '#161b22',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Claude Chat</span>
+            <span style={{ fontSize: 11, color: '#8b949e', background: '#21262d', padding: '1px 6px', borderRadius: 10 }}>
+              {activeProject.name}
+            </span>
+            <span style={{ fontSize: 10, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
+              {branchLabel}
+            </span>
+            {sessionId && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block' }} />}
+            {model && <span style={{ fontSize: 10, color: '#8b949e', background: '#21262d', padding: '1px 6px', borderRadius: 8 }}>{model}</span>}
+            {isSending && <span style={{ fontSize: 11, color: '#d29922', fontStyle: 'italic' }}>thinking...</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setIsVerbose(!isVerbose)} style={{
+              background: isVerbose ? '#1a2332' : '#21262d',
+              border: `1px solid ${isVerbose ? '#1f6feb' : '#30363d'}`,
+              color: isVerbose ? '#58a6ff' : '#8b949e',
+              borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+            }}>
+              {isVerbose ? 'Verbose' : 'Conversation'}
+            </button>
+            {/* Palette toggle */}
+            <button onClick={() => setPaletteOpen(!paletteOpen)} style={{
+              background: paletteOpen ? '#1a2332' : '#21262d',
+              border: `1px solid ${paletteOpen ? '#1f6feb' : '#30363d'}`,
+              color: paletteOpen ? '#58a6ff' : '#8b949e',
+              borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer',
+            }} title="Toggle palette">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M15 3v18" />
+              </svg>
+            </button>
+            {!sessionId && repoPath ? (
+              <button onClick={() => startClaude(repoPath)} disabled={isStarting} style={{
+                background: '#238636', border: 'none', color: '#fff', borderRadius: 6,
+                padding: '4px 14px', fontSize: 13, fontWeight: 600,
+                cursor: isStarting ? 'default' : 'pointer', opacity: isStarting ? 0.6 : 1,
+              }}>
+                {isStarting ? 'Starting...' : 'Restart'}
+              </button>
+            ) : sessionId ? (
+              <button onClick={handleStop} style={{
+                background: '#21262d', border: '1px solid #da3633', color: '#f85149',
+                borderRadius: 6, padding: '4px 12px', fontSize: 13, cursor: 'pointer',
+              }}>
+                Stop
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div ref={outputRef} style={{ flex: 1, overflow: 'auto', background: '#010409' }}>
+          {messages.map((msg, i) => (
+            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} />
+          ))}
+        </div>
+
+        {/* Input */}
+        {sessionId && (
+          <div style={{
+            padding: 8, borderTop: '1px solid #21262d', background: '#0d1117',
+            display: 'flex', gap: 6, flexShrink: 0, position: 'relative',
+          }}>
+            {showSlashMenu && <SlashCommandMenu filter={input} onSelect={handleSlashCommand} onClose={() => setShowSlashMenu(false)} selectedIndex={slashIndex} />}
+            {showModelPicker && <ModelPicker currentModel={model} onSelect={handleModelSelect} onClose={() => setShowModelPicker(false)} />}
+            <input
+              ref={inputRef} type="text" value={input}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={isSending ? 'Claude is thinking...' : 'Type a message or / for commands...'}
+              disabled={isSending}
+              style={{
+                flex: 1, background: '#161b22', border: '1px solid #30363d', borderRadius: 6,
+                color: '#e0e0e0', padding: '8px 12px', fontSize: 13, outline: 'none',
+                fontFamily: "'Cascadia Code', 'Consolas', monospace", opacity: isSending ? 0.6 : 1,
+              }}
+            />
+            <button onClick={handleSend} disabled={!input.trim() || isSending} style={{
+              background: input.trim() && !isSending ? '#238636' : '#21262d',
+              border: 'none', color: input.trim() && !isSending ? '#fff' : '#484f58',
+              borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              cursor: input.trim() && !isSending ? 'pointer' : 'default',
+            }}>
+              Send
+            </button>
           </div>
         )}
-        {output.map((line, i) => (
-          <div key={i} style={{
-            color: line.type === 'system' ? '#6e7681' : '#e0e0e0',
-            fontStyle: line.type === 'system' ? 'italic' : 'normal',
-          }}>
-            {line.text}
-          </div>
-        ))}
       </div>
 
-      {/* Input */}
-      {sessionId && (
+      {/* Collapsible palette sidebar — RIGHT side */}
+      {paletteOpen && (
         <div style={{
-          padding: 8,
-          borderTop: '1px solid #21262d',
+          width: 220,
+          borderLeft: '1px solid #21262d',
           background: '#0d1117',
           display: 'flex',
-          gap: 6,
+          flexDirection: 'column',
           flexShrink: 0,
         }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Type a message..."
-            style={{
-              flex: 1,
-              background: '#161b22',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              color: '#e0e0e0',
-              padding: '8px 12px',
-              fontSize: 13,
-              outline: 'none',
-              fontFamily: "'Cascadia Code', 'Consolas', monospace",
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim()}
-            style={{
-              background: input.trim() ? '#238636' : '#21262d',
-              border: 'none',
-              color: input.trim() ? '#fff' : '#484f58',
-              borderRadius: 6,
-              padding: '8px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: input.trim() ? 'pointer' : 'default',
-            }}
-          >
-            Send
-          </button>
+          <div style={{
+            padding: '12px',
+            fontSize: 11,
+            fontWeight: 600,
+            color: '#8b949e',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            borderBottom: '1px solid #21262d',
+          }}>
+            Skills & Flows
+          </div>
+          <div style={{
+            padding: 16, color: '#484f58', fontSize: 12, textAlign: 'center',
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            Command palette coming soon
+          </div>
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ export function ClaudeChatWindow() {
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -180,10 +181,22 @@ export function ClaudeChatWindow() {
     setShowModelPicker(false);
     setSelectedModel(modelId);
     const modelLabel = modelId.replace('claude-', '').replace(/-/g, ' ');
+
+    // Collect conversation history to replay into new session
+    const conversationHistory = messages
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.some((c) => c.type === 'text' && c.text)))
+      .map((m) => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const text = m.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+        return `${role}: ${text}`;
+      })
+      .join('\n\n');
+
     setMessages((prev) => [...prev, {
       role: 'system',
       content: [{ type: 'text', text: `Switching model to ${modelLabel}. Restarting session...` }],
     }]);
+
     // Stop current session and restart with new model
     if (sessionId) {
       await stopSession(sessionId);
@@ -191,9 +204,33 @@ export function ClaudeChatWindow() {
     }
     setModel(null);
     if (workingDir) {
-      startClaude(workingDir, modelId);
+      setIsStarting(true);
+      try {
+        const sid = await startClaudeSession(workingDir, modelId);
+        setSessionId(sid);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
+
+        // Replay conversation context if there was prior history
+        if (conversationHistory.trim()) {
+          const contextMsg = `[Context from previous model session - continue this conversation naturally]\n\n${conversationHistory}\n\n[You are now on model ${modelId}. Continue from where the conversation left off.]`;
+          await sendClaudeMessage(sid, contextMsg);
+          setIsSending(true);
+        }
+
+        logEvent({
+          repo: workingDir,
+          functionArea: 'claude-chat',
+          level: 'info',
+          operation: 'model-switch',
+          message: `Switched to ${modelId}`,
+        }).catch(() => {});
+        inputRef.current?.focus();
+      } catch (e) {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
+      }
+      setIsStarting(false);
     }
-  }, [sessionId, workingDir]);
+  }, [sessionId, workingDir, messages]);
 
   const handleSend = useCallback(async () => {
     if (!sessionId || !input.trim() || isSending) return;
@@ -286,40 +323,6 @@ export function ClaudeChatWindow() {
       color: '#e0e0e0',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     }}>
-      {/* Skill palette sidebar */}
-      <div style={{
-        width: 220,
-        borderRight: '1px solid #21262d',
-        background: '#0d1117',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-      }}>
-        <div style={{
-          padding: '12px',
-          fontSize: 11,
-          fontWeight: 600,
-          color: '#8b949e',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          borderBottom: '1px solid #21262d',
-        }}>
-          Skills & Flows
-        </div>
-        <div style={{
-          padding: 16,
-          color: '#484f58',
-          fontSize: 12,
-          textAlign: 'center',
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          Command palette coming soon
-        </div>
-      </div>
-
       {/* Chat area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
@@ -360,6 +363,17 @@ export function ClaudeChatWindow() {
               }}
             >
               {isVerbose ? 'Verbose' : 'Conversation'}
+            </button>
+            <button onClick={() => setPaletteOpen(!paletteOpen)} style={{
+              background: paletteOpen ? '#1a2332' : '#21262d',
+              border: `1px solid ${paletteOpen ? '#1f6feb' : '#30363d'}`,
+              color: paletteOpen ? '#58a6ff' : '#8b949e',
+              borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer',
+            }} title="Toggle palette">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M15 3v18" />
+              </svg>
             </button>
             {!sessionId && workingDir ? (
               <button
@@ -477,6 +491,36 @@ export function ClaudeChatWindow() {
           </div>
         )}
       </div>
+
+      {/* Collapsible palette sidebar — RIGHT side */}
+      {paletteOpen && (
+        <div style={{
+          width: 220,
+          borderLeft: '1px solid #21262d',
+          background: '#0d1117',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+        }}>
+          <div style={{
+            padding: '12px',
+            fontSize: 11,
+            fontWeight: 600,
+            color: '#8b949e',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            borderBottom: '1px solid #21262d',
+          }}>
+            Skills & Flows
+          </div>
+          <div style={{
+            padding: 16, color: '#484f58', fontSize: 12, textAlign: 'center',
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            Command palette coming soon
+          </div>
+        </div>
+      )}
     </div>
   );
 }
