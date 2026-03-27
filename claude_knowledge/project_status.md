@@ -20,7 +20,7 @@
 - [x] **Logging system**: SQLite at %APPDATA%/Buildor/logs.db, session_id correlation, duration_ms timing
 - [x] **Settings panel**: sidebar with Projects + Logs sections, log viewer with filtering
 - [x] **Start Session modal**: project picker, base branch, type radio, Haiku slug generation, worktree creation
-- [x] **Worktree Manager panel**: list open sessions grouped by project, close individual/per-project/global
+- [x] **Worktree Manager panel**: list open sessions grouped by project, close individual/per-project/global, force-close for sessions with uncommitted/unpushed work
 - [x] **Claude Chat (in-app)**: full rich UI in main app tab, scoped to checked-out branch per project, auto-starts session, slash commands, model picker, permission cards, sidebar dropdown shows only checked-out branches (no worktrees)
 - [x] **Claude Chat (breakout window)**: separate Tauri window for worktree sessions, same rich UI
 - [x] **Slash command autocomplete**: type / in chat input for menu — /model (model picker with session restart + context replay), /login, /logout (browser OAuth via subprocess), /clear, /cost, /help
@@ -38,11 +38,10 @@
 2. [ ] **Skills & Flows palette content** — palette UI exists but shows placeholder; needs skill browser, auto-generated parameter forms
 
 ### Not Started
-- [ ] Flow Builder (drag-and-drop visual editor with React Flow)
-- [ ] Command Palette (skill browser with auto-generated parameter forms)
-- [ ] Skill & Flow Library (shared repo sync, auto-pull, commit/PR workflow)
-- [ ] App-as-Orchestrator (flow execution engine in Rust/JS)
-- [ ] Auto-update system (VERSION file check against source repo)
+- [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)
+- [ ] Command Palette (skill browser with auto-generated parameter forms — component is placeholder only)
+- [ ] Skill & Flow Library (shared repo sync, auto-pull, scoping, commit/PR workflow)
+- [ ] App-as-Orchestrator (flow execution engine — backend stubs exist but return empty)
 - [ ] Phase 2: Internal API/CLI for Claude-to-app bidirectional communication
 
 ### Environment

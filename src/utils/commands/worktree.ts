@@ -25,12 +25,13 @@ export async function closeSession(params: {
   projectName: string;
   repoPath: string;
   worktreePath: string;
+  force?: boolean;
 }): Promise<void> {
   return invoke('close_session', params);
 }
 
-export async function closeAllSessions(projectName?: string): Promise<void> {
-  return invoke('close_all_sessions', { projectName });
+export async function closeAllSessions(projectName?: string, force?: boolean): Promise<void> {
+  return invoke('close_all_sessions', { projectName, force });
 }
 
 export async function createWorktree(repoPath: string, branch: string, path: string): Promise<void> {

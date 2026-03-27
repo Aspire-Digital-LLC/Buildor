@@ -198,7 +198,34 @@ pub async fn list_sessions() -> Result<Vec<SessionInfo>, String> {
 }
 
 #[tauri::command]
-pub async fn close_session(session_id: String, project_name: String, repo_path: String, worktree_path: String) -> Result<(), String> {
+pub async fn close_session(session_id: String, project_name: String, repo_path: String, worktree_path: String, force: Option<bool>) -> Result<(), String> {
+    let force = force.unwrap_or(false);
+
+    // Safety check: warn if there are uncommitted changes or unpushed commits
+    if !force {
+        // Check for uncommitted changes
+        let status = run_git(&worktree_path, &["status", "--porcelain"]).unwrap_or_default();
+        if !status.trim().is_empty() {
+            return Err("Session has uncommitted changes. Commit or discard them first, or force-close.".to_string());
+        }
+
+        // Check for unpushed commits (no upstream = unpushed)
+        let has_upstream = run_git(&worktree_path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok();
+        if has_upstream {
+            let ahead = run_git(&worktree_path, &["rev-list", "--count", "@{u}..HEAD"]).unwrap_or_default();
+            if ahead.trim().parse::<i32>().unwrap_or(0) > 0 {
+                return Err("Session has unpushed commits. Push first, or force-close.".to_string());
+            }
+        } else {
+            // No upstream — check if there are any commits beyond the base
+            let log = run_git(&worktree_path, &["log", "--oneline", "-1"]).unwrap_or_default();
+            if !log.trim().is_empty() {
+                // Branch exists with commits but was never pushed
+                return Err("Session branch was never pushed to remote. Push first, or force-close.".to_string());
+            }
+        }
+    }
+
     // Remove worktree
     run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"])?;
 
@@ -221,8 +248,9 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
 }
 
 #[tauri::command]
-pub async fn close_all_sessions(project_name: Option<String>) -> Result<(), String> {
+pub async fn close_all_sessions(project_name: Option<String>, force: Option<bool>) -> Result<(), String> {
     let sessions = list_sessions().await?;
+    let mut errors = Vec::new();
 
     for session in sessions {
         if let Some(ref pn) = project_name {
@@ -230,15 +258,22 @@ pub async fn close_all_sessions(project_name: Option<String>) -> Result<(), Stri
                 continue;
             }
         }
-        let _ = close_session(
-            session.session_id,
+        if let Err(e) = close_session(
+            session.session_id.clone(),
             session.project_name,
             session.repo_path,
             session.worktree_path,
-        ).await;
+            force,
+        ).await {
+            errors.push(format!("{}: {}", session.session_id, e));
+        }
     }
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 #[tauri::command]
