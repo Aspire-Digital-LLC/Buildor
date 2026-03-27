@@ -104,10 +104,15 @@ export function useChatGlow(sessionId: string | null, isSending?: boolean): Chat
     if (!sessionId) { setEventState('idle'); return; }
 
     const onToolExec = (e: BuildorEvent) => {
-      if (e.sessionId === sessionId) setEventState('working');
+      if (e.sessionId === sessionId) {
+        // Don't downgrade attention → working
+        setEventState((s) => s === 'attention' ? s : 'working');
+      }
     };
     const onMessage = (e: BuildorEvent) => {
-      if (e.sessionId === sessionId) setEventState('working');
+      if (e.sessionId === sessionId) {
+        setEventState((s) => s === 'attention' ? s : 'working');
+      }
     };
     const onPermission = (e: BuildorEvent) => {
       if (e.sessionId === sessionId) setEventState('attention');
