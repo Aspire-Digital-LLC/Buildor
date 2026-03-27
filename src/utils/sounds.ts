@@ -44,7 +44,19 @@ export function soundComplete() {
 export function setMuted(m: boolean) { muted = m; }
 export function isMuted() { return muted; }
 
+// Track pending permissions — don't ding on "complete" if waiting for approval
+let pendingPermissions = 0;
+
 // Auto-wire to event bus
-buildorEvents.on('permission-required', () => soundPermission());
+buildorEvents.on('permission-required', () => {
+  pendingPermissions++;
+  soundPermission();
+});
+buildorEvents.on('permission-resolved', () => {
+  pendingPermissions = Math.max(0, pendingPermissions - 1);
+});
 buildorEvents.on('error-occurred', () => soundError());
-buildorEvents.on('turn-completed', () => soundComplete());
+buildorEvents.on('turn-completed', () => {
+  // Only ding if no permissions are waiting
+  if (pendingPermissions === 0) soundComplete();
+});
