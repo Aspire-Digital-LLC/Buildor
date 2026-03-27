@@ -41,7 +41,9 @@
       "Bash(cp -r \"$APPDATA/ProductaFlows/projects\" \"$APPDATA/Buildor/\")",
       "Bash(gh repo:*)",
       "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 15 2>&1)",
-      "Bash(cmd.exe /c \"taskkill /F /IM buildor.exe\")"
+      "Bash(cmd.exe /c \"taskkill /F /IM buildor.exe\")",
+      "Bash(claude --print --output-format stream-json)",
+      "Bash(claude --print --output-format stream-json --verbose \"What is 2+2? Just answer the number.\")"
     ]
   }
 }

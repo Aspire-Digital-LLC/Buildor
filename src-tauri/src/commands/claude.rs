@@ -154,7 +154,12 @@ pub async fn send_message(app: AppHandle, session_id: String, message: String) -
     }
 
     // Build args: --print for non-interactive, --continue for subsequent messages
-    let mut args = vec!["--print".to_string()];
+    let mut args = vec![
+        "--print".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+    ];
     if !is_first {
         args.push("--continue".to_string());
     }

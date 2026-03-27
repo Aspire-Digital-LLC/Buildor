@@ -3,138 +3,121 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { startClaudeSession, sendClaudeMessage, stopSession } from '@/utils/commands/claude';
 import { logEvent } from '@/utils/commands/logging';
-
-interface OutputLine {
-  text: string;
-  type: 'stdout' | 'system';
-}
+import { parseStreamEvent } from '@/utils/parseClaudeStream';
+import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
 
 export function ClaudeChatWindow() {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [output, setOutput] = useState<OutputLine[]>([]);
+  const [messages, setMessages] = useState<ParsedMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStarting, setIsStarting] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isVerbose, setIsVerbose] = useState(false);
   const [workingDir, setWorkingDir] = useState<string | null>(null);
   const [windowTitle, setWindowTitle] = useState('Claude Chat');
+  const [model, setModel] = useState<string | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Extract working dir from window title (set by the creator)
-  useEffect(() => {
-    const appWindow = getCurrentWebviewWindow();
-    appWindow.title().then((t) => {
-      setWindowTitle(t);
-      // Extract the branch path after "Claude — "
-      const match = t.match(/Claude — (.+)/);
-      if (match) {
-        setWindowTitle(t);
-      }
-    }).catch(() => {});
-  }, []);
-
-  // Auto-start: look for the session's worktree path from saved sessions
-  useEffect(() => {
-    const findWorktreePath = async () => {
-      try {
-        const { listSessions } = await import('@/utils/commands/worktree');
-        const sessions = await listSessions();
-        // Match based on the window label which contains the session ID prefix
-        const appWindow = getCurrentWebviewWindow();
-        const label = appWindow.label; // "claude-{sessionIdPrefix}"
-        const idPrefix = label.replace('claude-', '');
-
-        const session = sessions.find((s) => s.sessionId.startsWith(idPrefix));
-        if (session) {
-          setWorkingDir(session.worktreePath);
-          setOutput([{ text: `Session: ${session.branchName}`, type: 'system' },
-                     { text: `Worktree: ${session.worktreePath}`, type: 'system' },
-                     { text: '', type: 'system' }]);
-          // Auto-start Claude
-          startClaude(session.worktreePath);
-        } else {
-          setOutput([{ text: 'Could not find session. Start Claude manually.', type: 'system' }]);
-        }
-      } catch (e) {
-        setOutput([{ text: `Error: ${String(e)}`, type: 'system' }]);
-      }
-    };
-    findWorktreePath();
-  }, []);
 
   // Auto-scroll
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [output]);
+  }, [messages]);
+
+  // Find worktree path from session
+  useEffect(() => {
+    const findWorktreePath = async () => {
+      try {
+        const appWindow = getCurrentWebviewWindow();
+        const t = await appWindow.title();
+        setWindowTitle(t);
+
+        const { listSessions } = await import('@/utils/commands/worktree');
+        const sessions = await listSessions();
+        const label = appWindow.label;
+        const idPrefix = label.replace('claude-', '');
+        const session = sessions.find((s) => s.sessionId.startsWith(idPrefix));
+        if (session) {
+          setWorkingDir(session.worktreePath);
+          setMessages([{
+            role: 'system',
+            content: [{ type: 'text', text: `Session: ${session.branchName}\nWorktree: ${session.worktreePath}` }],
+          }]);
+          startClaude(session.worktreePath);
+        } else {
+          setMessages([{ role: 'system', content: [{ type: 'text', text: 'Could not find session.' }] }]);
+        }
+      } catch (e) {
+        setMessages([{ role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
+      }
+    };
+    findWorktreePath();
+  }, []);
 
   // Listen to events
   useEffect(() => {
     if (!sessionId) return;
 
     const unlistenOutput = listen<string>(`claude-output-${sessionId}`, (event) => {
-      setOutput((prev) => [...prev, { text: event.payload, type: 'stdout' }]);
+      const parsed = parseStreamEvent(event.payload);
+      if (parsed) {
+        if (parsed.model && !model) setModel(parsed.model);
+        setMessages((prev) => [...prev, parsed]);
+      }
     });
 
     const unlistenDone = listen<string>(`claude-done-${sessionId}`, () => {
-      // Message completed — session stays active, just ready for next input
-      setOutput((prev) => [...prev, { text: '', type: 'system' }]);
+      setIsSending(false);
     });
 
     return () => {
       unlistenOutput.then((fn) => fn());
       unlistenDone.then((fn) => fn());
     };
-  }, [sessionId]);
+  }, [sessionId, model]);
 
   const startClaude = async (dir: string) => {
     setIsStarting(true);
-    setOutput((prev) => [...prev, { text: `Starting Claude in ${dir}...`, type: 'system' }]);
     try {
       const sid = await startClaudeSession(dir);
       setSessionId(sid);
-      setOutput((prev) => [...prev, { text: `Claude started (${sid.slice(0, 8)})`, type: 'system' }, { text: '', type: 'system' }]);
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Claude ready.` }] }]);
       logEvent({
         repo: dir,
         functionArea: 'claude-chat',
         level: 'info',
         operation: 'session-start',
-        message: `Claude session started in breakout window: ${sid}`,
+        message: `Claude session started: ${sid}`,
       }).catch(() => {});
       inputRef.current?.focus();
     } catch (e) {
-      setOutput((prev) => [...prev, { text: `Failed: ${String(e)}`, type: 'system' }]);
-      logEvent({
-        functionArea: 'claude-chat',
-        level: 'error',
-        operation: 'session-start',
-        message: `Failed: ${String(e)}`,
-      }).catch(() => {});
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
     }
     setIsStarting(false);
   };
 
   const handleSend = useCallback(async () => {
-    if (!sessionId || !input.trim()) return;
+    if (!sessionId || !input.trim() || isSending) return;
     const msg = input.trim();
     setInput('');
-    setOutput((prev) => [...prev, { text: `> ${msg}`, type: 'system' }]);
+    setIsSending(true);
+    setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
     try {
       await sendClaudeMessage(sessionId, msg);
     } catch (e) {
-      setOutput((prev) => [...prev, { text: `Error: ${String(e)}`, type: 'system' }]);
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
+      setIsSending(false);
     }
-  }, [sessionId, input]);
+  }, [sessionId, input, isSending]);
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
-    try {
-      await stopSession(sessionId);
-      setOutput((prev) => [...prev, { text: '\n--- Session stopped ---', type: 'system' }]);
-      setSessionId(null);
-    } catch (e) {
-      setOutput((prev) => [...prev, { text: `Error: ${String(e)}`, type: 'system' }]);
-    }
+    await stopSession(sessionId);
+    setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Session stopped.' }] }]);
+    setSessionId(null);
+    setIsSending(false);
   }, [sessionId]);
 
   return (
@@ -145,7 +128,7 @@ export function ClaudeChatWindow() {
       color: '#e0e0e0',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     }}>
-      {/* Skill palette sidebar — placeholder for now */}
+      {/* Skill palette sidebar */}
       <div style={{
         width: 220,
         borderRight: '1px solid #21262d',
@@ -194,17 +177,33 @@ export function ClaudeChatWindow() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{windowTitle}</span>
             {sessionId && (
-              <span style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: '#3fb950',
-                display: 'inline-block',
-              }} />
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block' }} />
+            )}
+            {model && (
+              <span style={{ fontSize: 10, color: '#8b949e', background: '#21262d', padding: '1px 6px', borderRadius: 8 }}>
+                {model}
+              </span>
+            )}
+            {isSending && (
+              <span style={{ fontSize: 11, color: '#d29922', fontStyle: 'italic' }}>thinking...</span>
             )}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            {!sessionId && workingDir && (
+            <button
+              onClick={() => setIsVerbose(!isVerbose)}
+              style={{
+                background: isVerbose ? '#1a2332' : '#21262d',
+                border: `1px solid ${isVerbose ? '#1f6feb' : '#30363d'}`,
+                color: isVerbose ? '#58a6ff' : '#8b949e',
+                borderRadius: 6,
+                padding: '4px 10px',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              {isVerbose ? 'Verbose' : 'Conversation'}
+            </button>
+            {!sessionId && workingDir ? (
               <button
                 onClick={() => startClaude(workingDir)}
                 disabled={isStarting}
@@ -213,17 +212,16 @@ export function ClaudeChatWindow() {
                   border: 'none',
                   color: '#fff',
                   borderRadius: 6,
-                  padding: '5px 14px',
+                  padding: '4px 14px',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: isStarting ? 'default' : 'pointer',
                   opacity: isStarting ? 0.6 : 1,
                 }}
               >
-                {isStarting ? 'Starting...' : 'Restart Claude'}
+                {isStarting ? 'Starting...' : 'Restart'}
               </button>
-            )}
-            {sessionId && (
+            ) : sessionId ? (
               <button
                 onClick={handleStop}
                 style={{
@@ -231,39 +229,25 @@ export function ClaudeChatWindow() {
                   border: '1px solid #da3633',
                   color: '#f85149',
                   borderRadius: 6,
-                  padding: '5px 12px',
+                  padding: '4px 12px',
                   fontSize: 13,
                   cursor: 'pointer',
                 }}
               >
                 Stop
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {/* Output */}
-        <div
-          ref={outputRef}
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: 12,
-            background: '#010409',
-            fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-            fontSize: 13,
-            lineHeight: 1.6,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {output.map((line, i) => (
-            <div key={i} style={{
-              color: line.type === 'system' ? '#6e7681' : '#e0e0e0',
-              fontStyle: line.type === 'system' ? 'italic' : 'normal',
-            }}>
-              {line.text}
-            </div>
+        {/* Messages */}
+        <div ref={outputRef} style={{
+          flex: 1,
+          overflow: 'auto',
+          background: '#010409',
+        }}>
+          {messages.map((msg, i) => (
+            <ChatMessage key={i} message={msg} isVerbose={isVerbose} />
           ))}
         </div>
 
@@ -288,7 +272,8 @@ export function ClaudeChatWindow() {
                   handleSend();
                 }
               }}
-              placeholder="Type a message..."
+              placeholder={isSending ? 'Claude is thinking...' : 'Type a message...'}
+              disabled={isSending}
               style={{
                 flex: 1,
                 background: '#161b22',
@@ -299,20 +284,21 @@ export function ClaudeChatWindow() {
                 fontSize: 13,
                 outline: 'none',
                 fontFamily: "'Cascadia Code', 'Consolas', monospace",
+                opacity: isSending ? 0.6 : 1,
               }}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isSending}
               style={{
-                background: input.trim() ? '#238636' : '#21262d',
+                background: input.trim() && !isSending ? '#238636' : '#21262d',
                 border: 'none',
-                color: input.trim() ? '#fff' : '#484f58',
+                color: input.trim() && !isSending ? '#fff' : '#484f58',
                 borderRadius: 6,
                 padding: '8px 16px',
                 fontSize: 13,
                 fontWeight: 600,
-                cursor: input.trim() ? 'pointer' : 'default',
+                cursor: input.trim() && !isSending ? 'pointer' : 'default',
               }}
             >
               Send

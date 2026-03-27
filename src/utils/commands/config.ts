@@ -7,3 +7,7 @@ export async function getConfig(): Promise<string> {
 export async function setConfig(config: string): Promise<void> {
   return invoke('set_config', { config });
 }
+
+export async function checkForUpdate(): Promise<[string, string, boolean]> {
+  return invoke('check_for_update');
+}

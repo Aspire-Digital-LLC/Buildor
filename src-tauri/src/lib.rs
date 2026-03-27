@@ -49,6 +49,7 @@ pub fn run() {
             commands::claude::list_claude_sessions,
             commands::config::get_config,
             commands::config::set_config,
+            commands::config::check_for_update,
             commands::worktree::list_worktrees,
             commands::worktree::create_worktree,
             commands::worktree::remove_worktree,

@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { LogsViewer } from './LogsViewer';
 import { ProjectSwitcher } from '../project-switcher/ProjectSwitcher';
+import { SharedMemory } from './SharedMemory';
+import { UpdateChecker } from './UpdateChecker';
 
-type SettingsSection = 'projects' | 'logs';
+type SettingsSection = 'projects' | 'logs' | 'shared-memory' | 'updates';
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'projects', label: 'Projects' },
   { id: 'logs', label: 'Logs' },
+  { id: 'shared-memory', label: 'Shared Memory' },
+  { id: 'updates', label: 'Updates' },
 ];
 
 export function Settings() {
@@ -62,6 +66,8 @@ export function Settings() {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {active === 'projects' && <ProjectSwitcher />}
         {active === 'logs' && <LogsViewer />}
+        {active === 'shared-memory' && <SharedMemory />}
+        {active === 'updates' && <UpdateChecker />}
       </div>
     </div>
   );

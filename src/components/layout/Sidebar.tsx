@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useTabStore, useProjectStore } from '@/stores';
 import { getGitStatus } from '@/utils/commands/git';
 import { listSessions } from '@/utils/commands/worktree';
+import { checkForUpdate } from '@/utils/commands/config';
 import { StartSessionModal } from '../session/StartSessionModal';
 import type { PanelType } from '@/types';
 
@@ -134,6 +135,14 @@ export function Sidebar() {
     const interval = setInterval(refreshSessionCount, 5000);
     return () => clearInterval(interval);
   }, [refreshSessionCount]);
+
+  const [hasUpdate, setHasUpdate] = useState(false);
+
+  useEffect(() => {
+    checkForUpdate()
+      .then(([, , needs]) => setHasUpdate(needs))
+      .catch(() => {});
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -285,9 +294,29 @@ export function Sidebar() {
           borderRadius: 4,
           color: activeTab?.panelType === 'settings' ? '#e0e0e0' : '#8b949e',
           marginBottom: 8,
+          position: 'relative',
         }}
       >
         {icons.settings}
+        {hasUpdate && (
+          <span style={{
+            position: 'absolute',
+            bottom: 4,
+            right: 4,
+            width: 16,
+            height: 16,
+            borderRadius: 8,
+            backgroundColor: '#d29922',
+            color: '#fff',
+            fontSize: 10,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            !
+          </span>
+        )}
       </button>
 
       {/* Project dropdown */}
