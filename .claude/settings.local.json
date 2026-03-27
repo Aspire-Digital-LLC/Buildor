@@ -26,7 +26,13 @@
       "Bash(rustup default:*)",
       "Bash(tasklist.exe)",
       "Bash(taskkill.exe /F /IM productaflows.exe)",
-      "Bash(cmd.exe /c \"taskkill /F /IM productaflows.exe\" 2>&1)"
+      "Bash(cmd.exe /c \"taskkill /F /IM productaflows.exe\" 2>&1)",
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 50 2>&1)",
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --errors 2>&1)",
+      "Bash(git:*)",
+      "Read(//c/Git/ProductaFlows/$HOME/**)",
+      "Read(//c/Git/ProductaFlows/$APPDATA/**)",
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 10 2>&1)"
     ]
   }
 }

@@ -1,25 +1,34 @@
 ---
-description: Query and analyze ProductaFlows application logs from the SQLite database at ~/.productaflows/logs.db. Use to debug errors, analyze performance, review session timelines, and audit operations.
+description: Query and analyze ProductaFlows application logs from the SQLite database. Use to debug errors, analyze performance, review session timelines, and audit operations.
 ---
 
 # /read-logs — Retrieve and Read ProductaFlows Application Logs
 
-ProductaFlows stores structured application logs in an SQLite database at `~/.productaflows/logs.db`.
+ProductaFlows stores structured application logs in an SQLite database.
+
+## Database Location
+
+The database is at the OS-standard app data directory:
+- **Windows**: `%APPDATA%\ProductaFlows\logs.db`
+- **macOS**: `~/Library/Application Support/ProductaFlows/logs.db`
+- **Linux**: `~/.config/ProductaFlows/logs.db`
+- **Legacy fallback**: `~/.productaflows/logs.db`
 
 ## Quick Start
 
 ```bash
-# Read recent logs
-sqlite3 -header -column ~/.productaflows/logs.db "SELECT timestamp, level, function_area, operation, message FROM logs ORDER BY timestamp DESC LIMIT 20;"
+# Use the CLI script (auto-detects DB location)
+bash scripts/read-logs.sh                    # Recent 30 logs
+bash scripts/read-logs.sh --errors           # Errors only
+bash scripts/read-logs.sh --session <GUID>   # Full session timeline
+bash scripts/read-logs.sh --repo <name>      # Filter by repo
+bash scripts/read-logs.sh --slow             # Slowest operations
+bash scripts/read-logs.sh --stats            # Operation statistics
+bash scripts/read-logs.sh --sessions         # List all sessions
+bash scripts/read-logs.sh --since "1 hour"   # Recent timeframe
 
-# Read errors only
-sqlite3 -header -column ~/.productaflows/logs.db "SELECT timestamp, repo, operation, message, details FROM logs WHERE level = 'error' ORDER BY timestamp DESC LIMIT 20;"
-
-# Read a specific session timeline (all correlated events)
-sqlite3 -header -column ~/.productaflows/logs.db "SELECT timestamp, operation, message, duration_ms FROM logs WHERE session_id = '<GUID>' ORDER BY timestamp ASC;"
-
-# Slowest operations
-sqlite3 -header -column ~/.productaflows/logs.db "SELECT timestamp, repo, operation, message, duration_ms FROM logs WHERE duration_ms IS NOT NULL ORDER BY duration_ms DESC LIMIT 20;"
+# Or query directly
+sqlite3 -header -column "$APPDATA/ProductaFlows/logs.db" "SELECT timestamp, level, function_area, operation, message FROM logs ORDER BY timestamp DESC LIMIT 20;"
 ```
 
 ## Log Schema
@@ -27,25 +36,16 @@ sqlite3 -header -column ~/.productaflows/logs.db "SELECT timestamp, repo, operat
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | integer | Auto-incrementing primary key |
-| `session_id` | text | GUID correlating all events from one worktree session — filter on this to see an entire workflow |
+| `session_id` | text | GUID correlating all events from one worktree session |
 | `timestamp` | text (ISO 8601) | When the event occurred |
-| `end_timestamp` | text (ISO 8601) | When the event finished (for timed operations) |
-| `duration_ms` | integer | Duration in milliseconds (end - start). Use for performance analysis. |
-| `repo` | text | Repository name/path this event relates to (null for global events) |
-| `function_area` | text | App area — see list below |
+| `end_timestamp` | text (ISO 8601) | When the event finished |
+| `duration_ms` | integer | Duration in milliseconds |
+| `repo` | text | Repository name/path (null for global events) |
+| `function_area` | text | `source-control`, `code-viewer`, `claude-chat`, `flow-builder`, `worktree`, `project`, `system` |
 | `level` | text | `debug`, `info`, `warn`, `error` |
-| `operation` | text | Specific operation name (e.g., `commit`, `push`, `stage`, `session-start`) |
+| `operation` | text | Specific operation name |
 | `message` | text | Human-readable description |
-| `details` | text | Extended details, stack traces, or structured JSON |
-
-### Function Areas
-- `source-control` — git operations (commit, push, pull, stage, merge, branch, etc.)
-- `code-viewer` — file browsing, file reads
-- `claude-chat` — Claude Code sessions
-- `flow-builder` — flow execution, stage management
-- `worktree` — worktree create/destroy/clean
-- `project` — project add/remove/switch
-- `system` — app lifecycle, config, updates
+| `details` | text | Extended details or stack traces |
 
 ## Useful Queries
 
@@ -54,42 +54,28 @@ sqlite3 -header -column ~/.productaflows/logs.db "SELECT timestamp, repo, operat
 SELECT timestamp, repo, function_area, operation, message, details
 FROM logs WHERE level = 'error' ORDER BY timestamp DESC LIMIT 20;
 
--- Average duration by operation type
-SELECT operation, COUNT(*) as count,
-       ROUND(AVG(duration_ms)) as avg_ms,
-       MAX(duration_ms) as max_ms,
-       MIN(duration_ms) as min_ms
-FROM logs WHERE duration_ms IS NOT NULL
-GROUP BY operation ORDER BY avg_ms DESC;
+-- Slowest operations
+SELECT timestamp, repo, operation, message, duration_ms
+FROM logs WHERE duration_ms IS NOT NULL ORDER BY duration_ms DESC LIMIT 20;
 
 -- Full session timeline
 SELECT timestamp, function_area, operation, message, duration_ms
-FROM logs WHERE session_id = '<GUID>'
-ORDER BY timestamp ASC;
+FROM logs WHERE session_id = '<GUID>' ORDER BY timestamp ASC;
 
--- List all sessions with summary
-SELECT session_id,
-       MIN(timestamp) as started,
-       MAX(timestamp) as last_event,
-       COUNT(*) as event_count,
+-- List all sessions
+SELECT session_id, MIN(timestamp) as started, COUNT(*) as events,
        SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as errors
 FROM logs WHERE session_id IS NOT NULL
 GROUP BY session_id ORDER BY started DESC;
 
--- Errors in the last hour
-SELECT * FROM logs
-WHERE level = 'error' AND timestamp > datetime('now', '-1 hour')
-ORDER BY timestamp DESC;
-
--- Git operations timeline (excludes debug-level polling)
-SELECT timestamp, operation, message, duration_ms
-FROM logs WHERE function_area = 'source-control' AND level != 'debug'
-ORDER BY timestamp DESC LIMIT 50;
+-- Operation performance stats
+SELECT operation, COUNT(*) as count, ROUND(AVG(duration_ms)) as avg_ms, MAX(duration_ms) as max_ms
+FROM logs WHERE duration_ms IS NOT NULL GROUP BY operation ORDER BY avg_ms DESC;
 ```
 
-## When to Use This Skill
+## When to Use
 
-- **Debugging failures**: filter by `level = 'error'` to see what went wrong
-- **Performance analysis**: sort by `duration_ms DESC` to find bottlenecks
-- **Session review**: filter by `session_id` to replay what happened in a worktree session
-- **Audit trail**: filter by `repo` and `function_area` to see all operations on a project
+- **Debugging failures**: `--errors` to see what went wrong
+- **Performance**: `--slow` or `--stats` to find bottlenecks
+- **Session review**: `--session <GUID>` to replay a worktree session
+- **Audit**: `--repo <name>` to see all operations on a project

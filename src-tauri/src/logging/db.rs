@@ -57,8 +57,13 @@ impl LogDb {
     }
 
     fn db_path() -> PathBuf {
-        let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        home.join(".productaflows").join("logs.db")
+        let base = if let Some(config) = dirs_next::config_dir() {
+            config.join("ProductaFlows")
+        } else {
+            let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            home.join(".productaflows")
+        };
+        base.join("logs.db")
     }
 
     pub fn insert(&self, entry: &LogEntry) -> Result<i64, String> {

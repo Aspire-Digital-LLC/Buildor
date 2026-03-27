@@ -30,39 +30,50 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadProjects: async () => {
     set({ isLoading: true, error: null });
+    logEvent({ functionArea: 'project', level: 'debug', operation: 'load-projects', message: 'Loading projects...' }).catch(() => {});
+
+    let projects: Project[];
     try {
-      const projects = await listProjects();
+      projects = await listProjects();
+      logEvent({ functionArea: 'project', level: 'debug', operation: 'load-projects', message: `listProjects returned ${projects.length} project(s)` }).catch(() => {});
+    } catch (e) {
+      const msg = `listProjects failed: ${String(e)}`;
+      set({ error: msg, isLoading: false });
+      logEvent({ functionArea: 'project', level: 'error', operation: 'load-projects', message: msg }).catch(() => {});
+      return;
+    }
 
-      // Fetch current branch for each project
-      const projectsWithBranch = await Promise.all(
-        projects.map(async (p) => {
-          try {
-            const currentBranch = await getCurrentBranch(p.repoPath);
-            return { ...p, currentBranch };
-          } catch {
-            return { ...p, currentBranch: undefined };
-          }
-        })
-      );
+    // Fetch current branch for each project
+    const projectsWithBranch = await Promise.all(
+      projects.map(async (p) => {
+        try {
+          const currentBranch = await getCurrentBranch(p.repoPath);
+          return { ...p, currentBranch };
+        } catch (e) {
+          logEvent({ functionArea: 'project', level: 'warn', operation: 'get-branch', message: `Failed to get branch for ${p.name}: ${String(e)}`, repo: p.repoPath }).catch(() => {});
+          return { ...p, currentBranch: undefined };
+        }
+      })
+    );
 
-      // Restore active project
+    // Restore active project
+    let activeWithBranch: Project | null = null;
+    try {
       const active = await getActiveProject();
-      let activeWithBranch: Project | null = null;
       if (active) {
         const match = projectsWithBranch.find((p) => p.name === active.name);
         activeWithBranch = match || null;
       }
-
-      set({
-        projects: projectsWithBranch,
-        activeProject: activeWithBranch,
-        isLoading: false,
-      });
-      logEvent({ functionArea: 'project', level: 'info', operation: 'load-projects', message: `Loaded ${projectsWithBranch.length} project(s)` }).catch(() => {});
     } catch (e) {
-      set({ error: String(e), isLoading: false });
-      logEvent({ functionArea: 'project', level: 'error', operation: 'load-projects', message: String(e) }).catch(() => {});
+      logEvent({ functionArea: 'project', level: 'warn', operation: 'get-active', message: `Failed to restore active project: ${String(e)}` }).catch(() => {});
     }
+
+    set({
+      projects: projectsWithBranch,
+      activeProject: activeWithBranch,
+      isLoading: false,
+    });
+    logEvent({ functionArea: 'project', level: 'info', operation: 'load-projects', message: `Loaded ${projectsWithBranch.length} project(s)${activeWithBranch ? `, active: ${activeWithBranch.name}` : ''}` }).catch(() => {});
   },
 
   setActiveProject: async (project) => {
@@ -71,19 +82,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({ activeProject: project, error: null });
       logEvent({ functionArea: 'project', level: 'info', operation: 'set-active', message: `Set active project: ${project.name}` }).catch(() => {});
     } catch (e) {
-      set({ error: String(e) });
+      const msg = `Failed to set active project: ${String(e)}`;
+      set({ error: msg });
+      logEvent({ functionArea: 'project', level: 'error', operation: 'set-active', message: msg }).catch(() => {});
     }
   },
 
   addProject: async (name, path) => {
     try {
       await addProjectCmd(name, path);
-      await get().loadProjects();
       logEvent({ functionArea: 'project', level: 'info', operation: 'add-project', message: `Added project: ${name} (${path})` }).catch(() => {});
+      await get().loadProjects();
     } catch (e) {
-      set({ error: String(e) });
-      logEvent({ functionArea: 'project', level: 'error', operation: 'add-project', message: `Failed to add ${name}: ${String(e)}` }).catch(() => {});
-      throw e; // Re-throw so the UI can show the error
+      const msg = `Failed to add ${name}: ${String(e)}`;
+      set({ error: msg });
+      logEvent({ functionArea: 'project', level: 'error', operation: 'add-project', message: msg }).catch(() => {});
+      throw e;
     }
   },
 
@@ -94,10 +108,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (activeProject?.name === name) {
         set({ activeProject: null });
       }
-      await get().loadProjects();
       logEvent({ functionArea: 'project', level: 'info', operation: 'remove-project', message: `Removed project: ${name}` }).catch(() => {});
+      await get().loadProjects();
     } catch (e) {
-      set({ error: String(e) });
+      const msg = `Failed to remove ${name}: ${String(e)}`;
+      set({ error: msg });
+      logEvent({ functionArea: 'project', level: 'error', operation: 'remove-project', message: msg }).catch(() => {});
     }
   },
 
@@ -109,8 +125,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({
         activeProject: { ...activeProject, currentBranch },
       });
-    } catch {
-      // Silently fail — branch info is non-critical
+    } catch (e) {
+      logEvent({ functionArea: 'project', level: 'warn', operation: 'refresh-branch', message: `Failed to refresh branch for ${activeProject.name}: ${String(e)}`, repo: activeProject.repoPath }).catch(() => {});
     }
   },
 }));

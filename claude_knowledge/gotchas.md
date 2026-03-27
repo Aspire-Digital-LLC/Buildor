@@ -48,3 +48,21 @@ Surprising behaviors, bugs encountered, and non-obvious pitfalls. Each entry des
 **Surprise**: The MSVC Rust target requires the Microsoft C++ linker from Visual Studio Build Tools. Without it, `cargo build` fails with `linking with link.exe failed`. The GNU target alternative requires MinGW `dlltool.exe` which Git Bash doesn't include.
 **Impact**: Build completely blocked until VS Build Tools are installed with the VCTools workload.
 **Workaround**: Install via `rustup` (not winget MSI) for flexibility. Use MSVC target + VS Build Tools (`winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`). Requires admin/UAC approval.
+
+---
+
+### App Data Must Use OS-Standard Paths, Not Home Directory Dotfiles
+
+**Context**: Originally stored config and logs at `~/.productaflows/`. App rebuilds during development wiped this location or created confusion with multiple locations.
+**Surprise**: On Windows, `~/.productaflows/` is non-standard. App updates, reinstalls, or dev rebuilds don't preserve data at custom locations. Users expect app data at `%APPDATA%`.
+**Impact**: Projects, settings, and logs disappeared after app rebuilds. Users had to re-add projects.
+**Workaround**: Use `dirs_next::config_dir()` which returns the OS-standard location: `%APPDATA%/ProductaFlows` (Windows), `~/Library/Application Support/ProductaFlows` (macOS), `~/.config/ProductaFlows` (Linux). Added auto-migration from the old `~/.productaflows/` path. All new features must use `AppConfig::config_dir()` as the base path.
+
+---
+
+### Silent Failures Hide Real Problems — Always Log Errors
+
+**Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.
+**Surprise**: Config file had the project, the "already exists" error proved it was persisted, but the UI showed nothing. No log entries were generated for the load attempt.
+**Impact**: User sees empty state, tries to re-add, gets "already exists" error. Confusing loop.
+**Workaround**: Every failure path must log at `error` or `warn` level. Every operation entry point should log at `debug` level so we can see it was attempted. The project store now logs at each stage: start, listProjects result, branch fetch failures, active project restore, and final count.

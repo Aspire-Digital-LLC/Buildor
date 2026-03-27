@@ -17,13 +17,23 @@
 #   --clear           Clear all logs (requires confirmation)
 #   --help            Show this help
 
-DB="$HOME/.productaflows/logs.db"
-
-if [ ! -f "$DB" ]; then
-  echo "No log database found at $DB"
+# Try OS-standard location first, fall back to legacy
+if [ -f "$APPDATA/ProductaFlows/logs.db" ]; then
+  DB="$APPDATA/ProductaFlows/logs.db"
+elif [ -f "$HOME/Library/Application Support/ProductaFlows/logs.db" ]; then
+  DB="$HOME/Library/Application Support/ProductaFlows/logs.db"
+elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/ProductaFlows/logs.db" ]; then
+  DB="${XDG_CONFIG_HOME:-$HOME/.config}/ProductaFlows/logs.db"
+elif [ -f "$HOME/.productaflows/logs.db" ]; then
+  DB="$HOME/.productaflows/logs.db"
+else
+  echo "No log database found."
+  echo "Searched: %APPDATA%/ProductaFlows/, ~/.config/ProductaFlows/, ~/.productaflows/"
   echo "The database is created when ProductaFlows first writes a log entry."
   exit 1
 fi
+
+echo "Using: $DB"
 
 LIMIT=30
 MODE="recent"
