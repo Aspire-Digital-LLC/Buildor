@@ -19,7 +19,7 @@ interface ProjectState {
   setActiveProject: (project: Project) => Promise<void>;
   addProject: (name: string, path: string) => Promise<void>;
   removeProject: (name: string) => Promise<void>;
-  refreshCurrentBranch: () => Promise<void>;
+  refreshCurrentBranch: (projectName?: string) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -118,16 +118,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  refreshCurrentBranch: async () => {
-    const { activeProject } = get();
-    if (!activeProject) return;
+  refreshCurrentBranch: async (projectName?: string) => {
+    const { projects, activeProject } = get();
+    // Refresh a specific project, or the active one
+    const target = projectName
+      ? projects.find((p) => p.name === projectName)
+      : activeProject;
+    if (!target) return;
     try {
-      const currentBranch = await getCurrentBranch(activeProject.repoPath);
+      const currentBranch = await getCurrentBranch(target.repoPath);
+      // Update in the projects array
       set({
-        activeProject: { ...activeProject, currentBranch },
+        projects: projects.map((p) =>
+          p.name === target.name ? { ...p, currentBranch } : p
+        ),
+        activeProject: activeProject?.name === target.name
+          ? { ...activeProject, currentBranch }
+          : activeProject,
       });
     } catch (e) {
-      logEvent({ functionArea: 'project', level: 'warn', operation: 'refresh-branch', message: `Failed to refresh branch for ${activeProject.name}: ${String(e)}`, repo: activeProject.repoPath }).catch(() => {});
+      logEvent({ functionArea: 'project', level: 'warn', operation: 'refresh-branch', message: `Failed to refresh branch for ${target.name}: ${String(e)}`, repo: target.repoPath }).catch(() => {});
     }
   },
 }));

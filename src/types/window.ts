@@ -13,6 +13,9 @@ export interface Tab {
   panelType: PanelType;
   projectName?: string;
   title: string;
+  browsePath?: string;
+  browseBranch?: string;
+  browseIsWorktree?: boolean;
 }
 
 export interface WindowConfig {

@@ -45,6 +45,17 @@ See `claude_knowledge/codebase_structure.md` for the full layout.
 - Run `/document` after completing any meaningful work
 - Update `claude_knowledge/project_status.md` at the end of each work session — mark completed items, add new in-progress/not-started items, note any new issues
 
+## MANDATORY: Event System
+
+When building features that produce significant state changes (tool executions, permissions, errors, completions), **emit events** via the Buildor event bus. See `claude_knowledge/events.md` for the full event type list and usage patterns.
+
+```typescript
+import { buildorEvents } from '@/utils/buildorEvents';
+buildorEvents.emit('tool-executing', { toolName: 'Edit', toolUseId: '...' }, sessionId);
+```
+
+This decouples AI responses from UI behaviors — any component can subscribe to react (window blinking, notifications, progress updates) without hardcoding.
+
 ## MANDATORY: Logging Convention
 
 **Every new feature that performs an operation (backend call, git command, file operation, Claude session, flow execution) MUST include logging.** This is not optional.

@@ -4,6 +4,9 @@ import type { PanelType } from '@/types';
 interface TabContextValue {
   projectName?: string;
   panelType: PanelType;
+  browsePath?: string;
+  browseBranch?: string;
+  browseIsWorktree?: boolean;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);

@@ -20,7 +20,8 @@ Buildor/
 ├── src/                         # React frontend (TypeScript)
 │   ├── components/              # React components
 │   ├── hooks/                   # Custom React hooks
-│   ├── stores/                  # State management
+│   ├── themes/                  # Theme definitions (themes.ts — 7 themes, CSS variable system)
+│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore)
 │   ├── types/                   # TypeScript type definitions
 │   ├── utils/                   # Frontend utilities
 │   └── windows/                 # Per-window entry points

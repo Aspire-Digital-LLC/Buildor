@@ -48,3 +48,31 @@ Established code patterns, conventions, and reusable approaches in this project.
 **Implementation**: Rust command `get_language_stats` uses the `ignore` crate's WalkBuilder (respects .gitignore), counts bytes per file extension, maps to language names and GitHub-standard colors.
 **Example**: `src-tauri/src/commands/filesystem.rs` — `get_language_stats`, displayed in `ProjectSwitcher.tsx`
 **Why**: No API call needed — computed locally, fast, respects gitignore. Colors match GitHub for familiarity.
+
+---
+
+### Event-Driven Store Pattern (Usage Tracking)
+
+**When to use**: When a Zustand store needs to react to event bus emissions without component mounting
+**Implementation**: Subscribe to `buildorEvents` at module scope (outside the store creator) using `store.getState()` to call actions. This ensures events update the store even when no component is subscribed.
+**Example**: `src/stores/usageStore.ts` — subscribes to `usage-updated`, `cost-updated`, `session-started`, `session-ended` at module level
+**Why**: Decouples data aggregation from UI rendering. The store accumulates token counts from stream events regardless of which panel is active.
+
+---
+
+### CSS Variable Theme System
+
+**When to use**: Any component that renders structural UI colors (backgrounds, borders, text). Does NOT apply to semantic status colors (#3fb950 green, #f85149 red, #d29922 amber, #da3633 red button, #238636 green button, #d2a8ff purple/worktree).
+**Implementation**: Use `var(--xxx)` CSS variables in inline styles. Theme definitions live in `src/themes/themes.ts`. The Zustand store `src/stores/themeStore.ts` persists the selected theme to localStorage and applies CSS variables to `document.documentElement` on load. Light themes also call `setTheme('light')` via `@tauri-apps/api/app` to flip the native title bar.
+**Key variables**: `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--bg-active`, `--bg-elevated`, `--bg-inset`, `--border-primary`, `--border-secondary`, `--text-primary`, `--text-secondary`, `--text-tertiary`, `--accent-primary`, `--accent-secondary`, `--accent-muted`, `--statusbar-bg`, `--scrollbar-track`, `--scrollbar-thumb`, `--scrollbar-hover`, `--shadow-color`, `--text-on-accent`
+**Adding a new theme**: Add a `theme(...)` call to the `themes` array in `themes.ts` with all 20 CSS variable values, a `dark` boolean, and preview swatches.
+**Why**: All components used hardcoded hex colors. CSS variables enable theme switching without re-rendering — just update `:root` properties. The theme store rehydrates synchronously from localStorage so there's no flash of wrong theme.
+
+---
+
+### VS Code-Style StatusBar
+
+**When to use**: App-wide status information that should always be visible
+**Implementation**: `StatusBar` component in `src/components/layout/StatusBar.tsx`, placed below the Sidebar+Content flex container in `MainLayout.tsx`. Uses `useUsageStore` + `useProjectStore` for data. Polls `claude status` CLI every 5 minutes for plan/quota info.
+**Example**: Left side: git branch, project, model, cost. Right side: plan badge, context window %, session tokens, weekly usage %, reset time.
+**Why**: Spans full window width (24px tall), always visible regardless of active panel. Matches VS Code's status bar UX.

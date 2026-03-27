@@ -178,15 +178,15 @@ export function GitMenu() {
               key={b.name}
               onClick={() => onSelect(b.name)}
               style={branchItemStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
               <span>{b.name}</span>
-              {b.remote && <span style={{ fontSize: 10, color: '#6e7681' }}>{b.remote}</span>}
+              {b.remote && <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{b.remote}</span>}
             </div>
           ))}
           {branches.filter(b => !b.current).length === 0 && (
-            <div style={{ padding: 16, color: '#6e7681', textAlign: 'center', fontSize: 13 }}>
+            <div style={{ padding: 16, color: 'var(--text-tertiary)', textAlign: 'center', fontSize: 13 }}>
               No other branches
             </div>
           )}
@@ -204,9 +204,9 @@ export function GitMenu() {
         onClick={() => setOpen(!open)}
         title="More actions"
         style={{
-          background: '#21262d',
-          border: '1px solid #30363d',
-          color: '#c9d1d9',
+          background: 'var(--border-primary)',
+          border: '1px solid var(--border-secondary)',
+          color: 'var(--text-primary)',
           borderRadius: 6,
           padding: '5px 8px',
           fontSize: 14,
@@ -228,8 +228,8 @@ export function GitMenu() {
           top: '100%',
           right: 0,
           marginTop: 4,
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-secondary)',
           borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
           width: 240,
@@ -238,7 +238,7 @@ export function GitMenu() {
         }}>
           {menuItems.map((item, i) => {
             if ('type' in item && item.type === 'divider') {
-              return <div key={i} style={{ borderTop: '1px solid #21262d', margin: '4px 0' }} />;
+              return <div key={i} style={{ borderTop: '1px solid var(--border-primary)', margin: '4px 0' }} />;
             }
             if ('type' in item && item.type === 'header') {
               return (
@@ -246,7 +246,7 @@ export function GitMenu() {
                   padding: '6px 12px 2px',
                   fontSize: 10,
                   fontWeight: 600,
-                  color: '#6e7681',
+                  color: 'var(--text-tertiary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                 }}>
@@ -261,10 +261,10 @@ export function GitMenu() {
                 style={{
                   padding: '6px 12px',
                   fontSize: 13,
-                  color: '#e0e0e0',
+                  color: 'var(--text-primary)',
                   cursor: 'pointer',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 {item.label}
@@ -344,7 +344,7 @@ export function GitMenu() {
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <div style={modalHeaderStyle}>{confirmAction.label}</div>
-            <div style={{ padding: '12px 16px', fontSize: 13, color: '#adbac7' }}>
+            <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
               {confirmAction.description}
             </div>
             <div style={modalFooterStyle}>
@@ -368,11 +368,11 @@ export function GitMenu() {
           position: 'fixed',
           bottom: 16,
           right: 16,
-          background: feedback.startsWith('Error') ? '#3d1f1f' : '#1a2332',
-          border: `1px solid ${feedback.startsWith('Error') ? '#6e3030' : '#1f6feb'}`,
+          background: feedback.startsWith('Error') ? '#3d1f1f' : 'var(--bg-active)',
+          border: `1px solid ${feedback.startsWith('Error') ? '#6e3030' : 'var(--accent-secondary)'}`,
           borderRadius: 8,
           padding: '8px 16px',
-          color: '#e0e0e0',
+          color: 'var(--text-primary)',
           fontSize: 13,
           zIndex: 200,
           boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
@@ -396,8 +396,8 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  background: '#161b22',
-  border: '1px solid #30363d',
+  background: 'var(--bg-secondary)',
+  border: '1px solid var(--border-secondary)',
   borderRadius: 10,
   width: 360,
   boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
@@ -408,8 +408,8 @@ const modalHeaderStyle: React.CSSProperties = {
   padding: '12px 16px',
   fontSize: 14,
   fontWeight: 600,
-  color: '#e0e0e0',
-  borderBottom: '1px solid #21262d',
+  color: 'var(--text-primary)',
+  borderBottom: '1px solid var(--border-primary)',
 };
 
 const modalFooterStyle: React.CSSProperties = {
@@ -417,13 +417,13 @@ const modalFooterStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'flex-end',
   gap: 8,
-  borderTop: '1px solid #21262d',
+  borderTop: '1px solid var(--border-primary)',
 };
 
 const branchItemStyle: React.CSSProperties = {
   padding: '8px 16px',
   fontSize: 13,
-  color: '#e0e0e0',
+  color: 'var(--text-primary)',
   cursor: 'pointer',
   display: 'flex',
   justifyContent: 'space-between',
@@ -433,10 +433,10 @@ const branchItemStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: '#0d1117',
-  border: '1px solid #30363d',
+  background: 'var(--bg-primary)',
+  border: '1px solid var(--border-secondary)',
   borderRadius: 6,
-  color: '#e0e0e0',
+  color: 'var(--text-primary)',
   padding: '8px 12px',
   fontSize: 13,
   outline: 'none',
@@ -445,8 +445,8 @@ const inputStyle: React.CSSProperties = {
 
 const cancelBtnStyle: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid #30363d',
-  color: '#8b949e',
+  border: '1px solid var(--border-secondary)',
+  color: 'var(--text-secondary)',
   borderRadius: 6,
   padding: '6px 14px',
   fontSize: 13,

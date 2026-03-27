@@ -233,6 +233,170 @@ pub async fn get_language_stats(repo_path: String) -> Result<Vec<LanguageStat>, 
     Ok(stats)
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeCommand {
+    pub name: String,
+    pub description: String,
+    pub source: String, // "skill" or "command"
+}
+
+#[tauri::command]
+pub async fn list_claude_commands(repo_path: String) -> Result<Vec<ClaudeCommand>, String> {
+    let root = Path::new(&repo_path);
+    let claude_dir = root.join(".claude");
+    if !claude_dir.is_dir() {
+        return Ok(vec![]);
+    }
+
+    let mut commands = Vec::new();
+
+    // Scan .claude/skills/**/SKILL.md
+    let skills_dir = claude_dir.join("skills");
+    if skills_dir.is_dir() {
+        scan_skills(&skills_dir, &skills_dir, &mut commands)?;
+    }
+
+    // Scan .claude/commands/*.md
+    let commands_dir = claude_dir.join("commands");
+    if commands_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&commands_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("md") {
+                    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                    if stem.is_empty() { continue; }
+                    let description = parse_frontmatter_description(&path).unwrap_or_default();
+                    commands.push(ClaudeCommand {
+                        name: format!("/{}", stem),
+                        description,
+                        source: "command".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort by name
+    commands.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(commands)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedCommand {
+    pub name: String,
+    pub source: String,
+    pub description: String,
+    pub content: String,
+    pub file_path: String,
+}
+
+/// Look up a slash command by name in the project's .claude/ directory.
+/// Returns the file content if found, or an error if not.
+#[tauri::command]
+pub async fn resolve_claude_command(repo_path: String, command_name: String) -> Result<ResolvedCommand, String> {
+    let name = command_name.strip_prefix('/').unwrap_or(&command_name);
+    let root = Path::new(&repo_path);
+    let claude_dir = root.join(".claude");
+
+    // Check .claude/commands/<name>.md
+    let cmd_file = claude_dir.join("commands").join(format!("{}.md", name));
+    if cmd_file.is_file() {
+        let content = fs::read_to_string(&cmd_file)
+            .map_err(|e| format!("Failed to read command file: {}", e))?;
+        let description = parse_frontmatter_description(&cmd_file).unwrap_or_default();
+        return Ok(ResolvedCommand {
+            name: format!("/{}", name),
+            source: "command".to_string(),
+            description,
+            content,
+            file_path: cmd_file.to_string_lossy().replace('\\', "/"),
+        });
+    }
+
+    // Check .claude/skills/<name>/SKILL.md (and nested)
+    let skills_dir = claude_dir.join("skills");
+    if skills_dir.is_dir() {
+        if let Some(resolved) = find_skill_by_name(&skills_dir, name) {
+            return Ok(resolved);
+        }
+    }
+
+    Err(format!("Unknown command: /{}", name))
+}
+
+fn find_skill_by_name(dir: &Path, name: &str) -> Option<ResolvedCommand> {
+    let entries = fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let dir_name = path.file_name()?.to_str()?;
+            let skill_file = path.join("SKILL.md");
+            if dir_name == name && skill_file.is_file() {
+                let content = fs::read_to_string(&skill_file).ok()?;
+                let description = parse_frontmatter_description(&skill_file).unwrap_or_default();
+                return Some(ResolvedCommand {
+                    name: format!("/{}", name),
+                    source: "skill".to_string(),
+                    description,
+                    content,
+                    file_path: skill_file.to_string_lossy().replace('\\', "/"),
+                });
+            }
+            // Recurse
+            if let Some(found) = find_skill_by_name(&path, name) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn scan_skills(base: &Path, dir: &Path, commands: &mut Vec<ClaudeCommand>) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|e| format!("Failed to read skills dir: {}", e))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let skill_file = path.join("SKILL.md");
+            if skill_file.is_file() {
+                let skill_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                if skill_name.is_empty() { continue; }
+                let description = parse_frontmatter_description(&skill_file).unwrap_or_default();
+                commands.push(ClaudeCommand {
+                    name: format!("/{}", skill_name),
+                    description,
+                    source: "skill".to_string(),
+                });
+            }
+            // Recurse into subdirectories
+            scan_skills(base, &path, commands)?;
+        }
+    }
+    Ok(())
+}
+
+fn parse_frontmatter_description(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    // Parse YAML frontmatter between --- delimiters
+    if !content.starts_with("---") {
+        return None;
+    }
+    let rest = &content[3..];
+    let end = rest.find("---")?;
+    let frontmatter = &rest[..end];
+    for line in frontmatter.lines() {
+        let trimmed = line.trim();
+        if let Some(desc) = trimmed.strip_prefix("description:") {
+            let desc = desc.trim().trim_matches('"').trim_matches('\'');
+            if !desc.is_empty() {
+                return Some(desc.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Dark-mode-optimized language colors — all visible on #161b22 backgrounds
 fn language_color(lang: &str) -> String {
     match lang {

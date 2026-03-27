@@ -4,8 +4,12 @@ export async function generateSlug(description: string): Promise<string> {
   return invoke('generate_slug', { description });
 }
 
-export async function startClaudeSession(workingDir: string): Promise<string> {
-  return invoke('start_session', { workingDir });
+export async function startClaudeSession(workingDir: string, model?: string): Promise<string> {
+  return invoke('start_session', { workingDir, model: model || null });
+}
+
+export async function runClaudeCli(args: string[]): Promise<string> {
+  return invoke('run_claude_cli', { args });
 }
 
 export async function sendClaudeMessage(sessionId: string, message: string): Promise<void> {
@@ -22,4 +26,16 @@ export async function stopSession(sessionId: string): Promise<void> {
 
 export async function listClaudeSessions(): Promise<string[]> {
   return invoke('list_claude_sessions');
+}
+
+export async function respondToPermission(sessionId: string, requestId: string, approved: boolean, toolInput?: Record<string, unknown>): Promise<void> {
+  return invoke('respond_to_permission', { sessionId, requestId, approved, toolInput: toolInput || null });
+}
+
+export async function addPermissionRule(sessionId: string, rule: string): Promise<void> {
+  return invoke('add_permission_rule', { sessionId, rule });
+}
+
+export async function queryClaudeStatus(): Promise<string> {
+  return invoke('query_claude_status');
 }

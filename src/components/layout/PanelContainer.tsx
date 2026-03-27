@@ -8,7 +8,7 @@ export function PanelContainer({ children }: PanelContainerProps) {
   return (
     <div style={{
       flex: 1,
-      backgroundColor: '#161b22',
+      backgroundColor: 'var(--bg-secondary)',
       overflow: 'auto',
       padding: 0,
     }}>

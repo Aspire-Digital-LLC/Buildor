@@ -39,6 +39,11 @@
       "keywords": ["local", "OS", "windows", "mac", "linux", "tooling", "environment", "setup", "install"]
     },
     {
+      "file": "events.md",
+      "description": "Buildor event bus system — event types, how to subscribe/emit, rules for adding new events",
+      "keywords": ["event", "events", "bus", "subscribe", "emit", "permission", "attention", "notification", "blink"]
+    },
+    {
       "file": "project_status.md",
       "description": "Current project phase, completed work, in-progress features, and known issues",
       "keywords": ["status", "progress", "done", "todo", "current", "phase", "roadmap", "what's done", "what's next"]

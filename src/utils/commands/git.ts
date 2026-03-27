@@ -57,6 +57,10 @@ export async function gitDiscardFile(repoPath: string, filePath: string): Promis
   return invoke('git_discard_file', { repoPath, filePath });
 }
 
+export async function gitDeleteUntrackedFile(repoPath: string, filePath: string): Promise<void> {
+  return invoke('git_delete_untracked_file', { repoPath, filePath });
+}
+
 export async function gitMerge(repoPath: string, branchName: string): Promise<string> {
   return invoke('git_merge', { repoPath, branchName });
 }

@@ -4,8 +4,9 @@ import { useTabStore, useProjectStore } from '@/stores';
 import { getGitStatus } from '@/utils/commands/git';
 import { listSessions } from '@/utils/commands/worktree';
 import { checkForUpdate } from '@/utils/commands/config';
+import { buildorEvents } from '@/utils/buildorEvents';
 import { StartSessionModal } from '../session/StartSessionModal';
-import type { PanelType } from '@/types';
+import type { PanelType, SessionInfo } from '@/types';
 
 const iconProps = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
@@ -77,7 +78,7 @@ const navItems: NavItem[] = [
   { panelType: 'source-control', icon: icons.sourceControl, label: 'Source Control', requiresProject: true },
   { panelType: 'code-viewer', icon: icons.codeViewer, label: 'Code Viewer', requiresProject: true },
   { panelType: 'flow-builder', icon: icons.flowBuilder, label: 'Flow Builder', requiresProject: false },
-  { panelType: 'claude-chat', icon: icons.claudeChat, label: 'Claude Chat', requiresProject: false },
+  { panelType: 'claude-chat', icon: icons.claudeChat, label: 'Claude Chat', requiresProject: true },
   { panelType: 'command-palette', icon: icons.commandPalette, label: 'Command Palette', requiresProject: false },
   { panelType: 'worktree-manager', icon: icons.worktrees, label: 'Worktrees', requiresProject: false },
 ];
@@ -87,36 +88,65 @@ export function Sidebar() {
   const { projects } = useProjectStore();
   const [dropdown, setDropdown] = useState<{ panelType: PanelType; rect: DOMRect } | null>(null);
   const [showStartSession, setShowStartSession] = useState(false);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Track uncommitted change counts per project
+  // Track uncommitted change counts per project name AND per path (for worktrees)
   const [changeCounts, setChangeCounts] = useState<Record<string, number>>({});
+  // changeCounts keyed by both project name (for badge) and repoPath (for dropdown)
 
   const refreshChangeCounts = useCallback(async () => {
     const currentProjects = useProjectStore.getState().projects;
     if (currentProjects.length === 0) return;
     const counts: Record<string, number> = {};
+
+    // Get counts for main repo paths
     await Promise.all(
       currentProjects.map(async (p) => {
         try {
           const status = await getGitStatus(p.repoPath);
-          counts[p.name] = status.staged.length + status.unstaged.length + status.untracked.length;
+          const c = status.staged.length + status.unstaged.length + status.untracked.length;
+          counts[p.name] = c;
+          counts[p.repoPath] = c;
         } catch {
           counts[p.name] = 0;
+          counts[p.repoPath] = 0;
         }
       })
     );
+
+    // Also get counts for active worktree sessions
+    try {
+      const activeSessions = await listSessions();
+      await Promise.all(
+        activeSessions.map(async (s) => {
+          try {
+            const status = await getGitStatus(s.worktreePath);
+            counts[s.worktreePath] = status.staged.length + status.unstaged.length + status.untracked.length;
+          } catch {
+            counts[s.worktreePath] = 0;
+          }
+        })
+      );
+    } catch {}
+
     setChangeCounts(counts);
   }, []);
 
-  // Poll every 10 seconds
+  // Poll every 5 seconds + refresh immediately on branch switch
   useEffect(() => {
     refreshChangeCounts();
     const interval = setInterval(refreshChangeCounts, 5000);
-    return () => clearInterval(interval);
+    const handler = () => refreshChangeCounts();
+    buildorEvents.on('branch-switched', handler);
+    return () => {
+      clearInterval(interval);
+      buildorEvents.off('branch-switched', handler);
+    };
   }, [refreshChangeCounts, projects]);
 
-  const totalChanges = Object.values(changeCounts).reduce((sum, c) => sum + c, 0);
+  // Sum only by project name (not paths) to avoid double-counting
+  const totalChanges = projects.reduce((sum, p) => sum + (changeCounts[p.name] || 0), 0);
 
   // Track open session count
   const [sessionCount, setSessionCount] = useState(0);
@@ -167,12 +197,17 @@ export function Sidebar() {
         currentProjects = useProjectStore.getState().projects;
       }
       if (currentProjects.length === 0) {
-        // Still no projects — open settings
         openTab('settings');
         return;
       }
+      // Code Viewer, Source Control, and Claude Chat show grouped dropdown
+      if (item.panelType === 'code-viewer' || item.panelType === 'source-control' || item.panelType === 'claude-chat') {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setDropdown({ panelType: item.panelType, rect });
+        listSessions().then((s) => setSessions(s)).catch(() => setSessions([]));
+        return;
+      }
       if (currentProjects.length === 1) {
-        // Single project — open directly
         openTab(item.panelType, currentProjects[0].name);
         return;
       }
@@ -187,8 +222,8 @@ export function Sidebar() {
   return (
     <nav style={{
       width: 56,
-      backgroundColor: '#0d1117',
-      borderRight: '1px solid #21262d',
+      backgroundColor: 'var(--bg-primary)',
+      borderRight: '1px solid var(--border-primary)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -211,7 +246,7 @@ export function Sidebar() {
           borderLeft: '2px solid transparent',
           cursor: 'pointer',
           borderRadius: 4,
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           marginBottom: 4,
         }}
       >
@@ -239,12 +274,12 @@ export function Sidebar() {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 20,
-              background: isActive ? '#1a1a2e' : 'transparent',
+              background: isActive ? 'var(--bg-active)' : 'transparent',
               border: 'none',
-              borderLeft: isActive ? '2px solid #58a6ff' : '2px solid transparent',
+              borderLeft: isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
               cursor: 'pointer',
               borderRadius: 4,
-              color: isActive ? '#e0e0e0' : '#8b949e',
+              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
               position: 'relative',
             }}
           >
@@ -257,7 +292,7 @@ export function Sidebar() {
                 minWidth: 16,
                 height: 16,
                 borderRadius: 8,
-                backgroundColor: '#1f6feb',
+                backgroundColor: 'var(--accent-secondary)',
                 color: '#fff',
                 fontSize: 9,
                 fontWeight: 700,
@@ -287,12 +322,12 @@ export function Sidebar() {
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: 20,
-          background: activeTab?.panelType === 'settings' ? '#1a1a2e' : 'transparent',
+          background: activeTab?.panelType === 'settings' ? 'var(--bg-active)' : 'transparent',
           border: 'none',
-          borderLeft: activeTab?.panelType === 'settings' ? '2px solid #58a6ff' : '2px solid transparent',
+          borderLeft: activeTab?.panelType === 'settings' ? '2px solid var(--accent-primary)' : '2px solid transparent',
           cursor: 'pointer',
           borderRadius: 4,
-          color: activeTab?.panelType === 'settings' ? '#e0e0e0' : '#8b949e',
+          color: activeTab?.panelType === 'settings' ? 'var(--text-primary)' : 'var(--text-secondary)',
           marginBottom: 8,
           position: 'relative',
         }}
@@ -327,76 +362,210 @@ export function Sidebar() {
             position: 'fixed',
             left: dropdown.rect.right + 4,
             top: dropdown.rect.top,
-            background: '#161b22',
-            border: '1px solid #30363d',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-secondary)',
             borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-            width: 220,
+            boxShadow: '0 8px 24px var(--shadow-color)',
+            width: (dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control' || dropdown.panelType === 'claude-chat') ? 280 : 220,
+            maxHeight: 400,
+            overflowY: 'auto',
             zIndex: 200,
-            overflow: 'hidden',
           }}
         >
           <div style={{
             padding: '6px 12px',
             fontSize: 11,
             fontWeight: 600,
-            color: '#6e7681',
+            color: 'var(--text-tertiary)',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
-            borderBottom: '1px solid #21262d',
+            borderBottom: '1px solid var(--border-primary)',
           }}>
-            Select Project
+            {dropdown.panelType === 'code-viewer' ? 'Browse Code' : dropdown.panelType === 'source-control' ? 'Source Control' : dropdown.panelType === 'claude-chat' ? 'Claude Chat' : 'Select Project'}
           </div>
-          {projects.map((project) => {
-            const count = changeCounts[project.name] || 0;
-            return (
-              <div
-                key={project.name}
-                onClick={() => {
-                  openTab(dropdown.panelType, project.name);
-                  setDropdown(null);
-                }}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  color: '#e0e0e0',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div>
-                  <div style={{ fontWeight: 500 }}>{project.name}</div>
-                  {project.currentBranch && (
-                    <div style={{ fontSize: 11, color: '#6e7681', marginTop: 1 }}>
-                      {project.currentBranch}
-                    </div>
-                  )}
-                </div>
-                {dropdown.panelType === 'source-control' && count > 0 && (
-                  <span style={{
-                    minWidth: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: '#1f6feb',
-                    color: '#fff',
-                    fontSize: 11,
+
+          {(dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control' || dropdown.panelType === 'claude-chat') ? (
+            /* Grouped by project with checked-out branch + worktrees */
+            projects.map((project) => {
+              const projectSessions = sessions.filter(
+                (s) => s.repoPath.replace(/\\/g, '/') === project.repoPath.replace(/\\/g, '/')
+              );
+              return (
+                <div key={project.name}>
+                  {/* Project name header (not clickable) */}
+                  <div style={{
+                    padding: '8px 12px 2px',
+                    fontSize: 13,
                     fontWeight: 600,
+                    color: 'var(--text-primary)',
+                  }}>
+                    {project.name}
+                  </div>
+
+                  {/* Checked out branch */}
+                  <div style={{
+                    padding: '2px 12px 2px 20px',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: 'var(--text-tertiary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.3px',
+                    marginTop: 4,
+                  }}>
+                    Checked out
+                  </div>
+                  <div
+                    onClick={() => {
+                      openTab(dropdown.panelType, project.name, {
+                        browsePath: project.repoPath,
+                        browseBranch: project.currentBranch || 'main',
+                        browseIsWorktree: false,
+                      });
+                      setDropdown(null);
+                    }}
+                    style={{
+                      padding: '4px 12px 4px 28px',
+                      fontSize: 12,
+                      color: 'var(--accent-primary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 3v12" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
+                    </svg>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{project.currentBranch || 'main'}</span>
+                    {dropdown.panelType === 'source-control' && (changeCounts[project.repoPath] || 0) > 0 && (
+                      <span style={{
+                        minWidth: 18, height: 18, borderRadius: 9,
+                        backgroundColor: 'var(--accent-secondary)', color: '#fff',
+                        fontSize: 10, fontWeight: 600,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '0 4px', flexShrink: 0,
+                      }}>
+                        {changeCounts[project.repoPath]}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Worktrees (only for code-viewer and source-control, not claude-chat) */}
+                  {dropdown.panelType !== 'claude-chat' && projectSessions.length > 0 && (
+                    <>
+                      <div style={{
+                        padding: '6px 12px 2px 20px',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: 'var(--text-tertiary)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.3px',
+                      }}>
+                        Worktrees
+                      </div>
+                      {projectSessions.map((session) => (
+                        <div
+                          key={session.sessionId}
+                          onClick={() => {
+                            openTab(dropdown.panelType, project.name, {
+                              browsePath: session.worktreePath,
+                              browseBranch: session.branchName,
+                              browseIsWorktree: true,
+                            });
+                            setDropdown(null);
+                          }}
+                          style={{
+                            padding: '4px 12px 4px 28px',
+                            fontSize: 12,
+                            color: '#d2a8ff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 3v18" /><path d="M6 9h6a2 2 0 0 1 2 2v0a2 2 0 0 0 2 2h2" />
+                          </svg>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.branchName}</span>
+                          {dropdown.panelType === 'source-control' && (changeCounts[session.worktreePath] || 0) > 0 && (
+                            <span style={{
+                              minWidth: 18, height: 18, borderRadius: 9,
+                              backgroundColor: 'var(--accent-secondary)', color: '#fff',
+                              fontSize: 10, fontWeight: 600,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              padding: '0 4px', flexShrink: 0,
+                            }}>
+                              {changeCounts[session.worktreePath]}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Divider between projects */}
+                  <div style={{ borderBottom: '1px solid var(--border-primary)', margin: '4px 0' }} />
+                </div>
+              );
+            })
+          ) : (
+            /* Default: flat project list for source-control etc. */
+            projects.map((project) => {
+              const count = changeCounts[project.name] || 0;
+              return (
+                <div
+                  key={project.name}
+                  onClick={() => {
+                    openTab(dropdown.panelType, project.name);
+                    setDropdown(null);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 13,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 5px',
-                    flexShrink: 0,
-                  }}>
-                    {count}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+                    justifyContent: 'space-between',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 500 }}>{project.name}</div>
+                    {project.currentBranch && (
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                        {project.currentBranch}
+                      </div>
+                    )}
+                  </div>
+                  {dropdown.panelType === 'source-control' && count > 0 && (
+                    <span style={{
+                      minWidth: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: 'var(--accent-secondary)',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 5px',
+                      flexShrink: 0,
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

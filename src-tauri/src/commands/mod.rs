@@ -7,3 +7,4 @@ pub mod worktree;
 pub mod window;
 pub mod filesystem;
 pub mod logging;
+pub mod account;

@@ -297,7 +297,7 @@ pub async fn git_list_branches(repo_path: String) -> Result<Vec<BranchInfo>, Str
             continue;
         }
         let current = line.starts_with('*');
-        let rest = if current { &line[2..] } else { &line[2..] };
+        let rest = if current { &line[2..] } else { line };
         let parts: Vec<&str> = rest.splitn(2, ' ').collect();
         let name = parts[0].to_string();
         let remote = parts.get(1).and_then(|r| {
@@ -314,6 +314,23 @@ pub async fn git_list_branches(repo_path: String) -> Result<Vec<BranchInfo>, Str
 #[tauri::command]
 pub async fn git_discard_file(repo_path: String, file_path: String) -> Result<(), String> {
     run_git(&repo_path, &["checkout", "--", &file_path])?;
+    Ok(())
+}
+
+/// Delete an untracked file (git checkout doesn't work for these)
+#[tauri::command]
+pub async fn git_delete_untracked_file(repo_path: String, file_path: String) -> Result<(), String> {
+    let full_path = std::path::Path::new(&repo_path).join(&file_path);
+    if !full_path.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+    // Safety: only delete if the file is actually untracked
+    let status = run_git(&repo_path, &["status", "--porcelain", "--", &file_path])?;
+    if !status.starts_with("??") {
+        return Err("File is tracked by git — use discard instead".to_string());
+    }
+    std::fs::remove_file(&full_path)
+        .map_err(|e| format!("Failed to delete {}: {}", file_path, e))?;
     Ok(())
 }
 

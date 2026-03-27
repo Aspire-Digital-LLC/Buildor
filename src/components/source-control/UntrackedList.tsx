@@ -3,9 +3,10 @@ interface UntrackedListProps {
   onStage: (path: string) => void;
   onStageAll: () => void;
   onClickFile?: (path: string) => void;
+  onDiscard?: (path: string) => void;
 }
 
-export function UntrackedList({ files, onStage, onStageAll, onClickFile }: UntrackedListProps) {
+export function UntrackedList({ files, onStage, onStageAll, onClickFile, onDiscard }: UntrackedListProps) {
   if (files.length === 0) return null;
 
   return (
@@ -17,7 +18,7 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile }: Untra
         padding: '6px 12px',
         fontSize: 11,
         fontWeight: 600,
-        color: '#8b949e',
+        color: 'var(--text-secondary)',
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
       }}>
@@ -27,7 +28,7 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile }: Untra
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#58a6ff',
+            color: 'var(--accent-primary)',
             fontSize: 11,
             cursor: 'pointer',
             padding: '0 4px',
@@ -46,10 +47,10 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile }: Untra
             padding: '3px 12px',
             cursor: onClickFile ? 'pointer' : 'default',
             fontSize: 13,
-            color: '#adbac7',
+            color: 'var(--text-secondary)',
             fontFamily: "'Cascadia Code', 'Consolas', monospace",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <span style={{
@@ -71,6 +72,35 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile }: Untra
           }}>
             {file}
           </span>
+          {/* Discard (delete) button */}
+          {onDiscard && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDiscard(file);
+              }}
+              title="Delete untracked file"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#f85149',
+                fontSize: 13,
+                cursor: 'pointer',
+                padding: '0 4px',
+                flexShrink: 0,
+                opacity: 0.6,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          )}
+          {/* Stage button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -80,7 +110,7 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile }: Untra
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#8b949e',
+              color: 'var(--text-secondary)',
               fontSize: 14,
               cursor: 'pointer',
               padding: '0 4px',

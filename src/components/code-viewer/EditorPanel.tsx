@@ -60,7 +60,7 @@ export function EditorPanel() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#6e7681',
+        color: 'var(--text-tertiary)',
         fontSize: 14,
       }}>
         Select a file to view
@@ -85,14 +85,14 @@ export function EditorPanel() {
       {/* Breadcrumb + actions */}
       <div style={{
         height: 36,
-        background: '#1c2128',
-        borderBottom: '1px solid #21262d',
+        background: 'var(--bg-tertiary)',
+        borderBottom: '1px solid var(--border-primary)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 12px',
         fontSize: 12,
-        color: '#8b949e',
+        color: 'var(--text-secondary)',
         overflow: 'hidden',
         whiteSpace: 'nowrap',
         fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
@@ -101,9 +101,9 @@ export function EditorPanel() {
         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {breadcrumbParts.map((part, i) => (
             <span key={i}>
-              {i > 0 && <span style={{ margin: '0 4px', color: '#484f58' }}>/</span>}
+              {i > 0 && <span style={{ margin: '0 4px', color: 'var(--text-tertiary)' }}>/</span>}
               <span style={{
-                color: i === breadcrumbParts.length - 1 ? '#e0e0e0' : '#8b949e',
+                color: i === breadcrumbParts.length - 1 ? 'var(--text-primary)' : 'var(--text-secondary)',
               }}>
                 {part}
               </span>
@@ -117,9 +117,9 @@ export function EditorPanel() {
               onClick={() => setIsEditing(true)}
               title="Edit file"
               style={{
-                background: '#21262d',
-                border: '1px solid #30363d',
-                color: '#c9d1d9',
+                background: 'var(--border-primary)',
+                border: '1px solid var(--border-secondary)',
+                color: 'var(--text-primary)',
                 borderRadius: 6,
                 padding: '4px 10px',
                 fontSize: 12,
@@ -158,9 +158,9 @@ export function EditorPanel() {
               <button
                 onClick={handleCancel}
                 style={{
-                  background: '#21262d',
-                  border: '1px solid #30363d',
-                  color: '#c9d1d9',
+                  background: 'var(--border-primary)',
+                  border: '1px solid var(--border-secondary)',
+                  color: 'var(--text-primary)',
                   borderRadius: 6,
                   padding: '4px 10px',
                   fontSize: 12,
@@ -191,7 +191,7 @@ export function EditorPanel() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#6e7681',
+          color: 'var(--text-tertiary)',
         }}>
           Loading...
         </div>

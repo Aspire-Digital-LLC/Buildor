@@ -12,8 +12,10 @@ fn get_sessions() -> &'static Mutex<HashMap<String, ClaudeSession>> {
 }
 
 struct ClaudeSession {
+    stdin: Option<std::process::ChildStdin>,
+    #[allow(dead_code)]
+    child: Option<std::process::Child>,
     working_dir: String,
-    is_first_message: bool,
 }
 
 fn is_valid_slug(s: &str) -> bool {
@@ -119,89 +121,179 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
     ))
 }
 
-/// Claude sessions use --print --continue for each message.
-/// The session_id maps to a working directory. Each send_message
-/// spawns `claude --print --continue "<message>"` and streams output.
-
-// (ClaudeSession struct defined below get_sessions)
-
 #[tauri::command]
-pub async fn start_session(_app: AppHandle, working_dir: String) -> Result<String, String> {
+pub async fn start_session(app: AppHandle, working_dir: String, model: Option<String>) -> Result<String, String> {
     let session_id = uuid::Uuid::new_v4().to_string();
+
+    let mut args = vec![
+        "--print".to_string(),
+        "--input-format".to_string(), "stream-json".to_string(),
+        "--output-format".to_string(), "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--permission-mode".to_string(), "default".to_string(),
+        "--permission-prompt-tool".to_string(), "stdio".to_string(),
+    ];
+    if let Some(ref m) = model {
+        args.push("--model".to_string());
+        args.push(m.clone());
+    }
+
+    let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    let mut child = std::process::Command::new("claude")
+        .args(&args_refs)
+        .current_dir(&working_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to capture stdout".to_string())?;
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to capture stderr".to_string())?;
+    let stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to capture stdin".to_string())?;
+
+    let sid = session_id.clone();
+
+    // Stream stdout (JSON lines) to frontend
+    let app_handle = app.clone();
+    let sid_out = sid.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(text) => {
+                    if !text.trim().is_empty() {
+                        let _ = app_handle.emit(&format!("claude-output-{}", sid_out), &text);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = app_handle.emit(&format!("claude-exit-{}", sid_out), "exited");
+    });
+
+    // Stream stderr too
+    let app_handle2 = app.clone();
+    let sid_err = sid.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(text) => {
+                    if !text.trim().is_empty() {
+                        let _ = app_handle2.emit(&format!("claude-stderr-{}", sid_err), &text);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
 
     let sessions = get_sessions();
     let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
     map.insert(session_id.clone(), ClaudeSession {
+        stdin: Some(stdin),
+        child: Some(child),
         working_dir,
-        is_first_message: true,
     });
 
     Ok(session_id)
 }
 
 #[tauri::command]
-pub async fn send_message(app: AppHandle, session_id: String, message: String) -> Result<(), String> {
-    let working_dir;
-    let is_first;
-    {
-        let sessions = get_sessions();
-        let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
-        let session = map.get_mut(&session_id)
-            .ok_or_else(|| "Session not found".to_string())?;
-        working_dir = session.working_dir.clone();
-        is_first = session.is_first_message;
-        session.is_first_message = false;
-    }
+pub async fn send_message(session_id: String, message: String) -> Result<(), String> {
+    use std::io::Write;
 
-    // Build args: --print for non-interactive, --continue for subsequent messages
-    // --dangerously-skip-permissions because --print mode has no interactive approval
-    let mut args = vec![
-        "--print".to_string(),
-        "--dangerously-skip-permissions".to_string(),
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-        "--verbose".to_string(),
-    ];
-    if !is_first {
-        args.push("--continue".to_string());
-    }
-    args.push(message);
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
 
-    let sid = session_id.clone();
-    let app_handle = app.clone();
+    let session = map.get_mut(&session_id)
+        .ok_or_else(|| "Session not found".to_string())?;
 
-    // Spawn in background thread to not block
-    thread::spawn(move || {
-        let child = Command::new("claude")
-            .args(&args)
-            .current_dir(&working_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
+    let stdin = session.stdin.as_mut()
+        .ok_or_else(|| "Session stdin not available".to_string())?;
 
-        match child {
-            Ok(mut child) => {
-                if let Some(stdout) = child.stdout.take() {
-                    let reader = BufReader::new(stdout);
-                    for line in reader.lines().flatten() {
-                        let _ = app_handle.emit(&format!("claude-output-{}", sid), line);
-                    }
-                }
-                if let Some(stderr) = child.stderr.take() {
-                    let reader = BufReader::new(stderr);
-                    for line in reader.lines().flatten() {
-                        let _ = app_handle.emit(&format!("claude-output-{}", sid), line);
-                    }
-                }
-                let _ = child.wait();
-                let _ = app_handle.emit(&format!("claude-done-{}", sid), "done");
-            }
-            Err(e) => {
-                let _ = app_handle.emit(&format!("claude-output-{}", sid), format!("Error: {}", e));
-                let _ = app_handle.emit(&format!("claude-done-{}", sid), "error");
-            }
+    // Send message as JSON to stream-json input
+    // Claude expects: {"type":"user","message":{"role":"user","content":"<text>"}}
+    let input_msg = serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": message
         }
     });
+
+    let json_str = serde_json::to_string(&input_msg)
+        .map_err(|e| format!("Failed to serialize message: {}", e))?;
+
+    writeln!(stdin, "{}", json_str)
+        .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    stdin.flush()
+        .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+
+    Ok(())
+}
+
+/// Send a permission response (approve/deny) back to Claude
+#[tauri::command]
+pub async fn respond_to_permission(
+    session_id: String,
+    request_id: String,
+    approved: bool,
+    tool_input: Option<serde_json::Value>,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    let session = map.get_mut(&session_id)
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let stdin = session.stdin.as_mut()
+        .ok_or_else(|| "Session stdin not available".to_string())?;
+
+    let response = if approved {
+        let mut response_data = serde_json::json!({
+            "behavior": "allow"
+        });
+        // Must echo back the original tool input
+        if let Some(input) = tool_input {
+            response_data["updatedInput"] = input;
+        }
+        serde_json::json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": request_id,
+                "response": response_data
+            }
+        })
+    } else {
+        serde_json::json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": request_id,
+                "response": {
+                    "behavior": "deny",
+                    "message": "Permission denied by user in Buildor UI"
+                }
+            }
+        })
+    };
+
+    let json_str = serde_json::to_string(&response)
+        .map_err(|e| format!("Failed to serialize: {}", e))?;
+
+    writeln!(stdin, "{}", json_str)
+        .map_err(|e| format!("Failed to write: {}", e))?;
+    stdin.flush()
+        .map_err(|e| format!("Failed to flush: {}", e))?;
 
     Ok(())
 }
@@ -210,7 +302,15 @@ pub async fn send_message(app: AppHandle, session_id: String, message: String) -
 pub async fn stop_session(session_id: String) -> Result<(), String> {
     let sessions = get_sessions();
     let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
-    map.remove(&session_id);
+
+    if let Some(mut session) = map.remove(&session_id) {
+        drop(session.stdin.take()); // Close stdin first
+        if let Some(mut child) = session.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
     Ok(())
 }
 
@@ -230,4 +330,114 @@ pub async fn list_claude_sessions() -> Result<Vec<String>, String> {
     let sessions = get_sessions();
     let map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
     Ok(map.keys().cloned().collect())
+}
+
+/// Add a permission rule to .claude/settings.local.json in the session's working directory
+#[tauri::command]
+pub async fn add_permission_rule(session_id: String, rule: String) -> Result<(), String> {
+    let working_dir = {
+        let sessions = get_sessions();
+        let map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let session = map.get(&session_id)
+            .ok_or_else(|| "Session not found".to_string())?;
+        session.working_dir.clone()
+    };
+
+    let settings_path = std::path::Path::new(&working_dir)
+        .join(".claude")
+        .join("settings.local.json");
+
+    // Read existing settings or create new
+    let mut settings: serde_json::Value = if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read settings: {}", e))?;
+        serde_json::from_str(&content)
+            .unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    // Ensure permissions.allow array exists
+    if settings.get("permissions").is_none() {
+        settings["permissions"] = serde_json::json!({ "allow": [] });
+    }
+    if settings["permissions"].get("allow").is_none() {
+        settings["permissions"]["allow"] = serde_json::json!([]);
+    }
+
+    // Check if rule already exists
+    let allow = settings["permissions"]["allow"].as_array().unwrap_or(&vec![]).clone();
+    if !allow.iter().any(|v| v.as_str() == Some(&rule)) {
+        settings["permissions"]["allow"]
+            .as_array_mut()
+            .ok_or_else(|| "Failed to get allow array".to_string())?
+            .push(serde_json::Value::String(rule));
+    }
+
+    // Write back
+    if let Some(parent) = settings_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create .claude dir: {}", e))?;
+    }
+    let formatted = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize: {}", e))?;
+    std::fs::write(&settings_path, formatted)
+        .map_err(|e| format!("Failed to write settings: {}", e))?;
+
+    Ok(())
+}
+
+/// Read Claude credentials and config to get plan type, tier, and version
+#[tauri::command]
+pub async fn query_claude_status() -> Result<String, String> {
+    let mut result = serde_json::json!({});
+
+    // 1. Read ~/.claude/.credentials.json for plan/tier info
+    if let Some(home) = dirs_next::home_dir() {
+        let creds_path = home.join(".claude").join(".credentials.json");
+        if creds_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&creds_path) {
+                if let Ok(creds) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let oauth = &creds["claudeAiOauth"];
+                    if let Some(sub_type) = oauth["subscriptionType"].as_str() {
+                        result["subscriptionType"] = serde_json::Value::String(sub_type.to_string());
+                    }
+                    if let Some(tier) = oauth["rateLimitTier"].as_str() {
+                        result["rateLimitTier"] = serde_json::Value::String(tier.to_string());
+                    }
+                    if let Some(scopes) = oauth["scopes"].as_array() {
+                        result["scopes"] = serde_json::Value::Array(scopes.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Get claude CLI version
+    if let Ok(output) = Command::new("claude").args(["--version"]).output() {
+        if output.status.success() {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            result["version"] = serde_json::Value::String(version);
+        }
+    }
+
+    Ok(serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string()))
+}
+
+/// Run a claude CLI command (e.g., login, logout) and return its output
+#[tauri::command]
+pub async fn run_claude_cli(args: Vec<String>) -> Result<String, String> {
+    let output = Command::new("claude")
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Failed to run claude: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Err(format!("{}\n{}", stdout, stderr).trim().to_string())
+    }
 }
