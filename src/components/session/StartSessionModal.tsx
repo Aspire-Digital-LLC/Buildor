@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useProjectStore } from '@/stores';
 import { getBranchesForRepo, createSession } from '@/utils/commands/worktree';
 import { generateSlug as generateSlugViaHaiku } from '@/utils/commands/claude';
@@ -243,8 +244,60 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
             </div>
           </div>
           <div style={modalFooterStyle}>
-            <button onClick={onClose} style={primaryBtnStyle}>
+            <button onClick={onClose} style={cancelBtnStyle}>
               Done
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  // Get screen size for 50% width
+                  const screenWidth = window.screen.availWidth;
+                  const screenHeight = window.screen.availHeight;
+                  const winWidth = Math.floor(screenWidth * 0.5);
+                  const winHeight = Math.floor(screenHeight * 0.85);
+
+                  const label = `claude-${createdSession.sessionId.slice(0, 8)}`;
+                  const webview = new WebviewWindow(label, {
+                    url: `index.html`,
+                    title: `Claude — ${createdSession.branchName}`,
+                    width: winWidth,
+                    height: winHeight,
+                    x: Math.floor(screenWidth * 0.25),
+                    y: Math.floor(screenHeight * 0.05),
+                    theme: 'dark' as const,
+                  });
+
+                  webview.once('tauri://error', (e) => {
+                    logEvent({
+                      sessionId: createdSession.sessionId,
+                      functionArea: 'claude-chat',
+                      level: 'error',
+                      operation: 'launch-window',
+                      message: `Failed to open Claude window: ${String(e)}`,
+                    }).catch(() => {});
+                  });
+
+                  logEvent({
+                    sessionId: createdSession.sessionId,
+                    repo: createdSession.repoPath,
+                    functionArea: 'claude-chat',
+                    level: 'info',
+                    operation: 'launch-window',
+                    message: `Launched Claude window for: ${createdSession.branchName}`,
+                  }).catch(() => {});
+                } catch (e) {
+                  logEvent({
+                    functionArea: 'claude-chat',
+                    level: 'error',
+                    operation: 'launch-window',
+                    message: `Failed: ${String(e)}`,
+                  }).catch(() => {});
+                }
+                onClose();
+              }}
+              style={primaryBtnStyle}
+            >
+              Launch Claude
             </button>
           </div>
         </div>

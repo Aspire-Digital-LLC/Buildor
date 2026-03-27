@@ -3,11 +3,11 @@ import ReactDOM from 'react-dom/client';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { MainApp } from './windows/main/MainApp';
 import { BreakoutApp } from './windows/breakout/BreakoutApp';
+import { ClaudeChatWindow } from './windows/claude/ClaudeChatWindow';
 import type { PanelType } from './types';
 import './styles/global.css';
 
 function parsePanelType(label: string): PanelType {
-  // Labels follow pattern: "breakout-{panelType}-{timestamp}"
   const match = label.match(/^breakout-(.+?)-\d+$/);
   if (match) {
     return match[1] as PanelType;
@@ -28,6 +28,12 @@ async function init() {
           <MainApp />
         </React.StrictMode>
       );
+    } else if (label.startsWith('claude-')) {
+      root.render(
+        <React.StrictMode>
+          <ClaudeChatWindow />
+        </React.StrictMode>
+      );
     } else {
       const panelType = parsePanelType(label);
       root.render(
@@ -37,7 +43,6 @@ async function init() {
       );
     }
   } catch {
-    // Fallback for dev server without Tauri
     root.render(
       <React.StrictMode>
         <MainApp />
