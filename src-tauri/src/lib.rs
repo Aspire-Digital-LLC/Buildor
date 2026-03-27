@@ -45,6 +45,8 @@ pub fn run() {
             commands::claude::start_session,
             commands::claude::send_message,
             commands::claude::get_session_status,
+            commands::claude::stop_session,
+            commands::claude::list_claude_sessions,
             commands::config::get_config,
             commands::config::set_config,
             commands::worktree::list_worktrees,

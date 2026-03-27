@@ -1,22 +1,44 @@
-use std::process::Command;
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Command, Stdio, Child};
+use std::sync::Mutex;
+use std::thread;
+use tauri::{AppHandle, Emitter};
+use serde::{Serialize, Deserialize};
+
+static SESSIONS: std::sync::OnceLock<Mutex<HashMap<String, ClaudeSession>>> = std::sync::OnceLock::new();
+
+fn get_sessions() -> &'static Mutex<HashMap<String, ClaudeSession>> {
+    SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+struct ClaudeSession {
+    stdin: std::process::ChildStdin,
+    #[allow(dead_code)]
+    child: Child,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStatus {
+    pub session_id: String,
+    pub working_dir: String,
+    pub is_active: bool,
+}
 
 fn is_valid_slug(s: &str) -> bool {
     if s.is_empty() || s.len() > 60 {
         return false;
     }
-    // Must contain at least one hyphen (multi-word)
     if !s.contains('-') {
         return false;
     }
-    // Only lowercase alphanumeric and hyphens
     if !s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
         return false;
     }
-    // No double hyphens, no leading/trailing hyphens
     if s.contains("--") || s.starts_with('-') || s.ends_with('-') {
         return false;
     }
-    // 2-6 words
     let word_count = s.split('-').count();
     word_count >= 2 && word_count <= 6
 }
@@ -87,22 +109,20 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
         return Ok(slug);
     }
 
-    // Attempt 2 — retry with correction
-    // Log will happen on frontend side as warn
+    // Attempt 2
     let raw2 = call_haiku(&retry_prompt(&raw))?;
     let slug2 = clean_response(&raw2);
     if is_valid_slug(&slug2) {
         return Ok(slug2);
     }
 
-    // Attempt 3 — final retry
+    // Attempt 3
     let raw3 = call_haiku(&retry_prompt(&raw2))?;
     let slug3 = clean_response(&raw3);
     if is_valid_slug(&slug3) {
         return Ok(slug3);
     }
 
-    // All 3 attempts failed — return error
     Err(format!(
         "Failed to generate valid slug after 3 attempts. Last response: \"{}\"",
         raw3
@@ -110,19 +130,107 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn start_session(working_dir: String) -> Result<String, String> {
-    // TODO: Spawn Claude Code process for working_dir
-    Ok("stub-session-id".to_string())
+pub async fn start_session(app: AppHandle, working_dir: String) -> Result<String, String> {
+    let session_id = uuid::Uuid::new_v4().to_string();
+
+    let mut child = Command::new("claude")
+        .current_dir(&working_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to capture stdout".to_string())?;
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to capture stderr".to_string())?;
+    let stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to capture stdin".to_string())?;
+
+    let sid = session_id.clone();
+
+    // Stream stdout to frontend via events
+    let app_handle = app.clone();
+    let sid_stdout = sid.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(text) => {
+                    let _ = app_handle.emit(&format!("claude-output-{}", sid_stdout), text);
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = app_handle.emit(&format!("claude-exit-{}", sid_stdout), "exited");
+    });
+
+    // Stream stderr too
+    let app_handle2 = app.clone();
+    let sid_stderr = sid.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(text) => {
+                    let _ = app_handle2.emit(&format!("claude-output-{}", sid_stderr), text);
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+    map.insert(session_id.clone(), ClaudeSession { stdin, child });
+
+    Ok(session_id)
 }
 
 #[tauri::command]
-pub async fn send_message(session_id: String, message: String) -> Result<String, String> {
-    // TODO: Send message to Claude Code session
-    Ok("stub: response".to_string())
+pub async fn send_message(session_id: String, message: String) -> Result<(), String> {
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    let session = map.get_mut(&session_id)
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    writeln!(session.stdin, "{}", message)
+        .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    session.stdin.flush()
+        .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_session(session_id: String) -> Result<(), String> {
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    if let Some(mut session) = map.remove(&session_id) {
+        let _ = session.child.kill();
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn get_session_status(session_id: String) -> Result<String, String> {
-    // TODO: Check if session is active
-    Ok("active".to_string())
+    let sessions = get_sessions();
+    let map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    if map.contains_key(&session_id) {
+        Ok("active".to_string())
+    } else {
+        Ok("inactive".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn list_claude_sessions() -> Result<Vec<String>, String> {
+    let sessions = get_sessions();
+    let map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(map.keys().cloned().collect())
 }

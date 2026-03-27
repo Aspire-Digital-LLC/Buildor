@@ -15,3 +15,11 @@ export async function sendClaudeMessage(sessionId: string, message: string): Pro
 export async function getClaudeSessionStatus(sessionId: string): Promise<string> {
   return invoke('get_session_status', { sessionId });
 }
+
+export async function stopSession(sessionId: string): Promise<void> {
+  return invoke('stop_session', { sessionId });
+}
+
+export async function listClaudeSessions(): Promise<string[]> {
+  return invoke('list_claude_sessions');
+}
