@@ -94,16 +94,32 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
 
     const timeout = setTimeout(async () => {
       setIsGeneratingSlug(true);
+      const startTime = new Date().toISOString();
       try {
         const result = await generateSlugViaHaiku(slugInput);
+        const endTime = new Date().toISOString();
+        const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
         setAiSlug(result);
         setAiSlugSource(slugInput);
+        logEvent({
+          functionArea: 'worktree',
+          level: 'info',
+          operation: 'generate-slug',
+          message: `Generated slug: "${result}" from: "${slugInput}"`,
+          endTime,
+          durationMs,
+        }).catch(() => {});
       } catch (e) {
+        const endTime = new Date().toISOString();
+        const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
         logEvent({
           functionArea: 'worktree',
           level: 'error',
           operation: 'generate-slug',
-          message: `Slug generation failed after retries: ${String(e)}`,
+          message: `Slug generation failed: ${String(e)}`,
+          details: `Input: "${slugInput}"`,
+          endTime,
+          durationMs,
         }).catch(() => {});
       }
       setIsGeneratingSlug(false);
