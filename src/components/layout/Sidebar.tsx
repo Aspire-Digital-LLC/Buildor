@@ -354,7 +354,8 @@ export function Sidebar() {
         <StartSessionModal
           onClose={() => setShowStartSession(false)}
           onSessionCreated={() => {
-            setShowStartSession(false);
+            // Don't close — modal shows success screen, user clicks "Done" to close
+            refreshChangeCounts();
           }}
         />
       )}
