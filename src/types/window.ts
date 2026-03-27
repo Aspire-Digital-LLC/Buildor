@@ -24,3 +24,23 @@ export interface WindowConfig {
   projectName?: string;
   worktreePath?: string;
 }
+
+export type SessionType = 'bug' | 'issue' | 'feature' | 'documentation' | 'release';
+
+export interface SessionInfo {
+  sessionId: string;
+  projectName: string;
+  repoPath: string;
+  worktreePath: string;
+  branchName: string;
+  sessionType: string;
+  baseBranch: string;
+  issueNumber: string | null;
+  createdAt: string;
+}
+
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  isMain: boolean;
+}

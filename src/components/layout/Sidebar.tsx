@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useTabStore, useProjectStore } from '@/stores';
 import { getGitStatus } from '@/utils/commands/git';
+import { StartSessionModal } from '../session/StartSessionModal';
 import type { PanelType } from '@/types';
 
 const iconProps = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -83,6 +84,7 @@ export function Sidebar() {
   const { openTab, tabs, activeTabId } = useTabStore();
   const { projects } = useProjectStore();
   const [dropdown, setDropdown] = useState<{ panelType: PanelType; rect: DOMRect } | null>(null);
+  const [showStartSession, setShowStartSession] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Track uncommitted change counts per project
@@ -166,6 +168,31 @@ export function Sidebar() {
       gap: 4,
       position: 'relative',
     }}>
+      {/* Start Session — primary action */}
+      <button
+        onClick={() => setShowStartSession(true)}
+        title="Start Session"
+        style={{
+          width: 44,
+          height: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          borderLeft: '2px solid transparent',
+          cursor: 'pointer',
+          borderRadius: 4,
+          color: '#8b949e',
+          marginBottom: 4,
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v8M8 12h8" />
+        </svg>
+      </button>
+
       {navItems.map((item) => {
         const isActive = activeTab?.panelType === item.panelType;
         const badge = item.panelType === 'source-control' && totalChanges > 0 ? totalChanges : null;
@@ -320,6 +347,16 @@ export function Sidebar() {
             );
           })}
         </div>
+      )}
+
+      {/* Start Session Modal */}
+      {showStartSession && (
+        <StartSessionModal
+          onClose={() => setShowStartSession(false)}
+          onSessionCreated={() => {
+            setShowStartSession(false);
+          }}
+        />
       )}
     </nav>
   );

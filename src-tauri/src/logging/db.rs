@@ -53,6 +53,12 @@ impl LogDb {
             CREATE INDEX IF NOT EXISTS idx_logs_session_id ON logs(session_id);",
         ).map_err(|e| format!("Failed to create logs table: {}", e))?;
 
+        // Cull logs older than 30 days on startup
+        let _ = conn.execute(
+            "DELETE FROM logs WHERE timestamp < datetime('now', '-30 days')",
+            [],
+        );
+
         Ok(LogDb { conn: Mutex::new(conn) })
     }
 

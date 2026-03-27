@@ -15,7 +15,8 @@
         "label": "main",
         "title": "ProductaFlows v0.0.1",
         "width": 1400,
-        "height": 900
+        "height": 900,
+        "theme": "Dark"
       }
     ],
     "security": {
