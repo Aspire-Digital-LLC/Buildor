@@ -35,6 +35,11 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
 
+  // Haiku slug state
+  const [aiSlug, setAiSlug] = useState<string | null>(null);
+  const [aiSlugSource, setAiSlugSource] = useState<string>('');
+  const [isGeneratingSlug, setIsGeneratingSlug] = useState(false);
+
   useEffect(() => {
     loadProjects();
   }, []);
@@ -69,16 +74,34 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
     b.toLowerCase().includes(branchSearch.toLowerCase())
   );
 
-  // Local slug for live preview (instant, no API)
-  const previewSlug = (text: string): string => {
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .slice(0, 40)
-      .replace(/-$/, '');
-  };
+  // Debounced Haiku slug generation — 1 second after user stops typing
+  const slugInput = hasIssue ? (issueNumber ? `Issue #${issueNumber}` : '') : description;
+
+  useEffect(() => {
+    if (!slugInput.trim()) {
+      setAiSlug(null);
+      setAiSlugSource('');
+      return;
+    }
+
+    // Don't re-fetch if source hasn't changed
+    if (slugInput === aiSlugSource && aiSlug) return;
+
+    const timeout = setTimeout(async () => {
+      setIsGeneratingSlug(true);
+      try {
+        const result = await generateSlugViaHaiku(slugInput);
+        // Only set if input hasn't changed while we were waiting
+        setAiSlug(result);
+        setAiSlugSource(slugInput);
+      } catch {
+        // Silently fail — preview will show fallback
+      }
+      setIsGeneratingSlug(false);
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [slugInput]);
 
   const handleCreate = useCallback(async () => {
     if (!selectedProject || !selectedBranch) return;
@@ -86,14 +109,22 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
     setIsCreating(true);
     setError(null);
 
-    // Generate slug via Haiku subagent
-    const slugSource = hasIssue ? `Issue #${issueNumber}` : description;
+    // Use cached Haiku slug if source hasn't changed, otherwise request fresh
+    const currentSlugInput = hasIssue ? `Issue #${issueNumber}` : description;
     let slug: string;
-    try {
-      slug = await generateSlugViaHaiku(slugSource);
-    } catch {
-      // Fallback to local slug if Haiku is unavailable
-      slug = previewSlug(slugSource) || 'session';
+    if (aiSlug && aiSlugSource === currentSlugInput) {
+      slug = aiSlug;
+    } else {
+      try {
+        slug = await generateSlugViaHaiku(currentSlugInput);
+      } catch {
+        // Fallback to simple slug
+        slug = currentSlugInput
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .slice(0, 40) || 'session';
+      }
     }
 
     const startTime = new Date().toISOString();
@@ -370,7 +401,14 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
             }}>
               <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Branch Preview</div>
               <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
-                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}<span style={{ color: '#d29922', fontStyle: 'italic' }}>{'<ai-slug>'}</span>
+                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}
+                {isGeneratingSlug ? (
+                  <span style={{ color: '#6e7681', fontStyle: 'italic' }}>generating...</span>
+                ) : aiSlug ? (
+                  <span style={{ color: '#3fb950' }}>{aiSlug}</span>
+                ) : (
+                  <span style={{ color: '#6e7681', fontStyle: 'italic' }}>{'<type to generate>'}</span>
+                )}
               </div>
             </div>
           )}
@@ -401,7 +439,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
               cursor: canCreate && !isCreating ? 'pointer' : 'default',
             }}
           >
-            {isCreating ? 'Generating slug & creating...' : 'Create Session'}
+            {isCreating ? 'Creating session...' : 'Create Session'}
           </button>
         </div>
       </div>
