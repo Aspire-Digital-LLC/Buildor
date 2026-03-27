@@ -154,8 +154,10 @@ pub async fn send_message(app: AppHandle, session_id: String, message: String) -
     }
 
     // Build args: --print for non-interactive, --continue for subsequent messages
+    // --dangerously-skip-permissions because --print mode has no interactive approval
     let mut args = vec![
         "--print".to_string(),
+        "--dangerously-skip-permissions".to_string(),
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
