@@ -370,7 +370,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
             }}>
               <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Branch Preview</div>
               <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
-                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}{previewSlug(hasIssue ? `issue-${issueNumber}` : description) || '...'}
+                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}<span style={{ color: '#d29922', fontStyle: 'italic' }}>{'<ai-slug>'}</span>
               </div>
             </div>
           )}
