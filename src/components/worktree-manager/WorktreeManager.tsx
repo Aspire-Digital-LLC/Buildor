@@ -29,6 +29,7 @@ export function WorktreeManager() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [closing, setClosing] = useState<string | null>(null);
+  const [forceClosing, setForceClosing] = useState<string | null>(null);
   const [closingProject, setClosingProject] = useState<string | null>(null);
   const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
   const [globalConfirmText, setGlobalConfirmText] = useState('');
@@ -50,14 +51,15 @@ export function WorktreeManager() {
     return () => clearInterval(interval);
   }, [loadSessions]);
 
-  const handleClose = async (session: SessionInfo) => {
-    if (closing === session.sessionId) {
+  const handleClose = async (session: SessionInfo, force = false) => {
+    if (force || closing === session.sessionId) {
       try {
         await closeSession({
           sessionId: session.sessionId,
           projectName: session.projectName,
           repoPath: session.repoPath,
           worktreePath: session.worktreePath,
+          force,
         });
         logEvent({
           sessionId: session.sessionId,
@@ -65,23 +67,39 @@ export function WorktreeManager() {
           functionArea: 'worktree',
           level: 'info',
           operation: 'close-session',
-          message: `Closed session: ${session.branchName}`,
+          message: `Closed session: ${session.branchName}${force ? ' (forced)' : ''}`,
         }).catch(() => {});
+        setForceClosing(null);
         await loadSessions();
       } catch (e) {
-        logEvent({
-          sessionId: session.sessionId,
-          repo: session.repoPath,
-          functionArea: 'worktree',
-          level: 'error',
-          operation: 'close-session',
-          message: `Failed to close: ${String(e)}`,
-        }).catch(() => {});
+        const errMsg = String(e);
+        // If the error is about unsaved work, offer force-close
+        if (errMsg.includes('uncommitted') || errMsg.includes('unpushed') || errMsg.includes('never pushed')) {
+          setForceClosing(session.sessionId);
+          logEvent({
+            sessionId: session.sessionId,
+            repo: session.repoPath,
+            functionArea: 'worktree',
+            level: 'warn',
+            operation: 'close-session',
+            message: `Blocked close: ${errMsg}`,
+          }).catch(() => {});
+        } else {
+          logEvent({
+            sessionId: session.sessionId,
+            repo: session.repoPath,
+            functionArea: 'worktree',
+            level: 'error',
+            operation: 'close-session',
+            message: `Failed to close: ${errMsg}`,
+          }).catch(() => {});
+        }
       }
       setClosing(null);
     } else {
       setClosing(session.sessionId);
-      setTimeout(() => setClosing(null), 3000);
+      setForceClosing(null);
+      setTimeout(() => setClosing(null), 5000);
     }
   };
 
@@ -443,20 +461,39 @@ export function WorktreeManager() {
                           >
                             Open
                           </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleClose(session); }}
-                            style={{
-                              background: isConfirmingClose ? '#da3633' : '#21262d',
-                              color: isConfirmingClose ? '#fff' : '#8b949e',
-                              border: `1px solid ${isConfirmingClose ? '#da3633' : '#30363d'}`,
-                              borderRadius: 6,
-                              padding: '4px 10px',
-                              fontSize: 12,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {isConfirmingClose ? 'Confirm' : 'Close'}
-                          </button>
+                          {forceClosing === session.sessionId ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleClose(session, true); }}
+                              title="Has uncommitted or unpushed changes — click to force close anyway"
+                              style={{
+                                background: '#da3633',
+                                color: '#fff',
+                                border: '1px solid #f85149',
+                                borderRadius: 6,
+                                padding: '4px 10px',
+                                fontSize: 12,
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                              }}
+                            >
+                              Force Close
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleClose(session); }}
+                              style={{
+                                background: isConfirmingClose ? '#da3633' : '#21262d',
+                                color: isConfirmingClose ? '#fff' : '#8b949e',
+                                border: `1px solid ${isConfirmingClose ? '#da3633' : '#30363d'}`,
+                                borderRadius: 6,
+                                padding: '4px 10px',
+                                fontSize: 12,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {isConfirmingClose ? 'Confirm' : 'Close'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

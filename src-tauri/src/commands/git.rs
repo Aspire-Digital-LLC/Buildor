@@ -79,7 +79,7 @@ pub async fn get_git_status(repo_path: String) -> Result<GitStatus, String> {
     }
 
     // Get porcelain status
-    let status_output = run_git(&repo_path, &["status", "--porcelain=v1", "-uall"])?;
+    let status_output = run_git(&repo_path, &["status", "--porcelain=v1", "-unormal"])?;
 
     let mut staged: Vec<FileChange> = Vec::new();
     let mut unstaged: Vec<FileChange> = Vec::new();
@@ -219,13 +219,28 @@ pub async fn git_commit(repo_path: String, message: String) -> Result<String, St
 
 #[tauri::command]
 pub async fn git_push(repo_path: String) -> Result<(), String> {
-    run_git(&repo_path, &["push"])?;
+    // Check if the current branch has an upstream configured
+    let has_upstream = run_git(&repo_path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok();
+
+    if has_upstream {
+        run_git(&repo_path, &["push"])?;
+    } else {
+        // No upstream — auto-publish the branch (like VS Code does on first push)
+        let branch = run_git(&repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+        let branch = branch.trim();
+        run_git(&repo_path, &["push", "-u", "origin", branch])?;
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn git_pull(repo_path: String) -> Result<(), String> {
-    run_git(&repo_path, &["pull"])?;
+    // If no upstream is set, there's nothing to pull from — succeed silently
+    let has_upstream = run_git(&repo_path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok();
+    if has_upstream {
+        run_git(&repo_path, &["pull"])?;
+    }
+    // No upstream = new branch that only exists locally, nothing to pull
     Ok(())
 }
 
@@ -237,6 +252,36 @@ pub async fn git_create_branch(repo_path: String, branch_name: String) -> Result
 
 #[tauri::command]
 pub async fn git_switch_branch(repo_path: String, branch_name: String) -> Result<(), String> {
+    // Check if the branch is already checked out by another worktree
+    let worktree_list = run_git(&repo_path, &["worktree", "list", "--porcelain"]).unwrap_or_default();
+    let repo_normalized = repo_path.replace('\\', "/");
+    let mut current_wt_path = String::new();
+    let mut current_wt_branch = String::new();
+
+    for line in worktree_list.lines() {
+        if line.starts_with("worktree ") {
+            current_wt_path = line[9..].replace('\\', "/");
+        } else if line.starts_with("branch refs/heads/") {
+            current_wt_branch = line[18..].to_string();
+        } else if line.is_empty() {
+            if current_wt_branch == branch_name && current_wt_path != repo_normalized {
+                return Err(format!(
+                    "Branch '{}' is already checked out in another worktree at: {}",
+                    branch_name, current_wt_path
+                ));
+            }
+            current_wt_path.clear();
+            current_wt_branch.clear();
+        }
+    }
+    // Check last entry
+    if current_wt_branch == branch_name && current_wt_path != repo_normalized {
+        return Err(format!(
+            "Branch '{}' is already checked out in another worktree at: {}",
+            branch_name, current_wt_path
+        ));
+    }
+
     run_git(&repo_path, &["checkout", &branch_name])?;
     Ok(())
 }
