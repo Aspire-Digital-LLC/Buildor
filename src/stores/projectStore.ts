@@ -73,7 +73,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       activeProject: activeWithBranch,
       isLoading: false,
     });
-    logEvent({ functionArea: 'project', level: 'info', operation: 'load-projects', message: `Loaded ${projectsWithBranch.length} project(s)${activeWithBranch ? `, active: ${activeWithBranch.name}` : ''}` }).catch(() => {});
+    const names = projectsWithBranch.map((p) => p.name).join(', ');
+    logEvent({ functionArea: 'project', level: 'info', operation: 'load-projects', message: `Loaded ${projectsWithBranch.length} project(s): [${names}]${activeWithBranch ? `, active: ${activeWithBranch.name}` : ''}` }).catch(() => {});
   },
 
   setActiveProject: async (project) => {

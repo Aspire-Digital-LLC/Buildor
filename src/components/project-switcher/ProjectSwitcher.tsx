@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useProjectStore } from '@/stores';
 
@@ -11,7 +11,13 @@ export function ProjectSwitcher() {
     addProject,
     removeProject,
     setActiveProject,
+    loadProjects,
   } = useProjectStore();
+
+  // Always refresh projects when this component mounts
+  useEffect(() => {
+    loadProjects();
+  }, []);
   const [removing, setRemoving] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 

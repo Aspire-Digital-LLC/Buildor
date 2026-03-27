@@ -32,7 +32,10 @@
       "Bash(git:*)",
       "Read(//c/Git/ProductaFlows/$HOME/**)",
       "Read(//c/Git/ProductaFlows/$APPDATA/**)",
-      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 10 2>&1)"
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 10 2>&1)",
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 20 2>&1)",
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 30 2>&1)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

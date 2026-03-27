@@ -98,16 +98,22 @@ export function Sidebar() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  const handleNavClick = (item: NavItem, e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleNavClick = async (item: NavItem, e: React.MouseEvent<HTMLButtonElement>) => {
     if (item.requiresProject) {
-      if (projects.length === 0) {
-        // No projects — open projects tab
-        openTab('projects');
+      // Ensure projects are loaded
+      let currentProjects = projects;
+      if (currentProjects.length === 0) {
+        await useProjectStore.getState().loadProjects();
+        currentProjects = useProjectStore.getState().projects;
+      }
+      if (currentProjects.length === 0) {
+        // Still no projects — open settings
+        openTab('settings');
         return;
       }
-      if (projects.length === 1) {
+      if (currentProjects.length === 1) {
         // Single project — open directly
-        openTab(item.panelType, projects[0].name);
+        openTab(item.panelType, currentProjects[0].name);
         return;
       }
       // Multiple projects — show dropdown
