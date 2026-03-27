@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listSessions, closeSession, closeAllSessions } from '@/utils/commands/worktree';
 import { logEvent } from '@/utils/commands/logging';
 import type { SessionInfo } from '@/types';
@@ -133,6 +134,42 @@ export function WorktreeManager() {
       setGlobalConfirmText('');
     }
   };
+
+  const openClaudeWindow = useCallback(async (session: SessionInfo) => {
+    try {
+      const screenWidth = window.screen.availWidth;
+      const screenHeight = window.screen.availHeight;
+      const label = `claude-${session.sessionId.slice(0, 8)}`;
+
+      const webview = new WebviewWindow(label, {
+        url: 'index.html',
+        title: `Claude — ${session.branchName}`,
+        width: Math.floor(screenWidth * 0.5),
+        height: Math.floor(screenHeight * 0.85),
+        x: Math.floor(screenWidth * 0.25),
+        y: Math.floor(screenHeight * 0.05),
+        theme: 'dark' as const,
+      });
+
+      webview.once('tauri://error', () => {});
+
+      logEvent({
+        sessionId: session.sessionId,
+        repo: session.repoPath,
+        functionArea: 'claude-chat',
+        level: 'info',
+        operation: 'launch-window',
+        message: `Opened Claude window for: ${session.branchName}`,
+      }).catch(() => {});
+    } catch (e) {
+      logEvent({
+        functionArea: 'claude-chat',
+        level: 'error',
+        operation: 'launch-window',
+        message: `Failed: ${String(e)}`,
+      }).catch(() => {});
+    }
+  }, []);
 
   // Group by project
   const grouped: Record<string, SessionInfo[]> = {};
@@ -335,12 +372,17 @@ export function WorktreeManager() {
                   return (
                     <div
                       key={session.sessionId}
+                      onClick={() => openClaudeWindow(session)}
                       style={{
                         background: '#161b22',
                         border: '1px solid #21262d',
                         borderRadius: 8,
                         padding: '10px 14px',
+                        cursor: 'pointer',
+                        transition: 'border-color 0.15s',
                       }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#30363d'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#21262d'; }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -389,22 +431,37 @@ export function WorktreeManager() {
                             {session.worktreePath}
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleClose(session)}
-                          style={{
-                            background: isConfirmingClose ? '#da3633' : '#21262d',
-                            color: isConfirmingClose ? '#fff' : '#8b949e',
-                            border: `1px solid ${isConfirmingClose ? '#da3633' : '#30363d'}`,
-                            borderRadius: 6,
-                            padding: '4px 10px',
-                            fontSize: 12,
-                            cursor: 'pointer',
-                            flexShrink: 0,
-                            marginLeft: 12,
-                          }}
-                        >
-                          {isConfirmingClose ? 'Confirm' : 'Close'}
-                        </button>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openClaudeWindow(session); }}
+                            style={{
+                              background: '#238636',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 6,
+                              padding: '4px 10px',
+                              fontSize: 12,
+                              cursor: 'pointer',
+                              fontWeight: 500,
+                            }}
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleClose(session); }}
+                            style={{
+                              background: isConfirmingClose ? '#da3633' : '#21262d',
+                              color: isConfirmingClose ? '#fff' : '#8b949e',
+                              border: `1px solid ${isConfirmingClose ? '#da3633' : '#30363d'}`,
+                              borderRadius: 6,
+                              padding: '4px 10px',
+                              fontSize: 12,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {isConfirmingClose ? 'Confirm' : 'Close'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
