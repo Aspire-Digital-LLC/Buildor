@@ -5,3 +5,4 @@ export * from './claude';
 export * from './window';
 export * from './skill';
 export * from './filesystem';
+export * from './log';

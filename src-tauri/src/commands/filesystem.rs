@@ -31,7 +31,7 @@ fn build_tree(dir: &Path, respect_gitignore: bool, depth: usize, max_depth: usiz
     let mut entries: Vec<FileEntry> = Vec::new();
 
     // Always skip these directories
-    let skip_dirs = [".git", "node_modules", "target", "dist", ".next", "__pycache__", ".cache", "build", ".turbo", ".nuxt"];
+    let skip_dirs = ["node_modules", "target", "dist", ".next", "__pycache__", ".cache", "build", ".turbo", ".nuxt"];
 
     let mut dir_entries: Vec<fs::DirEntry> = fs::read_dir(dir)
         .map_err(|e| format!("Failed to read directory: {}", e))?
@@ -54,8 +54,8 @@ fn build_tree(dir: &Path, respect_gitignore: bool, depth: usize, max_depth: usiz
         let entry_path = entry.path();
         let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
 
-        // Skip hidden files/dirs (starting with .) except specific ones we want to show
-        if name.starts_with('.') && name != ".gitignore" && name != ".env" && name != ".env.example" {
+        // Skip .git directory only — show all other dotfiles (.claude, .github, .env, etc.)
+        if name == ".git" {
             continue;
         }
 

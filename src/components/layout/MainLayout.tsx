@@ -10,22 +10,8 @@ import { ClaudeChat } from '../claude-chat/ClaudeChat';
 import { CommandPalette } from '../command-palette/CommandPalette';
 import { WorktreeManager } from '../worktree-manager/WorktreeManager';
 import { ProjectSwitcher } from '../project-switcher/ProjectSwitcher';
+import { Settings } from '../settings/Settings';
 import type { PanelType } from '@/types';
-
-function SettingsPlaceholder() {
-  return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: '#6e7681',
-      fontSize: 14,
-    }}>
-      Settings — Coming soon
-    </div>
-  );
-}
 
 const panelComponents: Record<PanelType, React.ComponentType> = {
   'source-control': SourceControl,
@@ -35,7 +21,7 @@ const panelComponents: Record<PanelType, React.ComponentType> = {
   'command-palette': CommandPalette,
   'worktree-manager': WorktreeManager,
   'projects': ProjectSwitcher,
-  'settings': SettingsPlaceholder,
+  'settings': Settings,
 };
 
 function ActivePanelRenderer() {

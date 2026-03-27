@@ -159,28 +159,6 @@ export function Sidebar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Projects button */}
-      <button
-        onClick={() => openTab('projects')}
-        title="Projects"
-        style={{
-          width: 44,
-          height: 44,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 20,
-          background: activeTab?.panelType === 'projects' ? '#1a1a2e' : 'transparent',
-          border: 'none',
-          borderLeft: activeTab?.panelType === 'projects' ? '2px solid #58a6ff' : '2px solid transparent',
-          cursor: 'pointer',
-          borderRadius: 4,
-          color: activeTab?.panelType === 'projects' ? '#e0e0e0' : '#8b949e',
-        }}
-      >
-        {icons.projects}
-      </button>
-
       {/* Settings button */}
       <button
         onClick={() => openTab('settings')}

@@ -6,3 +6,4 @@ pub mod config;
 pub mod worktree;
 pub mod window;
 pub mod filesystem;
+pub mod logging;

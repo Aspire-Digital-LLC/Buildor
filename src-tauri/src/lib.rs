@@ -3,6 +3,7 @@ mod git;
 mod orchestrator;
 mod claude;
 mod config;
+mod logging;
 
 pub fn run() {
     tauri::Builder::default()
@@ -53,6 +54,9 @@ pub fn run() {
             commands::window::close_breakout_window,
             commands::filesystem::list_directory_recursive,
             commands::filesystem::read_file_content,
+            commands::logging::log_event,
+            commands::logging::get_logs,
+            commands::logging::clear_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
