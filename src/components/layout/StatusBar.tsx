@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useUsageStore } from '@/stores';
+import { listen } from '@tauri-apps/api/event';
+import { useUsageStore, useTabStore } from '@/stores';
 import { queryClaudeStatus } from '@/utils/commands/claude';
+import { openLoginWindow, fetchClaudeUsage, hasClaudeSession } from '@/utils/commands/account';
 import { logEvent } from '@/utils/commands/logging';
 import type { ClaudeStatusInfo } from '@/stores/usageStore';
 
@@ -243,7 +245,9 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
   const statusLoading = useUsageStore((s) => s.statusLoading);
   const setStatus = useUsageStore((s) => s.setStatus);
   const setStatusLoading = useUsageStore((s) => s.setStatusLoading);
-  const isLoggedIn = !!(status.planType && status.planType !== 'Plan');
+  const [hasSession, setHasSession] = useState(false);
+  const isLoggedIn = hasSession || !!(status.planType && status.planType !== 'Plan');
+  const openTab = useTabStore((s) => s.openTab);
   // Per-session CTX: use explicit sessionId, or find the most active session
   const sessionCtx = useUsageStore((s) => {
     if (sessionId && s.sessions[sessionId]) return s.sessions[sessionId];
@@ -289,10 +293,50 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
     setStatusLoading(false);
   }, [setStatus, setStatusLoading, status]);
 
+  // Fetch usage from claude.ai API (requires session cookie)
+  const fetchUsage = useCallback(async () => {
+    try {
+      const has = await hasClaudeSession();
+      setHasSession(has);
+      if (!has) return;
+
+      const raw = await fetchClaudeUsage();
+      const data = JSON.parse(raw);
+
+      // Parse five_hour (session) and seven_day (weekly) utilization
+      const updates: Partial<typeof status> = {};
+      if (data.five_hour) {
+        updates.tokenUsedPercent = Math.round(data.five_hour.utilization ?? 0);
+        updates.tokenResetAt = data.five_hour.resets_at ?? null;
+      }
+      if (data.seven_day) {
+        updates.weeklyUsedPercent = Math.round(data.seven_day.utilization ?? 0);
+        updates.weeklyResetAt = data.seven_day.resets_at ?? null;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setStatus({ ...status, ...updates });
+      }
+    } catch {
+      // Session might not exist or be expired — silent fail
+    }
+  }, [status, setStatus]);
+
   useEffect(() => {
     fetchStatus();
-    pollRef.current = setInterval(fetchStatus, 5 * 60 * 1000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    fetchUsage();
+    pollRef.current = setInterval(() => { fetchStatus(); fetchUsage(); }, 5 * 60 * 1000);
+
+    // Refresh usage when login completes
+    const unlisten = listen('login-complete', () => {
+      setHasSession(true);
+      fetchUsage();
+    });
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      unlisten.then((fn) => fn());
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived values — all bars show "% used" (full = bad) ──
@@ -433,8 +477,11 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
         >
           <div
             onClick={() => {
-              // TODO: open login webview or navigate to account settings
-              console.log('Claude login clicked, loggedIn:', isLoggedIn);
+              if (isLoggedIn) {
+                openTab('settings');
+              } else {
+                openLoginWindow().catch(console.error);
+              }
             }}
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0 4px' }}
           >

@@ -77,6 +77,11 @@ pub fn run() {
             commands::logging::log_event,
             commands::logging::get_logs,
             commands::logging::clear_logs,
+            commands::account::open_login_window,
+            commands::account::fetch_claude_usage,
+            commands::account::has_claude_session,
+            commands::account::clear_claude_session,
+            commands::account::trigger_cli_login,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
