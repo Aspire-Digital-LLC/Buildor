@@ -122,18 +122,26 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn start_session(app: AppHandle, working_dir: String) -> Result<String, String> {
+pub async fn start_session(app: AppHandle, working_dir: String, model: Option<String>) -> Result<String, String> {
     let session_id = uuid::Uuid::new_v4().to_string();
 
+    let mut args = vec![
+        "--print".to_string(),
+        "--input-format".to_string(), "stream-json".to_string(),
+        "--output-format".to_string(), "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--permission-mode".to_string(), "default".to_string(),
+        "--permission-prompt-tool".to_string(), "stdio".to_string(),
+    ];
+    if let Some(ref m) = model {
+        args.push("--model".to_string());
+        args.push(m.clone());
+    }
+
+    let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
     let mut child = std::process::Command::new("claude")
-        .args([
-            "--print",
-            "--input-format", "stream-json",
-            "--output-format", "stream-json",
-            "--verbose",
-            "--permission-mode", "default",
-            "--permission-prompt-tool", "stdio",
-        ])
+        .args(&args_refs)
         .current_dir(&working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -377,4 +385,22 @@ pub async fn add_permission_rule(session_id: String, rule: String) -> Result<(),
         .map_err(|e| format!("Failed to write settings: {}", e))?;
 
     Ok(())
+}
+
+/// Run a claude CLI command (e.g., login, logout) and return its output
+#[tauri::command]
+pub async fn run_claude_cli(args: Vec<String>) -> Result<String, String> {
+    let output = Command::new("claude")
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Failed to run claude: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Err(format!("{}\n{}", stdout, stderr).trim().to_string())
+    }
 }

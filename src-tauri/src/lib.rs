@@ -50,6 +50,7 @@ pub fn run() {
             commands::claude::list_claude_sessions,
             commands::claude::respond_to_permission,
             commands::claude::add_permission_rule,
+            commands::claude::run_claude_cli,
             commands::config::get_config,
             commands::config::set_config,
             commands::config::scaffold_shared_repo,

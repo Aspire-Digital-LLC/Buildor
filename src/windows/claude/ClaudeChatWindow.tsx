@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { startClaudeSession, sendClaudeMessage, stopSession } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
+import { SlashCommandMenu, ModelPicker, getFilteredCommands } from '@/components/claude-chat/SlashCommandMenu';
 
 export function ClaudeChatWindow() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -16,6 +17,10 @@ export function ClaudeChatWindow() {
   const [workingDir, setWorkingDir] = useState<string | null>(null);
   const [windowTitle, setWindowTitle] = useState('Claude Chat');
   const [model, setModel] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +71,6 @@ export function ClaudeChatWindow() {
         if (parsed.model && !model) setModel(parsed.model);
         if (parsed.isResult) {
           setIsSending(false);
-          // Refocus input when response completes
           setTimeout(() => inputRef.current?.focus(), 50);
         }
         setMessages((prev) => [...prev, parsed]);
@@ -85,10 +89,10 @@ export function ClaudeChatWindow() {
     };
   }, [sessionId, model]);
 
-  const startClaude = async (dir: string) => {
+  const startClaude = async (dir: string, modelOverride?: string) => {
     setIsStarting(true);
     try {
-      const sid = await startClaudeSession(dir);
+      const sid = await startClaudeSession(dir, modelOverride || selectedModel);
       setSessionId(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Claude ready.` }] }]);
       logEvent({
@@ -96,7 +100,7 @@ export function ClaudeChatWindow() {
         functionArea: 'claude-chat',
         level: 'info',
         operation: 'session-start',
-        message: `Claude session started: ${sid}`,
+        message: `Claude session started: ${sid}${modelOverride ? ` (model: ${modelOverride})` : ''}`,
       }).catch(() => {});
       inputRef.current?.focus();
     } catch (e) {
@@ -105,9 +109,106 @@ export function ClaudeChatWindow() {
     setIsStarting(false);
   };
 
+  // Handle slash commands
+  const handleSlashCommand = useCallback(async (command: string) => {
+    setInput('');
+    setShowSlashMenu(false);
+
+    if (command === '/model') {
+      setShowModelPicker(true);
+      return;
+    }
+
+    if (command === '/login') {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Opening login...' }] }]);
+      try {
+        const result = await runClaudeCli(['login']);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: result || 'Login complete.' }] }]);
+      } catch (e) {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Login failed: ${String(e)}` }] }]);
+      }
+      return;
+    }
+
+    if (command === '/logout') {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Logging out...' }] }]);
+      try {
+        const result = await runClaudeCli(['logout']);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: result || 'Logged out.' }] }]);
+      } catch (e) {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Logout failed: ${String(e)}` }] }]);
+      }
+      return;
+    }
+
+    if (command === '/clear') {
+      if (sessionId) {
+        await stopSession(sessionId);
+      }
+      setMessages([]);
+      setSessionId(null);
+      setIsSending(false);
+      setModel(null);
+      if (workingDir) {
+        setMessages([{ role: 'system', content: [{ type: 'text', text: 'Chat cleared. Restarting...' }] }]);
+        startClaude(workingDir);
+      }
+      return;
+    }
+
+    if (command === '/cost') {
+      // Collect cost info from messages
+      const costs = messages.filter((m) => m.costUsd && m.costUsd > 0);
+      const total = costs.reduce((sum, m) => sum + (m.costUsd || 0), 0);
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: `Total cost this session: $${total.toFixed(4)} across ${costs.length} turn(s)` }],
+      }]);
+      return;
+    }
+
+    if (command === '/help') {
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: 'Available commands:\n/model — Switch AI model\n/login — Sign in to Anthropic\n/logout — Sign out\n/clear — Clear chat and restart\n/cost — Show session cost\n/help — Show this list' }],
+      }]);
+      return;
+    }
+  }, [sessionId, workingDir, messages, selectedModel]);
+
+  const handleModelSelect = useCallback(async (modelId: string) => {
+    setShowModelPicker(false);
+    setSelectedModel(modelId);
+    const modelLabel = modelId.replace('claude-', '').replace(/-/g, ' ');
+    setMessages((prev) => [...prev, {
+      role: 'system',
+      content: [{ type: 'text', text: `Switching model to ${modelLabel}. Restarting session...` }],
+    }]);
+    // Stop current session and restart with new model
+    if (sessionId) {
+      await stopSession(sessionId);
+      setSessionId(null);
+    }
+    setModel(null);
+    if (workingDir) {
+      startClaude(workingDir, modelId);
+    }
+  }, [sessionId, workingDir]);
+
   const handleSend = useCallback(async () => {
     if (!sessionId || !input.trim() || isSending) return;
     const msg = input.trim();
+
+    // Check for slash commands
+    if (msg.startsWith('/')) {
+      const cmdName = msg.split(' ')[0].toLowerCase();
+      const commands = getFilteredCommands(cmdName);
+      if (commands.some((c) => c.name === cmdName)) {
+        handleSlashCommand(cmdName);
+        return;
+      }
+    }
+
     setInput('');
     setIsSending(true);
     setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
@@ -117,9 +218,8 @@ export function ClaudeChatWindow() {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
       setIsSending(false);
     }
-    // Keep focus on input after sending
     inputRef.current?.focus();
-  }, [sessionId, input, isSending]);
+  }, [sessionId, input, isSending, handleSlashCommand]);
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
@@ -128,6 +228,55 @@ export function ClaudeChatWindow() {
     setSessionId(null);
     setIsSending(false);
   }, [sessionId]);
+
+  // Show/hide slash command menu based on input
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (value.startsWith('/') && value.length >= 1 && !value.includes(' ')) {
+      setShowSlashMenu(true);
+      setSlashIndex(0);
+    } else {
+      setShowSlashMenu(false);
+    }
+    setShowModelPicker(false);
+  };
+
+  // Handle keyboard nav in slash menu
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (showSlashMenu) {
+      const filtered = getFilteredCommands(input);
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashIndex((i) => (i > 0 ? i - 1 : filtered.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashIndex((i) => (i < filtered.length - 1 ? i + 1 : 0));
+        return;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && filtered.length > 0)) {
+        e.preventDefault();
+        const cmd = filtered[slashIndex];
+        if (cmd) {
+          handleSlashCommand(cmd.name);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowSlashMenu(false);
+        return;
+      }
+    }
+    if (showModelPicker && e.key === 'Escape') {
+      setShowModelPicker(false);
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
     <div style={{
@@ -269,19 +418,32 @@ export function ClaudeChatWindow() {
             display: 'flex',
             gap: 6,
             flexShrink: 0,
+            position: 'relative',
           }}>
+            {/* Slash command autocomplete */}
+            {showSlashMenu && (
+              <SlashCommandMenu
+                filter={input}
+                onSelect={handleSlashCommand}
+                onClose={() => setShowSlashMenu(false)}
+                selectedIndex={slashIndex}
+              />
+            )}
+            {/* Model picker */}
+            {showModelPicker && (
+              <ModelPicker
+                currentModel={model}
+                onSelect={handleModelSelect}
+                onClose={() => setShowModelPicker(false)}
+              />
+            )}
             <input
               ref={inputRef}
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder={isSending ? 'Claude is thinking...' : 'Type a message...'}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={isSending ? 'Claude is thinking...' : 'Type a message or / for commands...'}
               disabled={isSending}
               style={{
                 flex: 1,
