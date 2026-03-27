@@ -1,16 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { PanelType } from '@/types';
 
-export async function openBreakoutWindow(panelType: PanelType, title: string): Promise<WebviewWindow> {
-  const label = `breakout-${panelType}-${Date.now()}`;
-  const webview = new WebviewWindow(label, {
-    url: '/',
-    title,
-    width: 800,
-    height: 600,
-  });
-  return webview;
+export async function openClaudeWindow(params: {
+  label: string;
+  title: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}): Promise<void> {
+  return invoke('open_claude_window', params);
 }
 
 export async function closeBreakoutWindow(label: string): Promise<void> {

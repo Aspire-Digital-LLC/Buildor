@@ -58,6 +58,7 @@ pub fn run() {
             commands::worktree::close_session,
             commands::worktree::close_all_sessions,
             commands::worktree::get_branches_for_repo,
+            commands::window::open_claude_window,
             commands::window::open_breakout_window,
             commands::window::close_breakout_window,
             commands::filesystem::list_directory_recursive,

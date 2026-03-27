@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listSessions, closeSession, closeAllSessions } from '@/utils/commands/worktree';
+import { openClaudeWindow } from '@/utils/commands/window';
 import { logEvent } from '@/utils/commands/logging';
 import type { SessionInfo } from '@/types';
 
@@ -135,23 +135,19 @@ export function WorktreeManager() {
     }
   };
 
-  const openClaudeWindow = useCallback(async (session: SessionInfo) => {
+  const handleOpenClaudeWindow = useCallback(async (session: SessionInfo) => {
     try {
       const screenWidth = window.screen.availWidth;
       const screenHeight = window.screen.availHeight;
-      const label = `claude-${session.sessionId.slice(0, 8)}`;
 
-      const webview = new WebviewWindow(label, {
-        url: '/',
+      await openClaudeWindow({
+        label: `claude-${session.sessionId.slice(0, 8)}`,
         title: `Claude — ${session.branchName}`,
         width: Math.floor(screenWidth * 0.5),
         height: Math.floor(screenHeight * 0.85),
         x: Math.floor(screenWidth * 0.25),
         y: Math.floor(screenHeight * 0.05),
-        theme: 'dark' as const,
       });
-
-      webview.once('tauri://error', () => {});
 
       logEvent({
         sessionId: session.sessionId,
@@ -372,7 +368,7 @@ export function WorktreeManager() {
                   return (
                     <div
                       key={session.sessionId}
-                      onClick={() => openClaudeWindow(session)}
+                      onClick={() => handleOpenClaudeWindow(session)}
                       style={{
                         background: '#161b22',
                         border: '1px solid #21262d',
@@ -433,7 +429,7 @@ export function WorktreeManager() {
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>
                           <button
-                            onClick={(e) => { e.stopPropagation(); openClaudeWindow(session); }}
+                            onClick={(e) => { e.stopPropagation(); handleOpenClaudeWindow(session); }}
                             style={{
                               background: '#238636',
                               color: '#fff',

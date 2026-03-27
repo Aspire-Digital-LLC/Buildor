@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio, Child};
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
 use tauri::{AppHandle, Emitter};
-use serde::{Serialize, Deserialize};
 
 static SESSIONS: std::sync::OnceLock<Mutex<HashMap<String, ClaudeSession>>> = std::sync::OnceLock::new();
 
@@ -13,17 +12,8 @@ fn get_sessions() -> &'static Mutex<HashMap<String, ClaudeSession>> {
 }
 
 struct ClaudeSession {
-    stdin: std::process::ChildStdin,
-    #[allow(dead_code)]
-    child: Child,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionStatus {
-    pub session_id: String,
-    pub working_dir: String,
-    pub is_active: bool,
+    working_dir: String,
+    is_first_message: bool,
 }
 
 fn is_valid_slug(s: &str) -> bool {
@@ -129,77 +119,82 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
     ))
 }
 
+/// Claude sessions use --print --continue for each message.
+/// The session_id maps to a working directory. Each send_message
+/// spawns `claude --print --continue "<message>"` and streams output.
+
+// (ClaudeSession struct defined below get_sessions)
+
 #[tauri::command]
-pub async fn start_session(app: AppHandle, working_dir: String) -> Result<String, String> {
+pub async fn start_session(_app: AppHandle, working_dir: String) -> Result<String, String> {
     let session_id = uuid::Uuid::new_v4().to_string();
-
-    let mut child = Command::new("claude")
-        .current_dir(&working_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
-
-    let stdout = child.stdout.take()
-        .ok_or_else(|| "Failed to capture stdout".to_string())?;
-    let stderr = child.stderr.take()
-        .ok_or_else(|| "Failed to capture stderr".to_string())?;
-    let stdin = child.stdin.take()
-        .ok_or_else(|| "Failed to capture stdin".to_string())?;
-
-    let sid = session_id.clone();
-
-    // Stream stdout to frontend via events
-    let app_handle = app.clone();
-    let sid_stdout = sid.clone();
-    thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            match line {
-                Ok(text) => {
-                    let _ = app_handle.emit(&format!("claude-output-{}", sid_stdout), text);
-                }
-                Err(_) => break,
-            }
-        }
-        let _ = app_handle.emit(&format!("claude-exit-{}", sid_stdout), "exited");
-    });
-
-    // Stream stderr too
-    let app_handle2 = app.clone();
-    let sid_stderr = sid.clone();
-    thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            match line {
-                Ok(text) => {
-                    let _ = app_handle2.emit(&format!("claude-output-{}", sid_stderr), text);
-                }
-                Err(_) => break,
-            }
-        }
-    });
 
     let sessions = get_sessions();
     let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
-    map.insert(session_id.clone(), ClaudeSession { stdin, child });
+    map.insert(session_id.clone(), ClaudeSession {
+        working_dir,
+        is_first_message: true,
+    });
 
     Ok(session_id)
 }
 
 #[tauri::command]
-pub async fn send_message(session_id: String, message: String) -> Result<(), String> {
-    let sessions = get_sessions();
-    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+pub async fn send_message(app: AppHandle, session_id: String, message: String) -> Result<(), String> {
+    let working_dir;
+    let is_first;
+    {
+        let sessions = get_sessions();
+        let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let session = map.get_mut(&session_id)
+            .ok_or_else(|| "Session not found".to_string())?;
+        working_dir = session.working_dir.clone();
+        is_first = session.is_first_message;
+        session.is_first_message = false;
+    }
 
-    let session = map.get_mut(&session_id)
-        .ok_or_else(|| "Session not found".to_string())?;
+    // Build args: --print for non-interactive, --continue for subsequent messages
+    let mut args = vec!["--print".to_string()];
+    if !is_first {
+        args.push("--continue".to_string());
+    }
+    args.push(message);
 
-    writeln!(session.stdin, "{}", message)
-        .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-    session.stdin.flush()
-        .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+    let sid = session_id.clone();
+    let app_handle = app.clone();
+
+    // Spawn in background thread to not block
+    thread::spawn(move || {
+        let child = Command::new("claude")
+            .args(&args)
+            .current_dir(&working_dir)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn();
+
+        match child {
+            Ok(mut child) => {
+                if let Some(stdout) = child.stdout.take() {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines().flatten() {
+                        let _ = app_handle.emit(&format!("claude-output-{}", sid), line);
+                    }
+                }
+                if let Some(stderr) = child.stderr.take() {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines().flatten() {
+                        let _ = app_handle.emit(&format!("claude-output-{}", sid), line);
+                    }
+                }
+                let _ = child.wait();
+                let _ = app_handle.emit(&format!("claude-done-{}", sid), "done");
+            }
+            Err(e) => {
+                let _ = app_handle.emit(&format!("claude-output-{}", sid), format!("Error: {}", e));
+                let _ = app_handle.emit(&format!("claude-done-{}", sid), "error");
+            }
+        }
+    });
 
     Ok(())
 }
@@ -208,11 +203,7 @@ pub async fn send_message(session_id: String, message: String) -> Result<(), Str
 pub async fn stop_session(session_id: String) -> Result<(), String> {
     let sessions = get_sessions();
     let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
-
-    if let Some(mut session) = map.remove(&session_id) {
-        let _ = session.child.kill();
-    }
-
+    map.remove(&session_id);
     Ok(())
 }
 
@@ -220,7 +211,6 @@ pub async fn stop_session(session_id: String) -> Result<(), String> {
 pub async fn get_session_status(session_id: String) -> Result<String, String> {
     let sessions = get_sessions();
     let map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
-
     if map.contains_key(&session_id) {
         Ok("active".to_string())
     } else {

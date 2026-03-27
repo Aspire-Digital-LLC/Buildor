@@ -37,21 +37,13 @@ export function ClaudeChat() {
       setOutput((prev) => [...prev, { text: event.payload, type: 'stdout' }]);
     });
 
-    const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
-      setOutput((prev) => [...prev, { text: '\n--- Claude session ended ---', type: 'system' }]);
-      setSessionId(null);
-      logEvent({
-        repo: activeProject?.repoPath,
-        functionArea: 'claude-chat',
-        level: 'info',
-        operation: 'session-end',
-        message: `Claude session ended: ${sessionId}`,
-      }).catch(() => {});
+    const unlistenDone = listen<string>(`claude-done-${sessionId}`, () => {
+      setOutput((prev) => [...prev, { text: '', type: 'system' }]);
     });
 
     return () => {
       unlistenOutput.then((fn) => fn());
-      unlistenExit.then((fn) => fn());
+      unlistenDone.then((fn) => fn());
     };
   }, [sessionId]);
 

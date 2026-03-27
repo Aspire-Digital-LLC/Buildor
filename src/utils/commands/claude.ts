@@ -8,7 +8,7 @@ export async function startClaudeSession(workingDir: string): Promise<string> {
   return invoke('start_session', { workingDir });
 }
 
-export async function sendClaudeMessage(sessionId: string, message: string): Promise<string> {
+export async function sendClaudeMessage(sessionId: string, message: string): Promise<void> {
   return invoke('send_message', { sessionId, message });
 }
 

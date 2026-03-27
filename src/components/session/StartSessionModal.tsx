@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useProjectStore } from '@/stores';
 import { getBranchesForRepo, createSession } from '@/utils/commands/worktree';
 import { generateSlug as generateSlugViaHaiku } from '@/utils/commands/claude';
+import { openClaudeWindow } from '@/utils/commands/window';
 import { logEvent } from '@/utils/commands/logging';
 import type { Project, SessionInfo, SessionType } from '@/types';
 
@@ -250,31 +250,16 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
             <button
               onClick={async () => {
                 try {
-                  // Get screen size for 50% width
                   const screenWidth = window.screen.availWidth;
                   const screenHeight = window.screen.availHeight;
-                  const winWidth = Math.floor(screenWidth * 0.5);
-                  const winHeight = Math.floor(screenHeight * 0.85);
 
-                  const label = `claude-${createdSession.sessionId.slice(0, 8)}`;
-                  const webview = new WebviewWindow(label, {
-                    url: '/',
+                  await openClaudeWindow({
+                    label: `claude-${createdSession.sessionId.slice(0, 8)}`,
                     title: `Claude — ${createdSession.branchName}`,
-                    width: winWidth,
-                    height: winHeight,
+                    width: Math.floor(screenWidth * 0.5),
+                    height: Math.floor(screenHeight * 0.85),
                     x: Math.floor(screenWidth * 0.25),
                     y: Math.floor(screenHeight * 0.05),
-                    theme: 'dark' as const,
-                  });
-
-                  webview.once('tauri://error', (e) => {
-                    logEvent({
-                      sessionId: createdSession.sessionId,
-                      functionArea: 'claude-chat',
-                      level: 'error',
-                      operation: 'launch-window',
-                      message: `Failed to open Claude window: ${JSON.stringify(e)}`,
-                    }).catch(() => {});
                   });
 
                   logEvent({
