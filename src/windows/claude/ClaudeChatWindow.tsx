@@ -351,12 +351,30 @@ export function ClaudeChatWindow() {
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
+    const history = messages
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.some((c) => c.type === 'text' && c.text)))
+      .map((m) => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const text = m.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+        return `${role}: ${text}`;
+      }).join('\n\n');
+
     await stopSession(sessionId);
     setSessionId(null);
     setIsSending(false);
-    // Auto-restart so user can keep typing
-    if (workingDir) startClaude(workingDir);
-  }, [sessionId, workingDir]);
+
+    if (workingDir) {
+      setIsStarting(true);
+      try {
+        const sid = await startClaudeSession(workingDir, selectedModel);
+        setSessionId(sid);
+        if (history.trim()) {
+          await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
+        }
+      } catch { /* silent */ }
+      setIsStarting(false);
+    }
+  }, [sessionId, workingDir, messages, selectedModel]);
 
   // Show/hide slash command menu based on input
   const handleInputChange = (value: string) => {

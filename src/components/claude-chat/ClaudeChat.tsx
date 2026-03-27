@@ -280,12 +280,31 @@ export function ClaudeChat() {
 
   const handleStop = useCallback(async () => {
     if (!sessionId || !repoPath) return;
+    // Capture conversation before killing
+    const history = messages
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.some((c) => c.type === 'text' && c.text)))
+      .map((m) => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const text = m.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+        return `${role}: ${text}`;
+      }).join('\n\n');
+
     await stopSession(sessionId);
     setSessionId(null);
     setIsSending(false);
-    // Auto-restart so user can keep typing immediately
-    startClaude(repoPath);
-  }, [sessionId, repoPath]);
+
+    // Auto-restart and replay context so Claude doesn't lose the conversation
+    setIsStarting(true);
+    try {
+      const sid = await startClaudeSession(repoPath, selectedModel);
+      setSessionId(sid);
+      if (history.trim()) {
+        await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
+        // Don't set isSending — user interrupted, they want to type next
+      }
+    } catch { /* silent */ }
+    setIsStarting(false);
+  }, [sessionId, repoPath, messages, selectedModel]);
 
   const handleInputChange = (value: string) => {
     setInput(value);
