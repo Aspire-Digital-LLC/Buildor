@@ -15,8 +15,8 @@ const statusColors: Record<string, string> = {
   added: '#3fb950',
   modified: '#d29922',
   deleted: '#f85149',
-  renamed: '#58a6ff',
-  copied: '#58a6ff',
+  renamed: 'var(--accent-primary)',
+  copied: 'var(--accent-primary)',
   unmerged: '#f85149',
 };
 
@@ -50,7 +50,7 @@ export function ChangeList({
         padding: '6px 12px',
         fontSize: 11,
         fontWeight: 600,
-        color: '#8b949e',
+        color: 'var(--text-secondary)',
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
       }}>
@@ -61,7 +61,7 @@ export function ChangeList({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#58a6ff',
+              color: 'var(--accent-primary)',
               fontSize: 11,
               cursor: 'pointer',
               padding: '0 4px',
@@ -81,10 +81,10 @@ export function ChangeList({
             padding: '3px 12px',
             cursor: 'pointer',
             fontSize: 13,
-            color: '#adbac7',
+            color: 'var(--text-secondary)',
             fontFamily: "'Cascadia Code', 'Consolas', monospace",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <span style={{
@@ -92,7 +92,7 @@ export function ChangeList({
             textAlign: 'center',
             fontSize: 11,
             fontWeight: 700,
-            color: statusColors[file.status] || '#8b949e',
+            color: statusColors[file.status] || 'var(--text-secondary)',
             marginRight: 8,
             flexShrink: 0,
           }}>
@@ -115,7 +115,7 @@ export function ChangeList({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#8b949e',
+              color: 'var(--text-secondary)',
               fontSize: 14,
               cursor: 'pointer',
               padding: '0 4px',

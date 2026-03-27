@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { invoke } from '@tauri-apps/api/core';
 import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
-import { SlashCommandMenu, ModelPicker, getFilteredCommands } from '@/components/claude-chat/SlashCommandMenu';
+import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from '@/components/claude-chat/SlashCommandMenu';
+import { StatusBar } from '@/components/layout/StatusBar';
 
 export function ClaudeChatWindow() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export function ClaudeChatWindow() {
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [dynamicCommands, setDynamicCommands] = useState<SlashCommand[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +64,20 @@ export function ClaudeChatWindow() {
     };
     findWorktreePath();
   }, []);
+
+  // Load dynamic commands (skills + custom commands) from .claude/ directory
+  useEffect(() => {
+    if (!workingDir) return;
+    invoke<{ name: string; description: string; source: string }[]>('list_claude_commands', { repoPath: workingDir })
+      .then((cmds) => {
+        setDynamicCommands(cmds.map((c) => ({
+          name: c.name,
+          description: c.description,
+          source: c.source as 'skill' | 'command',
+        })));
+      })
+      .catch(() => setDynamicCommands([]));
+  }, [workingDir]);
 
   // Listen to events
   useEffect(() => {
@@ -169,13 +186,37 @@ export function ClaudeChatWindow() {
     }
 
     if (command === '/help') {
+      const dynamicList = dynamicCommands.map((c) => `${c.name} — ${c.description || c.source}`).join('\n');
+      const helpText = 'Available commands:\n/model — Switch AI model\n/login — Sign in to Anthropic\n/logout — Sign out\n/clear — Clear chat and restart\n/cost — Show session cost\n/help — Show this list'
+        + (dynamicList ? `\n\nSkills & Custom Commands:\n${dynamicList}` : '');
       setMessages((prev) => [...prev, {
         role: 'system',
-        content: [{ type: 'text', text: 'Available commands:\n/model — Switch AI model\n/login — Sign in to Anthropic\n/logout — Sign out\n/clear — Clear chat and restart\n/cost — Show session cost\n/help — Show this list' }],
+        content: [{ type: 'text', text: helpText }],
       }]);
       return;
     }
-  }, [sessionId, workingDir, messages, selectedModel]);
+
+    // Non-builtin command — scan .claude/ first, then decide
+    if (!isBuiltinCommand(command)) {
+      if (!workingDir) return;
+      try {
+        await invoke('resolve_claude_command', {
+          repoPath: workingDir,
+          commandName: command,
+        });
+        // Found — send to Claude
+        if (sessionId) {
+          setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: `${command}` }] }]);
+          setIsSending(true);
+          await sendClaudeMessage(sessionId, command);
+        }
+      } catch {
+        // Not found in .claude/ — show error
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Unknown command: ${command}\nType /help to see available commands.` }] }]);
+      }
+      return;
+    }
+  }, [sessionId, workingDir, messages, selectedModel, dynamicCommands]);
 
   const handleModelSelect = useCallback(async (modelId: string) => {
     setShowModelPicker(false);
@@ -237,11 +278,30 @@ export function ClaudeChatWindow() {
     const msg = input.trim();
 
     // Check for slash commands
+    if (msg.startsWith('/') && !msg.includes(' ')) {
+      // Pure slash command — route through handler with scan
+      handleSlashCommand(msg.toLowerCase());
+      return;
+    }
     if (msg.startsWith('/')) {
       const cmdName = msg.split(' ')[0].toLowerCase();
-      const commands = getFilteredCommands(cmdName);
-      if (commands.some((c) => c.name === cmdName)) {
+      if (isBuiltinCommand(cmdName) || dynamicCommands.some((c) => c.name === cmdName)) {
         handleSlashCommand(cmdName);
+        return;
+      }
+      // Unknown /command with args — scan before sending
+      if (workingDir) {
+        setInput('');
+        try {
+          await invoke('resolve_claude_command', { repoPath: workingDir, commandName: cmdName });
+          if (sessionId) {
+            setIsSending(true);
+            setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
+            await sendClaudeMessage(sessionId, msg);
+          }
+        } catch {
+          setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Unknown command: ${cmdName}\nType /help to see available commands.` }] }]);
+        }
         return;
       }
     }
@@ -281,7 +341,7 @@ export function ClaudeChatWindow() {
   // Handle keyboard nav in slash menu
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (showSlashMenu) {
-      const filtered = getFilteredCommands(input);
+      const filtered = getFilteredCommands(input, dynamicCommands);
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSlashIndex((i) => (i > 0 ? i - 1 : filtered.length - 1));
@@ -292,12 +352,15 @@ export function ClaudeChatWindow() {
         setSlashIndex((i) => (i < filtered.length - 1 ? i + 1 : 0));
         return;
       }
-      if (e.key === 'Tab' || (e.key === 'Enter' && filtered.length > 0)) {
+      if (e.key === 'Tab' && filtered[slashIndex]) {
         e.preventDefault();
-        const cmd = filtered[slashIndex];
-        if (cmd) {
-          handleSlashCommand(cmd.name);
-        }
+        setInput(filtered[slashIndex].name + ' ');
+        setShowSlashMenu(false);
+        return;
+      }
+      if (e.key === 'Enter' && filtered.length > 0 && filtered[slashIndex]) {
+        e.preventDefault();
+        handleSlashCommand(filtered[slashIndex].name);
         return;
       }
       if (e.key === 'Escape') {
@@ -318,22 +381,24 @@ export function ClaudeChatWindow() {
   return (
     <div style={{
       display: 'flex',
+      flexDirection: 'column',
       height: '100vh',
-      backgroundColor: '#0d1117',
-      color: '#e0e0e0',
+      backgroundColor: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Chat area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{
           padding: '8px 12px',
-          borderBottom: '1px solid #21262d',
+          borderBottom: '1px solid var(--border-primary)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexShrink: 0,
-          background: '#161b22',
+          background: 'var(--bg-secondary)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{windowTitle}</span>
@@ -341,7 +406,7 @@ export function ClaudeChatWindow() {
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block' }} />
             )}
             {model && (
-              <span style={{ fontSize: 10, color: '#8b949e', background: '#21262d', padding: '1px 6px', borderRadius: 8 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 8 }}>
                 {model}
               </span>
             )}
@@ -353,9 +418,9 @@ export function ClaudeChatWindow() {
             <button
               onClick={() => setIsVerbose(!isVerbose)}
               style={{
-                background: isVerbose ? '#1a2332' : '#21262d',
-                border: `1px solid ${isVerbose ? '#1f6feb' : '#30363d'}`,
-                color: isVerbose ? '#58a6ff' : '#8b949e',
+                background: isVerbose ? 'var(--bg-active)' : 'var(--border-primary)',
+                border: `1px solid ${isVerbose ? 'var(--accent-secondary)' : 'var(--border-secondary)'}`,
+                color: isVerbose ? 'var(--accent-primary)' : 'var(--text-secondary)',
                 borderRadius: 6,
                 padding: '4px 10px',
                 fontSize: 12,
@@ -386,7 +451,7 @@ export function ClaudeChatWindow() {
               <button
                 onClick={handleStop}
                 style={{
-                  background: '#21262d',
+                  background: 'var(--border-primary)',
                   border: '1px solid #da3633',
                   color: '#f85149',
                   borderRadius: 6,
@@ -405,7 +470,7 @@ export function ClaudeChatWindow() {
         <div ref={outputRef} style={{
           flex: 1,
           overflow: 'auto',
-          background: '#010409',
+          background: 'var(--bg-inset)',
         }}>
           {messages.map((msg, i) => (
             <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} />
@@ -416,8 +481,8 @@ export function ClaudeChatWindow() {
         {sessionId && (
           <div style={{
             padding: 8,
-            borderTop: '1px solid #21262d',
-            background: '#0d1117',
+            borderTop: '1px solid var(--border-primary)',
+            background: 'var(--bg-primary)',
             display: 'flex',
             gap: 6,
             flexShrink: 0,
@@ -430,6 +495,7 @@ export function ClaudeChatWindow() {
                 onSelect={handleSlashCommand}
                 onClose={() => setShowSlashMenu(false)}
                 selectedIndex={slashIndex}
+                dynamicCommands={dynamicCommands}
               />
             )}
             {/* Model picker */}
@@ -450,10 +516,10 @@ export function ClaudeChatWindow() {
               disabled={isSending}
               style={{
                 flex: 1,
-                background: '#161b22',
-                border: '1px solid #30363d',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-secondary)',
                 borderRadius: 6,
-                color: '#e0e0e0',
+                color: 'var(--text-primary)',
                 padding: '8px 12px',
                 fontSize: 13,
                 outline: 'none',
@@ -465,9 +531,9 @@ export function ClaudeChatWindow() {
               onClick={handleSend}
               disabled={!input.trim() || isSending}
               style={{
-                background: input.trim() && !isSending ? '#238636' : '#21262d',
+                background: input.trim() && !isSending ? '#238636' : 'var(--border-primary)',
                 border: 'none',
-                color: input.trim() && !isSending ? '#fff' : '#484f58',
+                color: input.trim() && !isSending ? '#fff' : 'var(--text-tertiary)',
                 borderRadius: 6,
                 padding: '8px 16px',
                 fontSize: 13,
@@ -485,8 +551,8 @@ export function ClaudeChatWindow() {
       {paletteOpen ? (
         <div style={{
           width: 220,
-          borderLeft: '1px solid #21262d',
-          background: '#0d1117',
+          borderLeft: '1px solid var(--border-primary)',
+          background: 'var(--bg-primary)',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
@@ -497,10 +563,10 @@ export function ClaudeChatWindow() {
               padding: '12px',
               fontSize: 11,
               fontWeight: 600,
-              color: '#8b949e',
+              color: 'var(--text-secondary)',
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
-              borderBottom: '1px solid #21262d',
+              borderBottom: '1px solid var(--border-primary)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -513,7 +579,7 @@ export function ClaudeChatWindow() {
             </svg>
           </div>
           <div style={{
-            padding: 16, color: '#484f58', fontSize: 12, textAlign: 'center',
+            padding: 16, color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center',
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             Command palette coming soon
@@ -524,8 +590,8 @@ export function ClaudeChatWindow() {
           onClick={() => setPaletteOpen(true)}
           style={{
             width: 28,
-            borderLeft: '1px solid #21262d',
-            background: '#0d1117',
+            borderLeft: '1px solid var(--border-primary)',
+            background: 'var(--bg-primary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -535,17 +601,19 @@ export function ClaudeChatWindow() {
             textOrientation: 'mixed',
             fontSize: 10,
             fontWeight: 600,
-            color: '#484f58',
+            color: 'var(--text-tertiary)',
             textTransform: 'uppercase',
             letterSpacing: '1px',
             userSelect: 'none',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#161b22'; e.currentTarget.style.color = '#8b949e'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = '#0d1117'; e.currentTarget.style.color = '#484f58'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
         >
           Skills & Flows
         </div>
       )}
+      </div>
+      <StatusBar sessionId={sessionId} />
     </div>
   );
 }

@@ -18,7 +18,7 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile, onDisca
         padding: '6px 12px',
         fontSize: 11,
         fontWeight: 600,
-        color: '#8b949e',
+        color: 'var(--text-secondary)',
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
       }}>
@@ -28,7 +28,7 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile, onDisca
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#58a6ff',
+            color: 'var(--accent-primary)',
             fontSize: 11,
             cursor: 'pointer',
             padding: '0 4px',
@@ -47,10 +47,10 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile, onDisca
             padding: '3px 12px',
             cursor: onClickFile ? 'pointer' : 'default',
             fontSize: 13,
-            color: '#adbac7',
+            color: 'var(--text-secondary)',
             fontFamily: "'Cascadia Code', 'Consolas', monospace",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <span style={{
@@ -110,7 +110,7 @@ export function UntrackedList({ files, onStage, onStageAll, onClickFile, onDisca
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#8b949e',
+              color: 'var(--text-secondary)',
               fontSize: 14,
               cursor: 'pointer',
               padding: '0 4px',

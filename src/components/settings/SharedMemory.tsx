@@ -132,15 +132,15 @@ export function SharedMemory() {
 
   const labelStyle: React.CSSProperties = {
     fontSize: 11,
-    color: '#6e7681',
+    color: 'var(--text-tertiary)',
     textTransform: 'uppercase',
     letterSpacing: '0.3px',
     marginBottom: 4,
   };
 
   const cardStyle: React.CSSProperties = {
-    background: '#161b22',
-    border: '1px solid #21262d',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-primary)',
     borderRadius: 8,
     padding: '12px 16px',
     marginBottom: 12,
@@ -148,8 +148,8 @@ export function SharedMemory() {
 
   return (
     <div style={{ padding: 24, height: '100%', overflow: 'auto' }}>
-      <h2 style={{ margin: '0 0 8px', color: '#e0e0e0', fontSize: 18 }}>Shared Memory</h2>
-      <p style={{ color: '#8b949e', fontSize: 13, marginBottom: 20 }}>
+      <h2 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 18 }}>Shared Memory</h2>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>
         Point to a local git repository that holds your team's shared skills, flows, and configurations.
         This repo will be synced automatically.
       </p>
@@ -161,7 +161,7 @@ export function SharedMemory() {
             <div style={labelStyle}>Repository Path</div>
             <div style={{
               fontSize: 13,
-              color: '#e0e0e0',
+              color: 'var(--text-primary)',
               fontFamily: "'Cascadia Code', monospace",
               marginBottom: 8,
             }}>
@@ -184,9 +184,9 @@ export function SharedMemory() {
               <button
                 onClick={handleSelectFolder}
                 style={{
-                  background: '#21262d',
-                  border: '1px solid #30363d',
-                  color: '#c9d1d9',
+                  background: 'var(--border-primary)',
+                  border: '1px solid var(--border-secondary)',
+                  color: 'var(--text-primary)',
                   borderRadius: 6,
                   padding: '5px 12px',
                   fontSize: 12,
@@ -198,7 +198,7 @@ export function SharedMemory() {
               <button
                 onClick={handleRemove}
                 style={{
-                  background: '#21262d',
+                  background: 'var(--border-primary)',
                   border: '1px solid #da3633',
                   color: '#f85149',
                   borderRadius: 6,
@@ -215,20 +215,20 @@ export function SharedMemory() {
           {/* Base branch */}
           <div style={cardStyle}>
             <div style={labelStyle}>Base Development Branch</div>
-            <p style={{ color: '#8b949e', fontSize: 12, margin: '0 0 8px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 8px' }}>
               The default branch to load when Buildor starts. Changes branch off from here.
             </p>
             {loadingBranches ? (
-              <span style={{ color: '#6e7681', fontSize: 12 }}>Loading branches...</span>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>Loading branches...</span>
             ) : (
               <select
                 value={baseBranch}
                 onChange={(e) => handleBaseBranchChange(e.target.value)}
                 style={{
-                  background: '#0d1117',
-                  border: '1px solid #30363d',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-secondary)',
                   borderRadius: 6,
-                  color: '#e0e0e0',
+                  color: 'var(--text-primary)',
                   padding: '6px 10px',
                   fontSize: 13,
                   fontFamily: "'Cascadia Code', monospace",
@@ -250,7 +250,7 @@ export function SharedMemory() {
           {/* Branch protection */}
           <div style={cardStyle}>
             <div style={labelStyle}>Branch Protection</div>
-            <p style={{ color: '#8b949e', fontSize: 12, margin: '0 0 10px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 10px' }}>
               Controls how Buildor pushes changes to this repository.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -260,8 +260,8 @@ export function SharedMemory() {
                   alignItems: 'flex-start',
                   gap: 10,
                   padding: '8px 12px',
-                  background: branchProtected ? '#1a2332' : '#0d1117',
-                  border: `1px solid ${branchProtected ? '#1f6feb' : '#21262d'}`,
+                  background: branchProtected ? 'var(--bg-active)' : 'var(--bg-primary)',
+                  border: `1px solid ${branchProtected ? 'var(--accent-secondary)' : 'var(--border-primary)'}`,
                   borderRadius: 6,
                   cursor: 'pointer',
                 }}
@@ -271,13 +271,13 @@ export function SharedMemory() {
                   name="branchProtection"
                   checked={branchProtected}
                   onChange={() => handleProtectionToggle(true)}
-                  style={{ marginTop: 2, accentColor: '#58a6ff' }}
+                  style={{ marginTop: 2, accentColor: 'var(--accent-primary)' }}
                 />
                 <div>
-                  <div style={{ fontSize: 13, color: '#e0e0e0', fontWeight: 500 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
                     Branch protected (requires PR)
                   </div>
-                  <div style={{ fontSize: 12, color: '#8b949e', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                     Changes are committed to a new branch and a pull request is opened to merge back into the base branch.
                   </div>
                 </div>
@@ -288,8 +288,8 @@ export function SharedMemory() {
                   alignItems: 'flex-start',
                   gap: 10,
                   padding: '8px 12px',
-                  background: !branchProtected ? '#1a2332' : '#0d1117',
-                  border: `1px solid ${!branchProtected ? '#1f6feb' : '#21262d'}`,
+                  background: !branchProtected ? 'var(--bg-active)' : 'var(--bg-primary)',
+                  border: `1px solid ${!branchProtected ? 'var(--accent-secondary)' : 'var(--border-primary)'}`,
                   borderRadius: 6,
                   cursor: 'pointer',
                 }}
@@ -299,13 +299,13 @@ export function SharedMemory() {
                   name="branchProtection"
                   checked={!branchProtected}
                   onChange={() => handleProtectionToggle(false)}
-                  style={{ marginTop: 2, accentColor: '#58a6ff' }}
+                  style={{ marginTop: 2, accentColor: 'var(--accent-primary)' }}
                 />
                 <div>
-                  <div style={{ fontSize: 13, color: '#e0e0e0', fontWeight: 500 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
                     Branch not protected (push directly)
                   </div>
-                  <div style={{ fontSize: 12, color: '#8b949e', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                     Changes are committed and pushed directly to the base branch.
                   </div>
                 </div>
@@ -315,12 +315,12 @@ export function SharedMemory() {
         </>
       ) : (
         <div style={{
-          border: '1px dashed #30363d',
+          border: '1px dashed var(--border-secondary)',
           borderRadius: 8,
           padding: '32px 20px',
           textAlign: 'center',
         }}>
-          <p style={{ color: '#6e7681', fontSize: 13, marginBottom: 12 }}>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13, marginBottom: 12 }}>
             No shared repository configured
           </p>
           <button
@@ -342,17 +342,17 @@ export function SharedMemory() {
       )}
 
       <div style={{ marginTop: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#e0e0e0', marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
           Expected Structure
         </div>
         <div style={{
-          background: '#0d1117',
-          border: '1px solid #21262d',
+          background: 'var(--bg-primary)',
+          border: '1px solid var(--border-primary)',
           borderRadius: 6,
           padding: '10px 14px',
           fontSize: 12,
           fontFamily: "'Cascadia Code', monospace",
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           lineHeight: 1.8,
           whiteSpace: 'pre',
         }}>

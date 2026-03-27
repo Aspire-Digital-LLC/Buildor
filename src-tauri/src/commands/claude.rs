@@ -387,6 +387,43 @@ pub async fn add_permission_rule(session_id: String, rule: String) -> Result<(),
     Ok(())
 }
 
+/// Read Claude credentials and config to get plan type, tier, and version
+#[tauri::command]
+pub async fn query_claude_status() -> Result<String, String> {
+    let mut result = serde_json::json!({});
+
+    // 1. Read ~/.claude/.credentials.json for plan/tier info
+    if let Some(home) = dirs_next::home_dir() {
+        let creds_path = home.join(".claude").join(".credentials.json");
+        if creds_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&creds_path) {
+                if let Ok(creds) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let oauth = &creds["claudeAiOauth"];
+                    if let Some(sub_type) = oauth["subscriptionType"].as_str() {
+                        result["subscriptionType"] = serde_json::Value::String(sub_type.to_string());
+                    }
+                    if let Some(tier) = oauth["rateLimitTier"].as_str() {
+                        result["rateLimitTier"] = serde_json::Value::String(tier.to_string());
+                    }
+                    if let Some(scopes) = oauth["scopes"].as_array() {
+                        result["scopes"] = serde_json::Value::Array(scopes.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Get claude CLI version
+    if let Ok(output) = Command::new("claude").args(["--version"]).output() {
+        if output.status.success() {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            result["version"] = serde_json::Value::String(version);
+        }
+    }
+
+    Ok(serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string()))
+}
+
 /// Run a claude CLI command (e.g., login, logout) and return its output
 #[tauri::command]
 pub async fn run_claude_cli(args: Vec<String>) -> Result<String, String> {

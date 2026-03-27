@@ -8,7 +8,7 @@ const typeColors: Record<string, string> = {
   feature: '#3fb950',
   bug: '#f85149',
   issue: '#d29922',
-  documentation: '#58a6ff',
+  documentation: 'var(--accent-primary)',
   release: '#a371f7',
 };
 
@@ -185,12 +185,12 @@ export function WorktreeManager() {
         marginBottom: 16,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h2 style={{ margin: 0, color: '#e0e0e0', fontSize: 18 }}>Worktree Sessions</h2>
+          <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 18 }}>Worktree Sessions</h2>
           {sessions.length > 0 && (
             <span style={{
               fontSize: 11,
-              color: '#8b949e',
-              background: '#21262d',
+              color: 'var(--text-secondary)',
+              background: 'var(--border-primary)',
               padding: '1px 8px',
               borderRadius: 10,
             }}>
@@ -202,9 +202,9 @@ export function WorktreeManager() {
           <button
             onClick={loadSessions}
             style={{
-              background: '#21262d',
-              border: '1px solid #30363d',
-              color: '#c9d1d9',
+              background: 'var(--border-primary)',
+              border: '1px solid var(--border-secondary)',
+              color: 'var(--text-primary)',
               borderRadius: 6,
               padding: '5px 10px',
               fontSize: 12,
@@ -217,7 +217,7 @@ export function WorktreeManager() {
             <button
               onClick={() => setShowGlobalConfirm(!showGlobalConfirm)}
               style={{
-                background: '#21262d',
+                background: 'var(--border-primary)',
                 border: '1px solid #da3633',
                 color: '#f85149',
                 borderRadius: 6,
@@ -237,7 +237,7 @@ export function WorktreeManager() {
         <div style={{
           padding: '8px 12px',
           marginBottom: 12,
-          background: '#1a1a2e',
+          background: 'var(--bg-active)',
           border: '1px solid #6e3030',
           borderRadius: 6,
           display: 'flex',
@@ -252,10 +252,10 @@ export function WorktreeManager() {
             onChange={(e) => setGlobalConfirmText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleGlobalClose(); }}
             style={{
-              background: '#0d1117',
+              background: 'var(--bg-primary)',
               border: '1px solid #da3633',
               borderRadius: 4,
-              color: '#e0e0e0',
+              color: 'var(--text-primary)',
               padding: '4px 8px',
               fontSize: 12,
               outline: 'none',
@@ -266,8 +266,8 @@ export function WorktreeManager() {
             onClick={handleGlobalClose}
             disabled={globalConfirmText !== 'close all'}
             style={{
-              background: globalConfirmText === 'close all' ? '#da3633' : '#21262d',
-              color: globalConfirmText === 'close all' ? '#fff' : '#484f58',
+              background: globalConfirmText === 'close all' ? '#da3633' : 'var(--border-primary)',
+              color: globalConfirmText === 'close all' ? '#fff' : 'var(--text-tertiary)',
               border: 'none',
               borderRadius: 4,
               padding: '4px 10px',
@@ -282,8 +282,8 @@ export function WorktreeManager() {
             onClick={() => { setShowGlobalConfirm(false); setGlobalConfirmText(''); }}
             style={{
               background: 'transparent',
-              border: '1px solid #30363d',
-              color: '#8b949e',
+              border: '1px solid var(--border-secondary)',
+              color: 'var(--text-secondary)',
               borderRadius: 4,
               padding: '4px 8px',
               fontSize: 12,
@@ -297,7 +297,7 @@ export function WorktreeManager() {
 
       {/* Loading */}
       {isLoading && sessions.length === 0 && (
-        <div style={{ color: '#6e7681', fontSize: 13, padding: 20, textAlign: 'center' }}>
+        <div style={{ color: 'var(--text-tertiary)', fontSize: 13, padding: 20, textAlign: 'center' }}>
           Loading sessions...
         </div>
       )}
@@ -305,11 +305,11 @@ export function WorktreeManager() {
       {/* Empty state */}
       {!isLoading && sessions.length === 0 && (
         <div style={{
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           fontSize: 14,
           textAlign: 'center',
           padding: '40px 20px',
-          border: '1px dashed #30363d',
+          border: '1px dashed var(--border-secondary)',
           borderRadius: 8,
         }}>
           No active sessions. Use Start Session to begin.
@@ -332,13 +332,13 @@ export function WorktreeManager() {
                 marginBottom: 8,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#e0e0e0' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                     {projectName}
                   </span>
                   <span style={{
                     fontSize: 11,
-                    color: '#8b949e',
-                    background: '#21262d',
+                    color: 'var(--text-secondary)',
+                    background: 'var(--border-primary)',
                     padding: '0 6px',
                     borderRadius: 8,
                   }}>
@@ -349,7 +349,7 @@ export function WorktreeManager() {
                   onClick={() => handleCloseProject(projectName)}
                   style={{
                     background: isConfirmingProject ? '#da3633' : 'transparent',
-                    color: isConfirmingProject ? '#fff' : '#6e7681',
+                    color: isConfirmingProject ? '#fff' : 'var(--text-tertiary)',
                     border: isConfirmingProject ? '1px solid #da3633' : '1px solid transparent',
                     borderRadius: 4,
                     padding: '2px 8px',
@@ -370,15 +370,15 @@ export function WorktreeManager() {
                       key={session.sessionId}
                       onClick={() => handleOpenClaudeWindow(session)}
                       style={{
-                        background: '#161b22',
-                        border: '1px solid #21262d',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-primary)',
                         borderRadius: 8,
                         padding: '10px 14px',
                         cursor: 'pointer',
                         transition: 'border-color 0.15s',
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#30363d'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#21262d'; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-secondary)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -387,7 +387,7 @@ export function WorktreeManager() {
                             <span style={{
                               fontWeight: 600,
                               fontSize: 13,
-                              color: '#e0e0e0',
+                              color: 'var(--text-primary)',
                               fontFamily: "'Cascadia Code', monospace",
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -399,8 +399,8 @@ export function WorktreeManager() {
                               fontSize: 10,
                               padding: '1px 6px',
                               borderRadius: 8,
-                              background: '#21262d',
-                              color: typeColors[session.sessionType] || '#8b949e',
+                              background: 'var(--border-primary)',
+                              color: typeColors[session.sessionType] || 'var(--text-secondary)',
                               fontWeight: 600,
                               flexShrink: 0,
                             }}>
@@ -408,17 +408,17 @@ export function WorktreeManager() {
                             </span>
                           </div>
                           {/* Details row */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: '#6e7681' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: 'var(--text-tertiary)' }}>
                             <span>base: {session.baseBranch}</span>
                             {session.issueNumber && (
-                              <span style={{ color: '#58a6ff' }}>#{session.issueNumber}</span>
+                              <span style={{ color: 'var(--accent-primary)' }}>#{session.issueNumber}</span>
                             )}
                             <span>{timeAgo(session.createdAt)}</span>
                           </div>
                           {/* Worktree path */}
                           <div style={{
                             fontSize: 11,
-                            color: '#484f58',
+                            color: 'var(--text-tertiary)',
                             marginTop: 2,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -446,9 +446,9 @@ export function WorktreeManager() {
                           <button
                             onClick={(e) => { e.stopPropagation(); handleClose(session); }}
                             style={{
-                              background: isConfirmingClose ? '#da3633' : '#21262d',
-                              color: isConfirmingClose ? '#fff' : '#8b949e',
-                              border: `1px solid ${isConfirmingClose ? '#da3633' : '#30363d'}`,
+                              background: isConfirmingClose ? '#da3633' : 'var(--border-primary)',
+                              color: isConfirmingClose ? '#fff' : 'var(--text-secondary)',
+                              border: `1px solid ${isConfirmingClose ? '#da3633' : 'var(--border-secondary)'}`,
                               borderRadius: 6,
                               padding: '4px 10px',
                               fontSize: 12,

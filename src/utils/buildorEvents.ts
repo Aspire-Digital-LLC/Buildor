@@ -23,7 +23,8 @@ export type BuildorEventType =
   | 'error-occurred'          // An error happened
   | 'cost-updated'            // Running cost changed
   | 'turn-completed'          // Claude finished responding to a message
-  | 'branch-switched';        // User switched a checked-out branch
+  | 'branch-switched'         // User switched a checked-out branch
+  | 'usage-updated';          // Token usage / context window updated
 
 export interface BuildorEvent<T = unknown> {
   type: BuildorEventType;

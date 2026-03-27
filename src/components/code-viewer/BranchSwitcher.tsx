@@ -105,8 +105,8 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
         left: 0,
         right: 0,
         maxHeight: 320,
-        background: '#161b22',
-        borderTop: '1px solid #30363d',
+        background: 'var(--bg-secondary)',
+        borderTop: '1px solid var(--border-secondary)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 100,
@@ -116,7 +116,7 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
       {/* Search bar */}
       <div style={{
         padding: '8px',
-        borderBottom: '1px solid #21262d',
+        borderBottom: '1px solid var(--border-primary)',
       }}>
         <input
           ref={inputRef}
@@ -126,10 +126,10 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
           placeholder="Switch branch..."
           style={{
             width: '100%',
-            background: '#0d1117',
-            border: '1px solid #30363d',
+            background: 'var(--bg-primary)',
+            border: '1px solid var(--border-secondary)',
             borderRadius: 6,
-            color: '#e0e0e0',
+            color: 'var(--text-primary)',
             padding: '6px 10px',
             fontSize: 12,
             outline: 'none',
@@ -149,7 +149,7 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
       {/* Branch list */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {isLoading ? (
-          <div style={{ padding: 12, color: '#6e7681', fontSize: 12 }}>Loading branches...</div>
+          <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: 12 }}>Loading branches...</div>
         ) : (
           <>
             {/* Local branches */}
@@ -159,7 +159,7 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
                   padding: '6px 10px',
                   fontSize: 10,
                   fontWeight: 600,
-                  color: '#6e7681',
+                  color: 'var(--text-tertiary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.3px',
                 }}>
@@ -184,7 +184,7 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
                   padding: '6px 10px',
                   fontSize: 10,
                   fontWeight: 600,
-                  color: '#6e7681',
+                  color: 'var(--text-tertiary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.3px',
                   marginTop: 4,
@@ -204,7 +204,7 @@ export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchS
             )}
 
             {localBranches.length === 0 && remoteBranches.length === 0 && (
-              <div style={{ padding: 12, color: '#6e7681', fontSize: 12 }}>
+              <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: 12 }}>
                 No branches matching "{filter}"
               </div>
             )}
@@ -228,7 +228,7 @@ function BranchItem({ branch, isCurrent, isSwitching, onClick }: {
       style={{
         padding: '5px 10px 5px 16px',
         fontSize: 12,
-        color: isCurrent ? '#3fb950' : isRemote ? '#d2a8ff' : '#58a6ff',
+        color: isCurrent ? '#3fb950' : isRemote ? '#d2a8ff' : 'var(--accent-primary)',
         cursor: isCurrent ? 'default' : 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -236,7 +236,7 @@ function BranchItem({ branch, isCurrent, isSwitching, onClick }: {
         fontFamily: "'Cascadia Code', 'Consolas', monospace",
         opacity: isSwitching ? 0.5 : 1,
       }}
-      onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = '#1c2128'; }}
+      onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
       {isCurrent && (

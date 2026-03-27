@@ -110,7 +110,7 @@ The main window uses a tab-based workspace instead of single-panel routing:
 │ R  │                                                     │
 │    │                                                     │
 ├────┴────────────────────────────────────────────────────┤
-│ [Start Session]                                          │  ← bottom bar
+│ branch | project | model | $cost | Plan | CTX ██ 72% | tokens | WK ██ 45% | reset │  ← StatusBar
 └─────────────────────────────────────────────────────────┘
 ```
 

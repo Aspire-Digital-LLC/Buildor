@@ -35,3 +35,7 @@ export async function respondToPermission(sessionId: string, requestId: string, 
 export async function addPermissionRule(sessionId: string, rule: string): Promise<void> {
   return invoke('add_permission_rule', { sessionId, rule });
 }
+
+export async function queryClaudeStatus(): Promise<string> {
+  return invoke('query_claude_status');
+}

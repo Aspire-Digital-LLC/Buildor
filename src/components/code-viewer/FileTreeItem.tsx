@@ -34,18 +34,18 @@ export function FileTreeItem({
         padding: '3px 8px',
         paddingLeft: depth * 16 + 8,
         cursor: 'pointer',
-        background: isSelected ? '#1a2332' : 'transparent',
-        color: isSelected ? '#e0e0e0' : '#adbac7',
+        background: isSelected ? 'var(--bg-active)' : 'transparent',
+        color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
         fontSize: 13,
         fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
         userSelect: 'none',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        borderLeft: isSelected ? '2px solid #1f6feb' : '2px solid transparent',
+        borderLeft: isSelected ? '2px solid var(--accent-secondary)' : '2px solid transparent',
       }}
       onMouseEnter={(e) => {
-        if (!isSelected) e.currentTarget.style.background = '#1c2128';
+        if (!isSelected) e.currentTarget.style.background = 'var(--bg-tertiary)';
       }}
       onMouseLeave={(e) => {
         if (!isSelected) e.currentTarget.style.background = 'transparent';

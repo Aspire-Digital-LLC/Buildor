@@ -148,7 +148,7 @@ export function ProjectSwitcher() {
         justifyContent: 'space-between',
         marginBottom: 20,
       }}>
-        <h2 style={{ margin: 0, color: '#e0e0e0', fontSize: 18 }}>Projects</h2>
+        <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 18 }}>Projects</h2>
         <button
           onClick={handleAddProject}
           style={{
@@ -195,18 +195,18 @@ export function ProjectSwitcher() {
       )}
 
       {isLoading && (
-        <div style={{ color: '#8b949e', fontSize: 13, padding: 20, textAlign: 'center' }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 20, textAlign: 'center' }}>
           Loading projects...
         </div>
       )}
 
       {!isLoading && projects.length === 0 && (
         <div style={{
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           fontSize: 14,
           textAlign: 'center',
           padding: '40px 20px',
-          border: '1px dashed #30363d',
+          border: '1px dashed var(--border-secondary)',
           borderRadius: 8,
         }}>
           No projects yet. Click "+ Project" to add a git repository.
@@ -222,8 +222,8 @@ export function ProjectSwitcher() {
             <div
               key={project.name}
               style={{
-                background: '#161b22',
-                border: '1px solid #21262d',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-primary)',
                 borderRadius: 8,
                 padding: '12px 16px',
               }}
@@ -234,7 +234,7 @@ export function ProjectSwitcher() {
                     <span style={{
                       fontWeight: 600,
                       fontSize: 14,
-                      color: '#e0e0e0',
+                      color: 'var(--text-primary)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -244,8 +244,8 @@ export function ProjectSwitcher() {
                     {project.currentBranch && (
                       <span style={{
                         fontSize: 11,
-                        color: '#8b949e',
-                        background: '#21262d',
+                        color: 'var(--text-secondary)',
+                        background: 'var(--border-primary)',
                         padding: '1px 6px',
                         borderRadius: 10,
                         flexShrink: 0,
@@ -256,7 +256,7 @@ export function ProjectSwitcher() {
                   </div>
                   <div style={{
                     fontSize: 12,
-                    color: '#6e7681',
+                    color: 'var(--text-tertiary)',
                     marginTop: 4,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -270,7 +270,7 @@ export function ProjectSwitcher() {
                   disabled={isChecking}
                   style={{
                     background: isConfirmingRemove ? '#da3633' : 'transparent',
-                    color: isConfirmingRemove ? '#fff' : '#6e7681',
+                    color: isConfirmingRemove ? '#fff' : 'var(--text-tertiary)',
                     border: isConfirmingRemove ? '1px solid #da3633' : '1px solid transparent',
                     borderRadius: 4,
                     padding: '2px 8px',
@@ -332,7 +332,7 @@ export function ProjectSwitcher() {
                         <span style={{ color: stat.color, fontWeight: 500 }}>
                           {stat.language}
                         </span>
-                        <span style={{ color: '#6e7681' }}>
+                        <span style={{ color: 'var(--text-tertiary)' }}>
                           {stat.percentage.toFixed(1)}%
                         </span>
                       </span>
@@ -357,13 +357,13 @@ export function ProjectSwitcher() {
           zIndex: 1000,
         }}>
           <div style={{
-            background: '#161b22',
+            background: 'var(--bg-secondary)',
             border: '1px solid #da3633',
             borderRadius: 12,
             padding: 24,
             maxWidth: 500,
             width: '90%',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+            boxShadow: '0 16px 48px var(--shadow-color)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <span style={{ fontSize: 20 }}>&#9888;</span>
@@ -372,15 +372,15 @@ export function ProjectSwitcher() {
               </h3>
             </div>
 
-            <p style={{ color: '#adbac7', fontSize: 13, margin: '0 0 16px', lineHeight: 1.5 }}>
-              Removing <strong style={{ color: '#e0e0e0' }}>{warning.projectName}</strong> will
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 16px', lineHeight: 1.5 }}>
+              Removing <strong style={{ color: 'var(--text-primary)' }}>{warning.projectName}</strong> will
               delete {warning.sessions.length} worktree{warning.sessions.length > 1 ? 's' : ''}.
               The following have work that may be lost:
             </p>
 
             <div style={{
-              background: '#0d1117',
-              border: '1px solid #21262d',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-primary)',
               borderRadius: 6,
               padding: 8,
               marginBottom: 16,
@@ -391,7 +391,7 @@ export function ProjectSwitcher() {
                 <div key={session.sessionId} style={{
                   padding: '6px 8px',
                   fontSize: 12,
-                  borderBottom: '1px solid #21262d',
+                  borderBottom: '1px solid var(--border-primary)',
                 }}>
                   <div style={{ color: '#d2a8ff', fontFamily: "'Cascadia Code', monospace", marginBottom: 4 }}>
                     {session.branchName}
@@ -412,7 +412,7 @@ export function ProjectSwitcher() {
               ))}
             </div>
 
-            <p style={{ color: '#8b949e', fontSize: 12, margin: '0 0 16px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 16px' }}>
               Consider committing and pushing changes before removing this project.
             </p>
 
@@ -420,9 +420,9 @@ export function ProjectSwitcher() {
               <button
                 onClick={() => { setWarning(null); setRemoving(null); }}
                 style={{
-                  background: '#21262d',
-                  border: '1px solid #30363d',
-                  color: '#c9d1d9',
+                  background: 'var(--border-primary)',
+                  border: '1px solid var(--border-secondary)',
+                  color: 'var(--text-primary)',
                   borderRadius: 6,
                   padding: '6px 16px',
                   fontSize: 13,

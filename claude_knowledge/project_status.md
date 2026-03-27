@@ -27,7 +27,9 @@
 - [x] **Claude Permission Cards**: interactive Approve/Always Allow/Deny buttons, control_request/control_response protocol with updatedInput echo
 - [x] **Always Allow persistence**: saves permission rules to .claude/settings.local.json
 - [x] **Collapsible Skills & Flows palette**: right-side panel, collapses to thin vertical bar with sideways text, click to expand/collapse
-- [x] **Event system**: buildorEvents bus (permissions, costs, branch-switched, turn-completed)
+- [x] **Event system**: buildorEvents bus (permissions, costs, branch-switched, turn-completed, usage-updated)
+- [x] **StatusBar**: VS Code-style full-width bottom bar with git branch, project, model, session cost, plan type badge, context window % (with mini progress bar), session token count, weekly usage %, reset countdown. Uses usageStore (Zustand) subscribed to event bus. Polls `claude status` CLI every 5min for plan/quota data.
+- [x] **Theme system**: 7 themes (Midnight, Ocean, Forest, Aurora, Copper, Arctic, Sakura) with CSS variable architecture, persisted via Zustand+localStorage, dynamic Tauri title bar dark/light switching, ThemeSettings picker in Settings panel with mini app-mockup previews
 - [x] **Skills**: /document and /read-logs in .claude/skills/
 - [x] **Data persistence**: OS-standard paths (%APPDATA% on Windows)
 

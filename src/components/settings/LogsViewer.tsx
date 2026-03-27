@@ -3,10 +3,10 @@ import { getLogs, clearLogs } from '@/utils/commands/logging';
 import type { LogEntry } from '@/types';
 
 const levelColors: Record<string, string> = {
-  info: '#58a6ff',
+  info: 'var(--accent-primary)',
   warn: '#d29922',
   error: '#f85149',
-  debug: '#8b949e',
+  debug: 'var(--text-secondary)',
 };
 
 const functionIcons: Record<string, string> = {
@@ -87,14 +87,14 @@ export function LogsViewer() {
       {/* Toolbar */}
       <div style={{
         padding: '8px 12px',
-        borderBottom: '1px solid #21262d',
+        borderBottom: '1px solid var(--border-primary)',
         display: 'flex',
         alignItems: 'center',
         gap: 8,
         flexShrink: 0,
         flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: '#e0e0e0' }}>Logs</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Logs</span>
 
         <select
           value={filterLevel}
@@ -150,9 +150,9 @@ export function LogsViewer() {
         <button
           onClick={loadLogs}
           style={{
-            background: '#21262d',
-            border: '1px solid #30363d',
-            color: '#c9d1d9',
+            background: 'var(--border-primary)',
+            border: '1px solid var(--border-secondary)',
+            color: 'var(--text-primary)',
             borderRadius: 6,
             padding: '4px 10px',
             fontSize: 12,
@@ -164,7 +164,7 @@ export function LogsViewer() {
         <button
           onClick={() => setClearConfirmOpen(!clearConfirmOpen)}
           style={{
-            background: '#21262d',
+            background: 'var(--border-primary)',
             border: '1px solid #da3633',
             color: '#f85149',
             borderRadius: 6,
@@ -182,7 +182,7 @@ export function LogsViewer() {
         <div style={{
           padding: '8px 12px',
           borderBottom: '1px solid #6e3030',
-          background: '#1a1a2e',
+          background: 'var(--bg-active)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -198,10 +198,10 @@ export function LogsViewer() {
             onChange={(e) => setClearConfirmText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleClear(); }}
             style={{
-              background: '#0d1117',
+              background: 'var(--bg-primary)',
               border: '1px solid #da3633',
               borderRadius: 4,
-              color: '#e0e0e0',
+              color: 'var(--text-primary)',
               padding: '4px 8px',
               fontSize: 12,
               outline: 'none',
@@ -213,8 +213,8 @@ export function LogsViewer() {
             onClick={handleClear}
             disabled={clearConfirmText !== 'clear all logs'}
             style={{
-              background: clearConfirmText === 'clear all logs' ? '#da3633' : '#21262d',
-              color: clearConfirmText === 'clear all logs' ? '#fff' : '#484f58',
+              background: clearConfirmText === 'clear all logs' ? '#da3633' : 'var(--border-primary)',
+              color: clearConfirmText === 'clear all logs' ? '#fff' : 'var(--text-tertiary)',
               border: 'none',
               borderRadius: 4,
               padding: '4px 10px',
@@ -229,8 +229,8 @@ export function LogsViewer() {
             onClick={() => { setClearConfirmOpen(false); setClearConfirmText(''); }}
             style={{
               background: 'transparent',
-              border: '1px solid #30363d',
-              color: '#8b949e',
+              border: '1px solid var(--border-secondary)',
+              color: 'var(--text-secondary)',
               borderRadius: 4,
               padding: '4px 8px',
               fontSize: 12,
@@ -245,11 +245,11 @@ export function LogsViewer() {
       {/* Log table */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {isLoading && logs.length === 0 && (
-          <div style={{ padding: 16, color: '#6e7681', textAlign: 'center' }}>Loading...</div>
+          <div style={{ padding: 16, color: 'var(--text-tertiary)', textAlign: 'center' }}>Loading...</div>
         )}
 
         {!isLoading && logs.length === 0 && (
-          <div style={{ padding: 32, color: '#6e7681', textAlign: 'center', fontSize: 13 }}>
+          <div style={{ padding: 32, color: 'var(--text-tertiary)', textAlign: 'center', fontSize: 13 }}>
             No log entries
           </div>
         )}
@@ -262,14 +262,14 @@ export function LogsViewer() {
             gap: 0,
             fontSize: 11,
             fontWeight: 600,
-            color: '#6e7681',
+            color: 'var(--text-tertiary)',
             textTransform: 'uppercase',
             letterSpacing: '0.3px',
             padding: '6px 12px',
-            borderBottom: '1px solid #21262d',
+            borderBottom: '1px solid var(--border-primary)',
             position: 'sticky',
             top: 0,
-            background: '#161b22',
+            background: 'var(--bg-secondary)',
             zIndex: 1,
           }}>
             <span>Time</span>
@@ -293,23 +293,23 @@ export function LogsViewer() {
               fontSize: 12,
               padding: '4px 12px',
               cursor: 'pointer',
-              borderBottom: '1px solid #0d1117',
-              color: '#adbac7',
+              borderBottom: '1px solid var(--bg-primary)',
+              color: 'var(--text-secondary)',
               fontFamily: "'Cascadia Code', 'Consolas', monospace",
-              background: selectedLog?.id === log.id ? '#1a2332' : 'transparent',
+              background: selectedLog?.id === log.id ? 'var(--bg-active)' : 'transparent',
             }}
             onMouseEnter={(e) => {
-              if (selectedLog?.id !== log.id) e.currentTarget.style.background = '#1c2128';
+              if (selectedLog?.id !== log.id) e.currentTarget.style.background = 'var(--bg-tertiary)';
             }}
             onMouseLeave={(e) => {
               if (selectedLog?.id !== log.id) e.currentTarget.style.background = 'transparent';
             }}
           >
-            <span style={{ color: '#6e7681', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {formatTimestamp(log.timestamp)}
             </span>
             <span style={{
-              color: levelColors[log.level] || '#8b949e',
+              color: levelColors[log.level] || 'var(--text-secondary)',
               fontWeight: 600,
               fontSize: 10,
               textTransform: 'uppercase',
@@ -318,17 +318,17 @@ export function LogsViewer() {
             </span>
             <span style={{
               fontSize: 10,
-              background: '#21262d',
+              background: 'var(--border-primary)',
               borderRadius: 3,
               padding: '0 4px',
               display: 'inline-block',
               textAlign: 'center',
-              color: '#8b949e',
+              color: 'var(--text-secondary)',
               maxWidth: 50,
             }}>
               {functionIcons[log.functionArea] || log.functionArea.slice(0, 2).toUpperCase()}
             </span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#6e7681' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
               {log.repo || '—'}
             </span>
             <span
@@ -342,7 +342,7 @@ export function LogsViewer() {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: log.sessionId ? '#58a6ff' : '#484f58',
+                color: log.sessionId ? 'var(--accent-primary)' : 'var(--text-tertiary)',
                 cursor: log.sessionId ? 'pointer' : 'default',
                 fontSize: 10,
               }}
@@ -353,7 +353,7 @@ export function LogsViewer() {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {log.operation}: {log.message}
             </span>
-            <span style={{ textAlign: 'right', color: log.durationMs ? '#d29922' : '#484f58' }}>
+            <span style={{ textAlign: 'right', color: log.durationMs ? '#d29922' : 'var(--text-tertiary)' }}>
               {formatDuration(log.durationMs)}
             </span>
           </div>
@@ -363,10 +363,10 @@ export function LogsViewer() {
         {selectedLog && selectedLog.details && (
           <div style={{
             padding: '8px 12px',
-            background: '#0d1117',
-            borderBottom: '1px solid #21262d',
+            background: 'var(--bg-primary)',
+            borderBottom: '1px solid var(--border-primary)',
             fontSize: 12,
-            color: '#8b949e',
+            color: 'var(--text-secondary)',
             fontFamily: "'Cascadia Code', 'Consolas', monospace",
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-all',
@@ -380,10 +380,10 @@ export function LogsViewer() {
 }
 
 const filterStyle: React.CSSProperties = {
-  background: '#0d1117',
-  border: '1px solid #30363d',
+  background: 'var(--bg-primary)',
+  border: '1px solid var(--border-secondary)',
   borderRadius: 4,
-  color: '#e0e0e0',
+  color: 'var(--text-primary)',
   padding: '4px 8px',
   fontSize: 12,
   outline: 'none',

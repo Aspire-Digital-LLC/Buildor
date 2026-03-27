@@ -20,6 +20,18 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
     }
 
     if (event.type === 'assistant' && event.message?.content) {
+      // Extract token usage from message if available
+      const usage = event.message?.usage || event.usage;
+      if (usage) {
+        buildorEvents.emit('usage-updated', {
+          inputTokens: usage.input_tokens || 0,
+          outputTokens: usage.output_tokens || 0,
+          cacheReadTokens: usage.cache_read_input_tokens || 0,
+          cacheCreationTokens: usage.cache_creation_input_tokens || 0,
+          model: event.message?.model,
+        }, sessionId);
+      }
+
       const content: ChatContent[] = event.message.content.map((block: any) => {
         if (block.type === 'text') {
           buildorEvents.emit('message-received', { text: block.text }, sessionId);
@@ -130,6 +142,17 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
         turns: event.num_turns,
       }, sessionId);
 
+      // Emit final usage stats from result if available
+      if (event.usage || event.total_input_tokens || event.input_tokens) {
+        buildorEvents.emit('usage-updated', {
+          inputTokens: event.usage?.input_tokens || event.total_input_tokens || event.input_tokens || 0,
+          outputTokens: event.usage?.output_tokens || event.total_output_tokens || event.output_tokens || 0,
+          cacheReadTokens: event.usage?.cache_read_input_tokens || 0,
+          cacheCreationTokens: event.usage?.cache_creation_input_tokens || 0,
+          isResultTotal: true,
+        }, sessionId);
+      }
+
       return {
         role: 'system',
         content: [{
@@ -154,7 +177,24 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
       };
     }
 
-    // Skip rate_limit_event and other non-display events
+    // Capture rate limit / usage events for StatusBar
+    if (event.type === 'rate_limit' || event.type === 'rate_limit_event' || event.type === 'usage') {
+      buildorEvents.emit('usage-updated', {
+        // Session/rate limit fields (various possible shapes)
+        sessionUsedPercent: event.session_usage_percent ?? event.usage_percent ?? event.percent_used ?? null,
+        sessionResetAt: event.session_reset_at ?? event.reset_at ?? event.resets_at ?? null,
+        sessionResetIn: event.resets_in ?? event.reset_in ?? null,
+        weeklyUsedPercent: event.weekly_usage_percent ?? event.weekly_percent_used ?? null,
+        weeklyResetAt: event.weekly_reset_at ?? null,
+        // Token counts if present
+        inputTokens: event.input_tokens ?? event.usage?.input_tokens ?? 0,
+        outputTokens: event.output_tokens ?? event.usage?.output_tokens ?? 0,
+        isRateLimitEvent: true,
+      }, sessionId);
+      return null; // Don't display in chat
+    }
+
+    // Log unhandled events at debug level for future discovery
     return null;
   } catch {
     if (jsonLine.trim()) {

@@ -3,11 +3,13 @@ import { LogsViewer } from './LogsViewer';
 import { ProjectSwitcher } from '../project-switcher/ProjectSwitcher';
 import { SharedMemory } from './SharedMemory';
 import { UpdateChecker } from './UpdateChecker';
+import { ThemeSettings } from './ThemeSettings';
 
-type SettingsSection = 'projects' | 'logs' | 'shared-memory' | 'updates';
+type SettingsSection = 'projects' | 'themes' | 'logs' | 'shared-memory' | 'updates';
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'projects', label: 'Projects' },
+  { id: 'themes', label: 'Themes' },
   { id: 'logs', label: 'Logs' },
   { id: 'shared-memory', label: 'Shared Memory' },
   { id: 'updates', label: 'Updates' },
@@ -21,8 +23,8 @@ export function Settings() {
       {/* Settings sidebar */}
       <div style={{
         width: 180,
-        borderRight: '1px solid #21262d',
-        background: '#0d1117',
+        borderRight: '1px solid var(--border-primary)',
+        background: 'var(--bg-primary)',
         flexShrink: 0,
         paddingTop: 8,
       }}>
@@ -30,10 +32,10 @@ export function Settings() {
           padding: '8px 12px',
           fontSize: 11,
           fontWeight: 600,
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           textTransform: 'uppercase',
           letterSpacing: '0.5px',
-          borderBottom: '1px solid #21262d',
+          borderBottom: '1px solid var(--border-primary)',
           marginBottom: 4,
         }}>
           Settings
@@ -45,13 +47,13 @@ export function Settings() {
             style={{
               padding: '8px 12px',
               fontSize: 13,
-              color: active === section.id ? '#e0e0e0' : '#8b949e',
-              background: active === section.id ? '#1a1a2e' : 'transparent',
-              borderLeft: active === section.id ? '2px solid #58a6ff' : '2px solid transparent',
+              color: active === section.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+              background: active === section.id ? 'var(--bg-active)' : 'transparent',
+              borderLeft: active === section.id ? '2px solid var(--accent-primary)' : '2px solid transparent',
               cursor: 'pointer',
             }}
             onMouseEnter={(e) => {
-              if (active !== section.id) e.currentTarget.style.background = '#1c2128';
+              if (active !== section.id) e.currentTarget.style.background = 'var(--bg-tertiary)';
             }}
             onMouseLeave={(e) => {
               if (active !== section.id) e.currentTarget.style.background = 'transparent';
@@ -65,6 +67,7 @@ export function Settings() {
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {active === 'projects' && <ProjectSwitcher />}
+        {active === 'themes' && <ThemeSettings />}
         {active === 'logs' && <LogsViewer />}
         {active === 'shared-memory' && <SharedMemory />}
         {active === 'updates' && <UpdateChecker />}

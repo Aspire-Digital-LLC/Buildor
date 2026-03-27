@@ -1,8 +1,9 @@
-import { useTabStore } from '@/stores';
+import { useTabStore, useThemeStore } from '@/stores';
 import { TabContextProvider } from '@/contexts/TabContext';
 import { Sidebar } from './Sidebar';
 import { PanelContainer } from './PanelContainer';
 import { TabBar } from './TabBar';
+import { StatusBar } from './StatusBar';
 import { SourceControl } from '../source-control/SourceControl';
 import { CodeViewer } from '../code-viewer/CodeViewer';
 import { FlowBuilder } from '../flow-builder/FlowBuilder';
@@ -37,12 +38,12 @@ function ActivePanelRenderer() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#484f58',
+        color: 'var(--text-tertiary)',
         fontSize: 14,
         flexDirection: 'column',
         gap: 8,
       }}>
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#30363d' }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--border-secondary)' }}>
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <path d="M9 3v18M3 9h6" />
         </svg>
@@ -62,21 +63,30 @@ function ActivePanelRenderer() {
 }
 
 export function MainLayout() {
+  // Ensure theme store is initialized (triggers rehydration + applyTheme)
+  useThemeStore();
+
   return (
     <div style={{
       display: 'flex',
+      flexDirection: 'column',
       height: '100vh',
-      backgroundColor: '#0d1117',
-      color: '#e0e0e0',
+      backgroundColor: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     }}>
-      <Sidebar />
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-        <TabBar />
-        <PanelContainer>
-          <ActivePanelRenderer />
-        </PanelContainer>
+      {/* Main area: Sidebar + Content */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <Sidebar />
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <TabBar />
+          <PanelContainer>
+            <ActivePanelRenderer />
+          </PanelContainer>
+        </div>
       </div>
+      {/* Full-width status bar at bottom */}
+      <StatusBar />
     </div>
   );
 }

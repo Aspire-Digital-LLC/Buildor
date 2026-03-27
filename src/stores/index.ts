@@ -5,3 +5,5 @@ export { useClaudeStore } from './claudeStore';
 export { useWindowStore } from './windowStore';
 export { useFileTreeStore } from './fileTreeStore';
 export { useTabStore } from './tabStore';
+export { useUsageStore } from './usageStore';
+export { useThemeStore } from './themeStore';

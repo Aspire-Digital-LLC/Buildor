@@ -52,7 +52,7 @@ export function CodeViewer() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#6e7681',
+        color: 'var(--text-tertiary)',
         fontSize: 14,
       }}>
         Select a project to browse code
@@ -70,8 +70,8 @@ export function CodeViewer() {
       <div style={{
         width: 260,
         minWidth: 180,
-        borderRight: '1px solid #21262d',
-        background: '#0d1117',
+        borderRight: '1px solid var(--border-primary)',
+        background: 'var(--bg-primary)',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -81,16 +81,16 @@ export function CodeViewer() {
           padding: '8px 12px',
           fontSize: 11,
           fontWeight: 600,
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           textTransform: 'uppercase',
           letterSpacing: '0.5px',
-          borderBottom: '1px solid #21262d',
+          borderBottom: '1px solid var(--border-primary)',
         }}>
           {activeProject.name}
         </div>
         <div style={{ flex: 1, overflow: 'auto' }}>
           {isLoadingTree ? (
-            <div style={{ padding: 16, color: '#6e7681', fontSize: 13 }}>
+            <div style={{ padding: 16, color: 'var(--text-tertiary)', fontSize: 13 }}>
               Loading file tree...
             </div>
           ) : (
@@ -103,16 +103,16 @@ export function CodeViewer() {
           onClick={canSwitchBranch ? () => setShowBranchSwitcher((v) => !v) : undefined}
           style={{
             padding: '6px 10px',
-            borderTop: '1px solid #21262d',
-            background: showBranchSwitcher ? '#1c2128' : '#161b22',
+            borderTop: '1px solid var(--border-primary)',
+            background: showBranchSwitcher ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             flexShrink: 0,
             cursor: canSwitchBranch ? 'pointer' : 'default',
           }}
-          onMouseEnter={(e) => { if (canSwitchBranch) e.currentTarget.style.background = '#1c2128'; }}
-          onMouseLeave={(e) => { if (canSwitchBranch && !showBranchSwitcher) e.currentTarget.style.background = '#161b22'; }}
+          onMouseEnter={(e) => { if (canSwitchBranch) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+          onMouseLeave={(e) => { if (canSwitchBranch && !showBranchSwitcher) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isWorktree ? '#d2a8ff' : '#58a6ff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {isWorktree ? (
@@ -139,8 +139,8 @@ export function CodeViewer() {
           </span>
           <span style={{
             fontSize: 9,
-            color: '#6e7681',
-            background: '#21262d',
+            color: 'var(--text-tertiary)',
+            background: 'var(--border-primary)',
             padding: '1px 5px',
             borderRadius: 4,
             flexShrink: 0,
@@ -151,7 +151,7 @@ export function CodeViewer() {
             {isWorktree ? 'worktree' : 'checked out'}
           </span>
           {canSwitchBranch && (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6e7681" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 15l-6-6-6 6" />
             </svg>
           )}

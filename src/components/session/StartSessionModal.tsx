@@ -15,7 +15,7 @@ const sessionTypes: { value: SessionType; label: string; color: string }[] = [
   { value: 'feature', label: 'Feature', color: '#3fb950' },
   { value: 'bug', label: 'Bug', color: '#f85149' },
   { value: 'issue', label: 'Issue', color: '#d29922' },
-  { value: 'documentation', label: 'Documentation', color: '#58a6ff' },
+  { value: 'documentation', label: 'Documentation', color: 'var(--accent-primary)' },
   { value: 'release', label: 'Release', color: '#a371f7' },
 ];
 
@@ -207,38 +207,38 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
           </div>
           <div style={{ padding: 20 }}>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Branch</div>
-              <div style={{ fontSize: 14, color: '#e0e0e0', fontFamily: "'Cascadia Code', monospace" }}>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Branch</div>
+              <div style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: "'Cascadia Code', monospace" }}>
                 {createdSession.branchName}
               </div>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Worktree</div>
-              <div style={{ fontSize: 12, color: '#8b949e', fontFamily: "'Cascadia Code', monospace" }}>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Worktree</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: "'Cascadia Code', monospace" }}>
                 {createdSession.worktreePath}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Type</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Type</div>
                 <span style={{
                   fontSize: 12,
                   padding: '2px 8px',
                   borderRadius: 10,
-                  background: '#21262d',
-                  color: sessionTypes.find((t) => t.value === createdSession.sessionType)?.color || '#8b949e',
+                  background: 'var(--border-primary)',
+                  color: sessionTypes.find((t) => t.value === createdSession.sessionType)?.color || 'var(--text-secondary)',
                 }}>
                   {createdSession.sessionType}
                 </span>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Base</div>
-                <span style={{ fontSize: 12, color: '#8b949e' }}>{createdSession.baseBranch}</span>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Base</div>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{createdSession.baseBranch}</span>
               </div>
               {createdSession.issueNumber && (
                 <div>
-                  <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Issue</div>
-                  <span style={{ fontSize: 12, color: '#58a6ff' }}>#{createdSession.issueNumber}</span>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Issue</div>
+                  <span style={{ fontSize: 12, color: 'var(--accent-primary)' }}>#{createdSession.issueNumber}</span>
                 </div>
               )}
             </div>
@@ -338,8 +338,8 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                 top: '100%',
                 left: 0,
                 right: 0,
-                background: '#161b22',
-                border: '1px solid #30363d',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-secondary)',
                 borderRadius: '0 0 6px 6px',
                 maxHeight: 200,
                 overflow: 'auto',
@@ -356,11 +356,11 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                     style={{
                       padding: '6px 12px',
                       fontSize: 13,
-                      color: b === selectedBranch ? '#58a6ff' : '#e0e0e0',
+                      color: b === selectedBranch ? 'var(--accent-primary)' : 'var(--text-primary)',
                       cursor: 'pointer',
                       fontFamily: "'Cascadia Code', monospace",
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     {b}
@@ -379,9 +379,9 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                   key={t.value}
                   onClick={() => setSessionType(t.value)}
                   style={{
-                    background: sessionType === t.value ? '#1a2332' : '#0d1117',
-                    border: `1px solid ${sessionType === t.value ? t.color : '#30363d'}`,
-                    color: sessionType === t.value ? t.color : '#8b949e',
+                    background: sessionType === t.value ? 'var(--bg-active)' : 'var(--bg-primary)',
+                    border: `1px solid ${sessionType === t.value ? t.color : 'var(--border-secondary)'}`,
+                    color: sessionType === t.value ? t.color : 'var(--text-secondary)',
                     borderRadius: 6,
                     padding: '5px 12px',
                     fontSize: 13,
@@ -402,9 +402,9 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
               <button
                 onClick={() => setHasIssue(false)}
                 style={{
-                  background: !hasIssue ? '#1a2332' : '#0d1117',
-                  border: `1px solid ${!hasIssue ? '#58a6ff' : '#30363d'}`,
-                  color: !hasIssue ? '#58a6ff' : '#8b949e',
+                  background: !hasIssue ? 'var(--bg-active)' : 'var(--bg-primary)',
+                  border: `1px solid ${!hasIssue ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
+                  color: !hasIssue ? 'var(--accent-primary)' : 'var(--text-secondary)',
                   borderRadius: 6,
                   padding: '5px 14px',
                   fontSize: 13,
@@ -417,9 +417,9 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
               <button
                 onClick={() => setHasIssue(true)}
                 style={{
-                  background: hasIssue ? '#1a2332' : '#0d1117',
-                  border: `1px solid ${hasIssue ? '#58a6ff' : '#30363d'}`,
-                  color: hasIssue ? '#58a6ff' : '#8b949e',
+                  background: hasIssue ? 'var(--bg-active)' : 'var(--bg-primary)',
+                  border: `1px solid ${hasIssue ? 'var(--accent-primary)' : 'var(--border-secondary)'}`,
+                  color: hasIssue ? 'var(--accent-primary)' : 'var(--text-secondary)',
                   borderRadius: 6,
                   padding: '5px 14px',
                   fontSize: 13,
@@ -460,8 +460,8 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
           {/* Preview */}
           {selectedProject && selectedBranch && (
             <div style={{
-              background: '#0d1117',
-              border: '1px solid #21262d',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-primary)',
               borderRadius: 6,
               padding: '8px 12px',
             }}>
@@ -471,7 +471,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                 justifyContent: 'space-between',
                 marginBottom: 4,
               }}>
-                <span style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase' }}>Branch Preview</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Branch Preview</span>
                 {!isEditingSlug ? (
                   <button
                     onClick={() => {
@@ -482,7 +482,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#6e7681',
+                      color: 'var(--text-tertiary)',
                       cursor: 'pointer',
                       padding: '0 2px',
                       display: 'flex',
@@ -503,7 +503,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#6e7681',
+                      color: 'var(--text-tertiary)',
                       cursor: 'pointer',
                       fontSize: 11,
                     }}
@@ -514,7 +514,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
               </div>
               {isEditingSlug ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                  <span style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
+                  <span style={{ fontSize: 13, color: 'var(--accent-primary)', fontFamily: "'Cascadia Code', monospace" }}>
                     {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}
                   </span>
                   <input
@@ -528,7 +528,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      borderBottom: '1px solid #30363d',
+                      borderBottom: '1px solid var(--border-secondary)',
                       color: '#d29922',
                       fontSize: 13,
                       fontFamily: "'Cascadia Code', monospace",
@@ -539,14 +539,14 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                   />
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
+                <div style={{ fontSize: 13, color: 'var(--accent-primary)', fontFamily: "'Cascadia Code', monospace" }}>
                   {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}
                   {isGeneratingSlug ? (
-                    <span style={{ color: '#6e7681', fontStyle: 'italic' }}>generating...</span>
+                    <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>generating...</span>
                   ) : aiSlug ? (
                     <span style={{ color: '#3fb950' }}>{aiSlug}</span>
                   ) : (
-                    <span style={{ color: '#6e7681', fontStyle: 'italic' }}>{'<type to generate>'}</span>
+                    <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{'<type to generate>'}</span>
                   )}
                 </div>
               )}
@@ -598,8 +598,8 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  background: '#161b22',
-  border: '1px solid #30363d',
+  background: 'var(--bg-secondary)',
+  border: '1px solid var(--border-secondary)',
   borderRadius: 12,
   boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
   overflow: 'hidden',
@@ -609,8 +609,8 @@ const modalHeaderStyle: React.CSSProperties = {
   padding: '14px 20px',
   fontSize: 16,
   fontWeight: 600,
-  color: '#e0e0e0',
-  borderBottom: '1px solid #21262d',
+  color: 'var(--text-primary)',
+  borderBottom: '1px solid var(--border-primary)',
 };
 
 const modalFooterStyle: React.CSSProperties = {
@@ -618,14 +618,14 @@ const modalFooterStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'flex-end',
   gap: 8,
-  borderTop: '1px solid #21262d',
+  borderTop: '1px solid var(--border-primary)',
 };
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 12,
   fontWeight: 600,
-  color: '#8b949e',
+  color: 'var(--text-secondary)',
   marginBottom: 6,
   textTransform: 'uppercase',
   letterSpacing: '0.3px',
@@ -633,10 +633,10 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: '#0d1117',
-  border: '1px solid #30363d',
+  background: 'var(--bg-primary)',
+  border: '1px solid var(--border-secondary)',
   borderRadius: 6,
-  color: '#e0e0e0',
+  color: 'var(--text-primary)',
   padding: '8px 12px',
   fontSize: 13,
   outline: 'none',
@@ -649,9 +649,9 @@ const selectStyle: React.CSSProperties = {
 };
 
 const cancelBtnStyle: React.CSSProperties = {
-  background: '#21262d',
-  border: '1px solid #30363d',
-  color: '#8b949e',
+  background: 'var(--border-primary)',
+  border: '1px solid var(--border-secondary)',
+  color: 'var(--text-secondary)',
   borderRadius: 6,
   padding: '7px 16px',
   fontSize: 13,

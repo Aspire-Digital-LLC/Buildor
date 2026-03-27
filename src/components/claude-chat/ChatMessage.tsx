@@ -48,11 +48,11 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
       <div style={{ padding: '8px 12px', marginBottom: 4 }}>
         <div style={{
           fontSize: 13,
-          color: '#58a6ff',
+          color: 'var(--accent-primary)',
           fontWeight: 600,
           marginBottom: 4,
         }}>You</div>
-        <div style={{ fontSize: 13, color: '#e0e0e0' }}>{message.content[0]?.text || ''}</div>
+        <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{message.content[0]?.text || ''}</div>
       </div>
     );
   }
@@ -62,7 +62,7 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
       <div style={{
         padding: '4px 12px',
         fontSize: 12,
-        color: '#6e7681',
+        color: 'var(--text-tertiary)',
         fontStyle: 'italic',
       }}>
         {message.content[0]?.text || ''}
@@ -75,26 +75,26 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
       {message.content.map((block, i) => {
         if (block.type === 'text' && block.text) {
           return (
-            <div key={i} className="chat-markdown" style={{ fontSize: 13, color: '#e0e0e0', lineHeight: 1.6 }}>
+            <div key={i} className="chat-markdown" style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}
                 components={{
                   code({ className, children, ...props }) {
                     const isInline = !className;
                     if (isInline) {
                       return <code style={{
-                        background: '#21262d',
+                        background: 'var(--border-primary)',
                         padding: '1px 4px',
                         borderRadius: 3,
                         fontSize: 12,
                         fontFamily: "'Cascadia Code', 'Consolas', monospace",
-                        color: '#e0e0e0',
+                        color: 'var(--text-primary)',
                       }} {...props}>{children}</code>;
                     }
                     const lang = className?.replace('language-', '') || '';
                     return (
                       <div style={{
-                        background: '#0d1117',
-                        border: '1px solid #21262d',
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border-primary)',
                         borderRadius: 6,
                         margin: '8px 0',
                         overflow: 'hidden',
@@ -103,8 +103,8 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
                           <div style={{
                             padding: '4px 10px',
                             fontSize: 10,
-                            color: '#6e7681',
-                            borderBottom: '1px solid #21262d',
+                            color: 'var(--text-tertiary)',
+                            borderBottom: '1px solid var(--border-primary)',
                             textTransform: 'uppercase',
                           }}>{lang}</div>
                         )}
@@ -114,7 +114,7 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
                           overflow: 'auto',
                           fontSize: 12,
                           fontFamily: "'Cascadia Code', 'Consolas', monospace",
-                          color: '#e0e0e0',
+                          color: 'var(--text-primary)',
                           lineHeight: 1.5,
                         }}>
                           <code {...props}>{children}</code>
@@ -134,24 +134,24 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
                   },
                   th({ children }) {
                     return <th style={{
-                      border: '1px solid #30363d',
+                      border: '1px solid var(--border-secondary)',
                       padding: '6px 10px',
-                      background: '#21262d',
-                      color: '#e0e0e0',
+                      background: 'var(--border-primary)',
+                      color: 'var(--text-primary)',
                       textAlign: 'left',
                       fontSize: 12,
                     }}>{children}</th>;
                   },
                   td({ children }) {
                     return <td style={{
-                      border: '1px solid #21262d',
+                      border: '1px solid var(--border-primary)',
                       padding: '6px 10px',
-                      color: '#adbac7',
+                      color: 'var(--text-secondary)',
                       fontSize: 12,
                     }}>{children}</td>;
                   },
                   a({ href, children }) {
-                    return <a href={href} style={{ color: '#58a6ff' }} target="_blank" rel="noopener noreferrer">{children}</a>;
+                    return <a href={href} style={{ color: 'var(--accent-primary)' }} target="_blank" rel="noopener noreferrer">{children}</a>;
                   },
                 }}
               >{block.text}</ReactMarkdown>
@@ -169,7 +169,7 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
               ) : isVerbose && block.input ? (
                 <pre style={{
                   fontSize: 11,
-                  color: '#8b949e',
+                  color: 'var(--text-secondary)',
                   fontFamily: "'Cascadia Code', monospace",
                   margin: 0,
                   whiteSpace: 'pre-wrap',
@@ -178,7 +178,7 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
                   {JSON.stringify(block.input, null, 2)}
                 </pre>
               ) : (
-                <span style={{ fontSize: 12, color: '#8b949e' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                   {block.name === 'Bash' ? (block.input as any)?.command :
                    block.name === 'Read' ? (block.input as any)?.file_path :
                    block.name === 'Write' ? (block.input as any)?.file_path :
@@ -195,13 +195,13 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
           if (!isVerbose) return null;
           return (
             <div key={i} style={{
-              background: '#0d1117',
-              border: '1px solid #21262d',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-primary)',
               borderRadius: 6,
               padding: '8px 10px',
               margin: '4px 0',
               fontSize: 12,
-              color: block.isError ? '#f85149' : '#8b949e',
+              color: block.isError ? '#f85149' : 'var(--text-secondary)',
               fontFamily: "'Cascadia Code', monospace",
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
@@ -217,10 +217,10 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
           if (!isVerbose) return null;
           return (
             <details key={i} style={{ margin: '4px 0' }}>
-              <summary style={{ fontSize: 11, color: '#6e7681', cursor: 'pointer' }}>Thinking...</summary>
+              <summary style={{ fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer' }}>Thinking...</summary>
               <div style={{
                 fontSize: 12,
-                color: '#6e7681',
+                color: 'var(--text-tertiary)',
                 padding: '8px',
                 fontStyle: 'italic',
                 whiteSpace: 'pre-wrap',
@@ -248,7 +248,7 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
 
       {/* Cost badge */}
       {message.costUsd !== undefined && message.costUsd > 0 && (
-        <div style={{ fontSize: 10, color: '#484f58', marginTop: 4 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>
           ${message.costUsd.toFixed(4)} · {message.durationMs ? `${(message.durationMs / 1000).toFixed(1)}s` : ''}
         </div>
       )}
@@ -263,8 +263,8 @@ function ToolCard({ icon, name, children }: {
 }) {
   return (
     <div style={{
-      background: '#161b22',
-      border: '1px solid #21262d',
+      background: 'var(--bg-secondary)',
+      border: '1px solid var(--border-primary)',
       borderRadius: 6,
       margin: '6px 0',
       overflow: 'hidden',
@@ -275,11 +275,11 @@ function ToolCard({ icon, name, children }: {
         alignItems: 'center',
         gap: 6,
         fontSize: 12,
-        color: '#8b949e',
-        borderBottom: '1px solid #21262d',
+        color: 'var(--text-secondary)',
+        borderBottom: '1px solid var(--border-primary)',
       }}>
         <span>{icon}</span>
-        <span style={{ fontWeight: 600, color: '#c9d1d9' }}>{name}</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
       </div>
       <div style={{ padding: '6px 10px' }}>
         {children}
@@ -321,7 +321,7 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
 
   return (
     <div style={{
-      background: '#1a1a2e',
+      background: 'var(--bg-active)',
       border: `1px solid ${resolved === 'approved' ? '#3fb950' : resolved === 'denied' ? '#f85149' : '#d29922'}`,
       borderRadius: 8,
       margin: '8px 0',
@@ -332,7 +332,7 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        borderBottom: '1px solid #21262d',
+        borderBottom: '1px solid var(--border-primary)',
       }}>
         <span style={{ fontSize: 16 }}>⚠️</span>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#d29922' }}>
@@ -342,11 +342,11 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
       <div style={{ padding: '10px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <span>{icon}</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0e0' }}>{toolName}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{toolName}</span>
         </div>
         <div style={{
           fontSize: 12,
-          color: '#adbac7',
+          color: 'var(--text-secondary)',
           marginBottom: 8,
           fontFamily: "'Cascadia Code', monospace",
         }}>
@@ -354,12 +354,12 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
         </div>
         {input && (toolName === 'Bash') && (
           <div style={{
-            background: '#0d1117',
-            border: '1px solid #21262d',
+            background: 'var(--bg-primary)',
+            border: '1px solid var(--border-primary)',
             borderRadius: 4,
             padding: '6px 8px',
             fontSize: 12,
-            color: '#8b949e',
+            color: 'var(--text-secondary)',
             fontFamily: "'Cascadia Code', monospace",
             marginBottom: 8,
             whiteSpace: 'pre-wrap',
@@ -414,9 +414,9 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
                 }
               }}
               style={{
-                background: '#21262d',
-                border: '1px solid #30363d',
-                color: '#c9d1d9',
+                background: 'var(--border-primary)',
+                border: '1px solid var(--border-secondary)',
+                color: 'var(--text-primary)',
                 borderRadius: 6,
                 padding: '5px 14px',
                 fontSize: 13,
@@ -428,7 +428,7 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
             <button
               onClick={() => handleResponse(false)}
               style={{
-                background: '#21262d',
+                background: 'var(--border-primary)',
                 border: '1px solid #da3633',
                 color: '#f85149',
                 borderRadius: 6,
@@ -453,7 +453,7 @@ function EditDiff({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div>
-      <div style={{ fontSize: 11, color: '#6e7681', marginBottom: 4, fontFamily: "'Cascadia Code', monospace" }}>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4, fontFamily: "'Cascadia Code', monospace" }}>
         {filePath}
       </div>
       {oldStr && (

@@ -42,8 +42,8 @@ export function DiffViewer() {
       {/* Header */}
       <div style={{
         height: 40,
-        background: '#1c2128',
-        borderBottom: '1px solid #21262d',
+        background: 'var(--bg-tertiary)',
+        borderBottom: '1px solid var(--border-primary)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -51,13 +51,13 @@ export function DiffViewer() {
         fontSize: 13,
         flexShrink: 0,
       }}>
-        <span style={{ color: '#e0e0e0', fontFamily: "'Cascadia Code', 'Consolas', monospace" }}>
+        <span style={{ color: 'var(--text-primary)', fontFamily: "'Cascadia Code', 'Consolas', monospace" }}>
           {diff.filePath}
           <span style={{
             color: diff.staged ? '#3fb950' : '#d29922',
             marginLeft: 8,
             fontSize: 11,
-            background: '#21262d',
+            background: 'var(--border-primary)',
             padding: '1px 6px',
             borderRadius: 10,
           }}>
@@ -70,9 +70,9 @@ export function DiffViewer() {
             onClick={handleStageOrUnstage}
             title={diff.staged ? 'Unstage this file' : 'Stage this file'}
             style={{
-              background: '#21262d',
-              border: '1px solid #30363d',
-              color: '#c9d1d9',
+              background: 'var(--border-primary)',
+              border: '1px solid var(--border-secondary)',
+              color: 'var(--text-primary)',
               borderRadius: 6,
               padding: '4px 10px',
               fontSize: 12,
@@ -88,7 +88,7 @@ export function DiffViewer() {
               onClick={handleDiscard}
               title="Discard changes"
               style={{
-                background: '#21262d',
+                background: 'var(--border-primary)',
                 border: '1px solid #da3633',
                 color: '#f85149',
                 borderRadius: 6,
@@ -105,9 +105,9 @@ export function DiffViewer() {
           <button
             onClick={closeDiff}
             style={{
-              background: '#21262d',
-              border: '1px solid #30363d',
-              color: '#8b949e',
+              background: 'var(--border-primary)',
+              border: '1px solid var(--border-secondary)',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
               borderRadius: 6,
               padding: '4px 8px',

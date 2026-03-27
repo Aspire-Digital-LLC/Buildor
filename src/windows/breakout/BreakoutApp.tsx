@@ -47,20 +47,20 @@ export function BreakoutApp({ panelType }: BreakoutAppProps) {
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: '#0d1117',
-      color: '#e0e0e0',
+      backgroundColor: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     }}>
       <header style={{
         height: 36,
-        backgroundColor: '#161b22',
-        borderBottom: '1px solid #21262d',
+        backgroundColor: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border-primary)',
         display: 'flex',
         alignItems: 'center',
         paddingLeft: 12,
         fontSize: 12,
         fontWeight: 600,
-        color: '#8b949e',
+        color: 'var(--text-secondary)',
         // @ts-expect-error WebkitAppRegion is a non-standard CSS property for Tauri window dragging
         WebkitAppRegion: 'drag',
       }}>

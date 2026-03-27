@@ -222,8 +222,8 @@ export function Sidebar() {
   return (
     <nav style={{
       width: 56,
-      backgroundColor: '#0d1117',
-      borderRight: '1px solid #21262d',
+      backgroundColor: 'var(--bg-primary)',
+      borderRight: '1px solid var(--border-primary)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -246,7 +246,7 @@ export function Sidebar() {
           borderLeft: '2px solid transparent',
           cursor: 'pointer',
           borderRadius: 4,
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           marginBottom: 4,
         }}
       >
@@ -274,12 +274,12 @@ export function Sidebar() {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 20,
-              background: isActive ? '#1a1a2e' : 'transparent',
+              background: isActive ? 'var(--bg-active)' : 'transparent',
               border: 'none',
-              borderLeft: isActive ? '2px solid #58a6ff' : '2px solid transparent',
+              borderLeft: isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
               cursor: 'pointer',
               borderRadius: 4,
-              color: isActive ? '#e0e0e0' : '#8b949e',
+              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
               position: 'relative',
             }}
           >
@@ -292,7 +292,7 @@ export function Sidebar() {
                 minWidth: 16,
                 height: 16,
                 borderRadius: 8,
-                backgroundColor: '#1f6feb',
+                backgroundColor: 'var(--accent-secondary)',
                 color: '#fff',
                 fontSize: 9,
                 fontWeight: 700,
@@ -322,12 +322,12 @@ export function Sidebar() {
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: 20,
-          background: activeTab?.panelType === 'settings' ? '#1a1a2e' : 'transparent',
+          background: activeTab?.panelType === 'settings' ? 'var(--bg-active)' : 'transparent',
           border: 'none',
-          borderLeft: activeTab?.panelType === 'settings' ? '2px solid #58a6ff' : '2px solid transparent',
+          borderLeft: activeTab?.panelType === 'settings' ? '2px solid var(--accent-primary)' : '2px solid transparent',
           cursor: 'pointer',
           borderRadius: 4,
-          color: activeTab?.panelType === 'settings' ? '#e0e0e0' : '#8b949e',
+          color: activeTab?.panelType === 'settings' ? 'var(--text-primary)' : 'var(--text-secondary)',
           marginBottom: 8,
           position: 'relative',
         }}
@@ -362,10 +362,10 @@ export function Sidebar() {
             position: 'fixed',
             left: dropdown.rect.right + 4,
             top: dropdown.rect.top,
-            background: '#161b22',
-            border: '1px solid #30363d',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-secondary)',
             borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            boxShadow: '0 8px 24px var(--shadow-color)',
             width: (dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control' || dropdown.panelType === 'claude-chat') ? 280 : 220,
             maxHeight: 400,
             overflowY: 'auto',
@@ -376,10 +376,10 @@ export function Sidebar() {
             padding: '6px 12px',
             fontSize: 11,
             fontWeight: 600,
-            color: '#6e7681',
+            color: 'var(--text-tertiary)',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
-            borderBottom: '1px solid #21262d',
+            borderBottom: '1px solid var(--border-primary)',
           }}>
             {dropdown.panelType === 'code-viewer' ? 'Browse Code' : dropdown.panelType === 'source-control' ? 'Source Control' : dropdown.panelType === 'claude-chat' ? 'Claude Chat' : 'Select Project'}
           </div>
@@ -397,7 +397,7 @@ export function Sidebar() {
                     padding: '8px 12px 2px',
                     fontSize: 13,
                     fontWeight: 600,
-                    color: '#e0e0e0',
+                    color: 'var(--text-primary)',
                   }}>
                     {project.name}
                   </div>
@@ -407,7 +407,7 @@ export function Sidebar() {
                     padding: '2px 12px 2px 20px',
                     fontSize: 10,
                     fontWeight: 600,
-                    color: '#6e7681',
+                    color: 'var(--text-tertiary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.3px',
                     marginTop: 4,
@@ -426,13 +426,13 @@ export function Sidebar() {
                     style={{
                       padding: '4px 12px 4px 28px',
                       fontSize: 12,
-                      color: '#58a6ff',
+                      color: 'var(--accent-primary)',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -442,7 +442,7 @@ export function Sidebar() {
                     {dropdown.panelType === 'source-control' && (changeCounts[project.repoPath] || 0) > 0 && (
                       <span style={{
                         minWidth: 18, height: 18, borderRadius: 9,
-                        backgroundColor: '#1f6feb', color: '#fff',
+                        backgroundColor: 'var(--accent-secondary)', color: '#fff',
                         fontSize: 10, fontWeight: 600,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: '0 4px', flexShrink: 0,
@@ -459,7 +459,7 @@ export function Sidebar() {
                         padding: '6px 12px 2px 20px',
                         fontSize: 10,
                         fontWeight: 600,
-                        color: '#6e7681',
+                        color: 'var(--text-tertiary)',
                         textTransform: 'uppercase',
                         letterSpacing: '0.3px',
                       }}>
@@ -485,7 +485,7 @@ export function Sidebar() {
                             alignItems: 'center',
                             gap: 6,
                           }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -495,7 +495,7 @@ export function Sidebar() {
                           {dropdown.panelType === 'source-control' && (changeCounts[session.worktreePath] || 0) > 0 && (
                             <span style={{
                               minWidth: 18, height: 18, borderRadius: 9,
-                              backgroundColor: '#1f6feb', color: '#fff',
+                              backgroundColor: 'var(--accent-secondary)', color: '#fff',
                               fontSize: 10, fontWeight: 600,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               padding: '0 4px', flexShrink: 0,
@@ -509,7 +509,7 @@ export function Sidebar() {
                   )}
 
                   {/* Divider between projects */}
-                  <div style={{ borderBottom: '1px solid #21262d', margin: '4px 0' }} />
+                  <div style={{ borderBottom: '1px solid var(--border-primary)', margin: '4px 0' }} />
                 </div>
               );
             })
@@ -527,19 +527,19 @@ export function Sidebar() {
                   style={{
                     padding: '8px 12px',
                     fontSize: 13,
-                    color: '#e0e0e0',
+                    color: 'var(--text-primary)',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div>
                     <div style={{ fontWeight: 500 }}>{project.name}</div>
                     {project.currentBranch && (
-                      <div style={{ fontSize: 11, color: '#6e7681', marginTop: 1 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                         {project.currentBranch}
                       </div>
                     )}
@@ -549,7 +549,7 @@ export function Sidebar() {
                       minWidth: 20,
                       height: 20,
                       borderRadius: 10,
-                      backgroundColor: '#1f6feb',
+                      backgroundColor: 'var(--accent-secondary)',
                       color: '#fff',
                       fontSize: 11,
                       fontWeight: 600,

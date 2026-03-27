@@ -44,31 +44,31 @@ export function UpdateChecker() {
 
   return (
     <div style={{ padding: 24, height: '100%', overflow: 'auto' }}>
-      <h2 style={{ margin: '0 0 8px', color: '#e0e0e0', fontSize: 18 }}>Updates</h2>
-      <p style={{ color: '#8b949e', fontSize: 13, marginBottom: 20 }}>
+      <h2 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 18 }}>Updates</h2>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>
         Check for new versions of Buildor.
       </p>
 
       {/* Version info */}
       <div style={{
-        background: '#161b22',
-        border: `1px solid ${needsUpdate ? '#d29922' : '#21262d'}`,
+        background: 'var(--bg-secondary)',
+        border: `1px solid ${needsUpdate ? '#d29922' : 'var(--border-primary)'}`,
         borderRadius: 8,
         padding: '16px',
         marginBottom: 16,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
               Installed Version
             </div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: '#e0e0e0' }}>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
               v{localVersion}
             </div>
           </div>
           {remoteVersion && (
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
                 Latest Version
               </div>
               <div style={{
@@ -84,7 +84,7 @@ export function UpdateChecker() {
 
         {needsUpdate ? (
           <div style={{
-            background: '#1a1a2e',
+            background: 'var(--bg-active)',
             border: '1px solid #d29922',
             borderRadius: 6,
             padding: '10px 14px',
@@ -96,7 +96,7 @@ export function UpdateChecker() {
               <div style={{ fontSize: 13, color: '#d29922', fontWeight: 600 }}>
                 Update Available
               </div>
-              <div style={{ fontSize: 12, color: '#8b949e', marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                 v{localVersion} → v{remoteVersion}
               </div>
             </div>
@@ -153,9 +153,9 @@ export function UpdateChecker() {
           onClick={doCheck}
           disabled={isChecking}
           style={{
-            background: '#21262d',
-            border: '1px solid #30363d',
-            color: '#c9d1d9',
+            background: 'var(--border-primary)',
+            border: '1px solid var(--border-secondary)',
+            color: 'var(--text-primary)',
             borderRadius: 6,
             padding: '6px 14px',
             fontSize: 13,
@@ -166,13 +166,13 @@ export function UpdateChecker() {
           {isChecking ? 'Checking...' : 'Check for Updates'}
         </button>
         {lastChecked && (
-          <span style={{ fontSize: 11, color: '#6e7681' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
             Last checked: {lastChecked}
           </span>
         )}
       </div>
 
-      <div style={{ marginTop: 24, fontSize: 12, color: '#484f58' }}>
+      <div style={{ marginTop: 24, fontSize: 12, color: 'var(--text-tertiary)' }}>
         Source: github.com/Aspire-Digital-LLC/Buildor
       </div>
     </div>

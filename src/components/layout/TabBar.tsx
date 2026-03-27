@@ -51,8 +51,8 @@ export function TabBar() {
   return (
     <div style={{
       height: 36,
-      backgroundColor: '#010409',
-      borderBottom: '1px solid #21262d',
+      backgroundColor: 'var(--bg-inset)',
+      borderBottom: '1px solid var(--border-primary)',
       display: 'flex',
       alignItems: 'stretch',
       overflow: 'hidden',
@@ -78,10 +78,10 @@ export function TabBar() {
                 gap: 6,
                 padding: '0 12px',
                 fontSize: 12,
-                color: isActive ? '#e0e0e0' : '#8b949e',
-                backgroundColor: isActive ? '#0d1117' : 'transparent',
-                borderRight: '1px solid #21262d',
-                borderBottom: isActive ? '2px solid #58a6ff' : '2px solid transparent',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                backgroundColor: isActive ? 'var(--bg-primary)' : 'transparent',
+                borderRight: '1px solid var(--border-primary)',
+                borderBottom: isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 userSelect: 'none',
@@ -89,7 +89,7 @@ export function TabBar() {
                 flexShrink: 0,
               }}
               onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.backgroundColor = '#161b22';
+                if (!isActive) e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
               }}
               onMouseLeave={(e) => {
                 if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
@@ -115,7 +115,7 @@ export function TabBar() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: isActive ? '#8b949e' : '#484f58',
+                  color: isActive ? 'var(--text-secondary)' : 'var(--text-tertiary)',
                   cursor: 'pointer',
                   fontSize: 14,
                   padding: '0 2px',
@@ -125,11 +125,11 @@ export function TabBar() {
                   borderRadius: 3,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#e0e0e0';
-                  e.currentTarget.style.backgroundColor = '#21262d';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                  e.currentTarget.style.backgroundColor = 'var(--border-primary)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = isActive ? '#8b949e' : '#484f58';
+                  e.currentTarget.style.color = isActive ? 'var(--text-secondary)' : 'var(--text-tertiary)';
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
