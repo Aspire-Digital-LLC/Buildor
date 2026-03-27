@@ -1,3 +1,7 @@
+---
+description: Update the project knowledge base after writing code or discovering anything worth persisting. Run after completing any meaningful work — captures decisions, gotchas, patterns, and architecture changes to claude_knowledge/ files.
+---
+
 # /document — Knowledge Persistence Skill
 
 You have just completed work or discovered something worth saving. Your job is to update the project's knowledge base in `claude_knowledge/`.

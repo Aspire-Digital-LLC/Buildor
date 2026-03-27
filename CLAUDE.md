@@ -11,6 +11,7 @@ See `APP_BUILD_DESCRIPTION.md` for the full feature specification.
 1. Read `claude_knowledge/mind-map.json` to understand what knowledge files exist and their purpose
 2. Check relevant knowledge files based on the current task
 3. After writing code or discovering anything worth persisting, run the `/document` skill
+4. To debug issues or review operations, run the `/read-logs` skill
 
 ## Tech Stack
 
