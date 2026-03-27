@@ -30,6 +30,7 @@ pub fn run() {
             commands::git::git_switch_branch,
             commands::git::git_list_branches,
             commands::git::git_discard_file,
+            commands::git::git_delete_untracked_file,
             commands::git::git_merge,
             commands::git::git_rebase,
             commands::git::git_undo_last_commit,

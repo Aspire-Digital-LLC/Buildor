@@ -2,16 +2,18 @@ import { DiffEditor } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { useGitStore, useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
-import { gitStage, gitUnstage, gitDiscardFile } from '@/utils/commands/git';
+import { gitStage, gitUnstage, gitDiscardFile, gitDeleteUntrackedFile } from '@/utils/commands/git';
 
 export function DiffViewer() {
   const { diff, closeDiff, refreshStatus } = useGitStore();
-  const { projectName } = useTabContext();
+  const { projectName, browsePath } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
-  const repoPath = activeProject?.repoPath;
+  const repoPath = browsePath || activeProject?.repoPath;
 
   if (!diff) return null;
+
+  const isUntracked = !diff.staged && diff.before === '';
 
   const handleStageOrUnstage = async () => {
     if (!repoPath) return;
@@ -26,7 +28,11 @@ export function DiffViewer() {
 
   const handleDiscard = async () => {
     if (!repoPath || diff.staged) return;
-    await gitDiscardFile(repoPath, diff.filePath);
+    if (isUntracked) {
+      await gitDeleteUntrackedFile(repoPath, diff.filePath);
+    } else {
+      await gitDiscardFile(repoPath, diff.filePath);
+    }
     await refreshStatus(repoPath);
     closeDiff();
   };

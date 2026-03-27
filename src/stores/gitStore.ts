@@ -14,6 +14,7 @@ import {
   gitPull,
   gitListBranches,
   gitDiscardFile,
+  gitDeleteUntrackedFile,
 } from '@/utils/commands/git';
 
 interface DiffState {
@@ -41,6 +42,7 @@ interface GitState {
   push: (repoPath: string) => Promise<void>;
   pull: (repoPath: string) => Promise<void>;
   discardFile: (repoPath: string, filePath: string) => Promise<void>;
+  discardUntrackedFile: (repoPath: string, filePath: string) => Promise<void>;
   viewDiff: (repoPath: string, filePath: string, staged: boolean) => Promise<void>;
   viewUntrackedDiff: (repoPath: string, filePath: string) => Promise<void>;
   closeDiff: () => void;
@@ -181,6 +183,18 @@ export const useGitStore = create<GitState>((set, get) => ({
     } catch (e) {
       set({ error: String(e) });
       await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'discard', message: String(e) }).catch(() => {});
+    }
+  },
+
+  discardUntrackedFile: async (repoPath, filePath) => {
+    try {
+      await gitDeleteUntrackedFile(repoPath, filePath);
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'info', operation: 'discard-untracked', message: `Deleted untracked file: ${filePath}` }).catch(() => {});
+      get().closeDiff();
+      await get().refreshStatus(repoPath);
+    } catch (e) {
+      set({ error: String(e) });
+      await logEvent({ repo: repoPath, functionArea: 'source-control', level: 'error', operation: 'discard-untracked', message: String(e) }).catch(() => {});
     }
   },
 

@@ -26,6 +26,7 @@ export function SourceControl() {
     pull,
     viewDiff,
     viewUntrackedDiff,
+    discardUntrackedFile,
     setCommitMessage,
   } = useGitStore();
 
@@ -287,6 +288,7 @@ export function SourceControl() {
                 onStage={(path) => repoPath && stageFiles(repoPath, [path])}
                 onStageAll={() => repoPath && stageAll(repoPath)}
                 onClickFile={(path) => repoPath && viewUntrackedDiff(repoPath, path)}
+                onDiscard={(path) => repoPath && discardUntrackedFile(repoPath, path)}
               />
             </>
           )}

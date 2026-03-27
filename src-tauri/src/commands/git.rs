@@ -272,6 +272,23 @@ pub async fn git_discard_file(repo_path: String, file_path: String) -> Result<()
     Ok(())
 }
 
+/// Delete an untracked file (git checkout doesn't work for these)
+#[tauri::command]
+pub async fn git_delete_untracked_file(repo_path: String, file_path: String) -> Result<(), String> {
+    let full_path = std::path::Path::new(&repo_path).join(&file_path);
+    if !full_path.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+    // Safety: only delete if the file is actually untracked
+    let status = run_git(&repo_path, &["status", "--porcelain", "--", &file_path])?;
+    if !status.starts_with("??") {
+        return Err("File is tracked by git — use discard instead".to_string());
+    }
+    std::fs::remove_file(&full_path)
+        .map_err(|e| format!("Failed to delete {}: {}", file_path, e))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn git_merge(repo_path: String, branch_name: String) -> Result<String, String> {
     run_git(&repo_path, &["merge", &branch_name])
