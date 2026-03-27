@@ -1,18 +1,18 @@
 ---
-description: Query and analyze ProductaFlows application logs from the SQLite database. Use to debug errors, analyze performance, review session timelines, and audit operations.
+description: Query and analyze Buildor application logs from the SQLite database. Use to debug errors, analyze performance, review session timelines, and audit operations.
 ---
 
-# /read-logs — Retrieve and Read ProductaFlows Application Logs
+# /read-logs — Retrieve and Read Buildor Application Logs
 
-ProductaFlows stores structured application logs in an SQLite database.
+Buildor stores structured application logs in an SQLite database.
 
 ## Database Location
 
 The database is at the OS-standard app data directory:
-- **Windows**: `%APPDATA%\ProductaFlows\logs.db`
-- **macOS**: `~/Library/Application Support/ProductaFlows/logs.db`
-- **Linux**: `~/.config/ProductaFlows/logs.db`
-- **Legacy fallback**: `~/.productaflows/logs.db`
+- **Windows**: `%APPDATA%\Buildor\logs.db`
+- **macOS**: `~/Library/Application Support/Buildor/logs.db`
+- **Linux**: `~/.config/Buildor/logs.db`
+- **Legacy fallback**: `~/.buildor/logs.db`
 
 ## Quick Start
 
@@ -28,7 +28,7 @@ bash scripts/read-logs.sh --sessions         # List all sessions
 bash scripts/read-logs.sh --since "1 hour"   # Recent timeframe
 
 # Or query directly
-sqlite3 -header -column "$APPDATA/ProductaFlows/logs.db" "SELECT timestamp, level, function_area, operation, message FROM logs ORDER BY timestamp DESC LIMIT 20;"
+sqlite3 -header -column "$APPDATA/Buildor/logs.db" "SELECT timestamp, level, function_area, operation, message FROM logs ORDER BY timestamp DESC LIMIT 20;"
 ```
 
 ## Log Schema

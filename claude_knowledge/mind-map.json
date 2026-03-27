@@ -1,5 +1,5 @@
 {
-  "title": "ProductaFlows Knowledge Base",
+  "title": "Buildor Knowledge Base",
   "description": "Index of all knowledge files. Claude should read this file at the start of every session to understand what knowledge is available and find relevant context by keyword matching.",
   "instructions": "Match your current task against the keywords below to identify which files to read. If no keywords match, scan the descriptions. After any session that produces new learnings, update this map via the /document skill.",
   "files": [

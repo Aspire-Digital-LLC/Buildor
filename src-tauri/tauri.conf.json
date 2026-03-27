@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicerdicer/tauri/refs/heads/v2/crates/tauri-schema-generator/schemas/config.schema.json",
-  "productName": "ProductaFlows",
+  "productName": "Buildor",
   "version": "0.0.1",
   "identifier": "com.productaflows.app",
   "build": {
@@ -19,7 +19,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "ProductaFlows v0.0.1",
+        "title": "Buildor v0.0.1",
         "width": 1400,
         "height": 900,
         "theme": "Dark"

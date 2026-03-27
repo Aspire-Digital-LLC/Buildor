@@ -1,8 +1,8 @@
-# ProductaFlows
+# Buildor
 
 ## Project Overview
 
-ProductaFlows is a cross-platform desktop application (Tauri v2 + React + Rust) that serves as a visual orchestrator and companion tool for Claude Code. It provides project management, git workflows, visual flow building, and a curated Claude Code interface — all while minimizing token usage and running entirely on a Claude subscription.
+Buildor is a cross-platform desktop application (Tauri v2 + React + Rust) that serves as a visual orchestrator and companion tool for Claude Code. It provides project management, git workflows, visual flow building, and a curated Claude Code interface — all while minimizing token usage and running entirely on a Claude subscription.
 
 See `APP_BUILD_DESCRIPTION.md` for the full feature specification.
 
@@ -28,7 +28,7 @@ See `APP_BUILD_DESCRIPTION.md` for the full feature specification.
 
 1. **Must run on Claude subscription** — no separate API keys. All Claude interactions go through Claude Code's auth.
 2. **Token efficient** — app handles orchestration logic in Rust/JS, not in prompts. Claude only gets minimum context needed for actual work.
-3. **Never touches project repos** — no files injected into user repositories. All state lives in `~/.productaflows/`.
+3. **Never touches project repos** — no files injected into user repositories. All state lives in `~/.buildor/`.
 4. **Single install file** — OS-specific executables (.msi, .dmg, .AppImage/.deb).
 
 ## Project Structure

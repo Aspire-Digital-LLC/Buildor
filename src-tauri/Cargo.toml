@@ -1,10 +1,10 @@
 [package]
-name = "productaflows"
+name = "buildor"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "productaflows_lib"
+name = "buildor_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

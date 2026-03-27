@@ -64,10 +64,10 @@ impl LogDb {
 
     fn db_path() -> PathBuf {
         let base = if let Some(config) = dirs_next::config_dir() {
-            config.join("ProductaFlows")
+            config.join("Buildor")
         } else {
             let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
-            home.join(".productaflows")
+            home.join(".buildor")
         };
         base.join("logs.db")
     }

@@ -1,8 +1,8 @@
-# ProductaFlows — App Build Description
+# Buildor — App Build Description
 
 ## Overview
 
-ProductaFlows is a cross-platform desktop application that serves as a visual orchestrator and companion tool for Claude Code. It replaces the need for a traditional IDE for AI-driven development by providing project management, git workflows, visual flow building, and a curated Claude Code interface — all while minimizing token usage and running entirely on a Claude subscription.
+Buildor is a cross-platform desktop application that serves as a visual orchestrator and companion tool for Claude Code. It replaces the need for a traditional IDE for AI-driven development by providing project management, git workflows, visual flow building, and a curated Claude Code interface — all while minimizing token usage and running entirely on a Claude subscription.
 
 ---
 
@@ -34,7 +34,7 @@ ProductaFlows is a cross-platform desktop application that serves as a visual or
 ## Architecture
 
 ```
-ProductaFlows (Tauri App)
+Buildor (Tauri App)
 │
 ├── Rust Backend
 │   ├── Project Manager (add/remove/switch projects)
@@ -56,8 +56,8 @@ ProductaFlows (Tauri App)
 │   └── Worktree Manager UI
 │
 └── Shared Data
-    ├── App Config (~/.productaflows/)
-    ├── Per-project orchestration state (~/.productaflows/projects/{name}/...)
+    ├── App Config (~/.buildor/)
+    ├── Per-project orchestration state (~/.buildor/projects/{name}/...)
     └── Workflows Repo (external git repo, synced)
 ```
 
@@ -150,11 +150,11 @@ Full VS Code-style source control experience:
 - **Shared team repo** containing:
   ```
   team-workflows-repo/
-  ├── .productaflows.json    # Config: default branch, auto-pull
+  ├── .buildor.json    # Config: default branch, auto-pull
   ├── flows/                 # Flow definitions (JSON)
   └── skills/                # Skill/command prompts (Markdown)
   ```
-- **Auto-pull on app open** — pulls the branch specified in `.productaflows.json` so the team always has the latest
+- **Auto-pull on app open** — pulls the branch specified in `.buildor.json` so the team always has the latest
 - **Scoping** — skills and flows can be global (available to all projects) or project-specific
 - **Git workflow for changes:**
   - Edit flows/skills in the app
@@ -167,7 +167,7 @@ Full VS Code-style source control experience:
 This is the core architectural advantage. The app replaces the ~3000-token orchestrator prompt with application code:
 
 - **App reads flow JSON** and manages phase sequencing, parallelism, and dependencies in Rust/JS
-- **App manages context files** — reads/writes `local-development/*.md` in its own data directory (`~/.productaflows/projects/{name}/{worktree}/local-development/`)
+- **App manages context files** — reads/writes `local-development/*.md` in its own data directory (`~/.buildor/projects/{name}/{worktree}/local-development/`)
 - **App spawns Claude Code per phase** — each invocation receives only the stage prompt + scoped context. No meta-reasoning about pipeline management.
 - **App tracks progress** in its own UI — no TaskCreate/TaskUpdate token overhead
 - **App handles session recovery** natively — it knows its own state, no need for Claude to reconstruct it
@@ -188,7 +188,7 @@ This is the core architectural advantage. The app replaces the ~3000-token orche
 ### App Configuration
 
 ```
-~/.productaflows/
+~/.buildor/
 ├── config.json                          # Global app settings
 ├── projects/
 │   ├── {project-slug}/
@@ -206,7 +206,7 @@ This is the core architectural advantage. The app replaces the ~3000-token orche
 
 ```
 {team-workflows-repo}/
-├── .productaflows.json                  # { "defaultBranch": "main", "autoPull": true }
+├── .buildor.json                  # { "defaultBranch": "main", "autoPull": true }
 ├── flows/
 │   ├── develop.json
 │   ├── hotfix.json
@@ -220,8 +220,8 @@ This is the core architectural advantage. The app replaces the ~3000-token orche
 ### Key Design Decisions
 
 - **No separate agent concept** — agent definitions (role, persona, instructions) are embedded in stage configuration within flows. Two concepts only: flows (with stages) and skills.
-- **No repo pollution** — the app never writes files to project repositories. All state is in `~/.productaflows/`.
-- **Shared repo config is minimal** — `.productaflows.json` lives in the workflows repo so the team shares branch config.
+- **No repo pollution** — the app never writes files to project repositories. All state is in `~/.buildor/`.
+- **Shared repo config is minimal** — `.buildor.json` lives in the workflows repo so the team shares branch config.
 
 ---
 
@@ -251,7 +251,7 @@ Built via Tauri's bundling system, which produces OS-native installers from a si
 
 ## Auto-Update System
 
-- The **ProductaFlows source repo** contains a version file (e.g., `version.json` or `package.json` version field)
+- The **Buildor source repo** contains a version file (e.g., `version.json` or `package.json` version field)
 - The installed app knows its own version (baked in at build time via `tauri.conf.json`)
 - **On app launch**: the app checks the source repo for the latest version file. If the repo version is higher than the installed version, a non-intrusive notification offers the user an update option.
 - **Manual check**: a "Check for Updates" menu item under Help (or Settings) triggers the same check on demand.

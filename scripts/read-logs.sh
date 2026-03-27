@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ProductaFlows Log Reader CLI
+# Buildor Log Reader CLI
 # Usage: bash scripts/read-logs.sh [options]
 #
 # Options:
@@ -18,18 +18,22 @@
 #   --help            Show this help
 
 # Try OS-standard location first, fall back to legacy
-if [ -f "$APPDATA/ProductaFlows/logs.db" ]; then
+if [ -f "$APPDATA/Buildor/logs.db" ]; then
+  DB="$APPDATA/Buildor/logs.db"
+elif [ -f "$HOME/Library/Application Support/Buildor/logs.db" ]; then
+  DB="$HOME/Library/Application Support/Buildor/logs.db"
+elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/Buildor/logs.db" ]; then
+  DB="${XDG_CONFIG_HOME:-$HOME/.config}/Buildor/logs.db"
+elif [ -f "$APPDATA/ProductaFlows/logs.db" ]; then
   DB="$APPDATA/ProductaFlows/logs.db"
-elif [ -f "$HOME/Library/Application Support/ProductaFlows/logs.db" ]; then
-  DB="$HOME/Library/Application Support/ProductaFlows/logs.db"
-elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/ProductaFlows/logs.db" ]; then
-  DB="${XDG_CONFIG_HOME:-$HOME/.config}/ProductaFlows/logs.db"
+elif [ -f "$HOME/.buildor/logs.db" ]; then
+  DB="$HOME/.buildor/logs.db"
 elif [ -f "$HOME/.productaflows/logs.db" ]; then
   DB="$HOME/.productaflows/logs.db"
 else
   echo "No log database found."
-  echo "Searched: %APPDATA%/ProductaFlows/, ~/.config/ProductaFlows/, ~/.productaflows/"
-  echo "The database is created when ProductaFlows first writes a log entry."
+  echo "Searched: %APPDATA%/Buildor/, %APPDATA%/ProductaFlows/, ~/.config/Buildor/"
+  echo "The database is created when Buildor first writes a log entry."
   exit 1
 fi
 

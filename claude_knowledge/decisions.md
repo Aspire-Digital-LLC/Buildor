@@ -42,10 +42,10 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ## No Repo Pollution
 
-**Choice**: All app state in `~/.productaflows/`, nothing in project repos
+**Choice**: All app state in `~/.buildor/`, nothing in project repos
 **Rejected**: Injecting config/context files into project repos (even gitignored)
 
-**Why**: Projects must work with or without ProductaFlows. Team members who don't use the app shouldn't see artifacts. Context files, orchestration state, and configuration all live in the app's own data directory.
+**Why**: Projects must work with or without Buildor. Team members who don't use the app shouldn't see artifacts. Context files, orchestration state, and configuration all live in the app's own data directory.
 
 ---
 
@@ -105,7 +105,7 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ## GitHub Issue Downloads Scoped to Session Lifecycle
 
-**Choice**: Downloaded issue data (text, images) stored in `~/.productaflows/projects/{name}/sessions/{worktree-slug}/`, destroyed when session closes
+**Choice**: Downloaded issue data (text, images) stored in `~/.buildor/projects/{name}/sessions/{worktree-slug}/`, destroyed when session closes
 **Rejected**: Storing issue data in the repo or keeping it permanently
 
 **Why**: Issue context is only needed during the active session. Storing it in the app's data directory (not the repo) avoids pollution. Tying cleanup to session close ensures no orphaned artifacts. Images are downloaded locally so Claude can analyze them without network dependencies during the session.
@@ -114,7 +114,7 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ## Version in Native Title Bar
 
-**Choice**: Version displayed in Tauri's native window title bar ("ProductaFlows v0.0.1")
+**Choice**: Version displayed in Tauri's native window title bar ("Buildor v0.0.1")
 **Rejected**: Custom rendered title bar within the webview
 
 **Why**: A custom title bar created a duplicate bar below the native one — confusing and wasteful of vertical space. The native title bar is free, always visible, and consistent with OS conventions. Version comes from tauri.conf.json, synced with the VERSION file.

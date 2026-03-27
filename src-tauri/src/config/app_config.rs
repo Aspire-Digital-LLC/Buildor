@@ -31,16 +31,16 @@ impl Default for AppConfig {
 
 impl AppConfig {
     /// Returns the OS-standard app data directory:
-    /// - Windows: %APPDATA%/ProductaFlows (e.g., C:\Users\{user}\AppData\Roaming\ProductaFlows)
-    /// - macOS: ~/Library/Application Support/ProductaFlows
-    /// - Linux: ~/.config/ProductaFlows (via XDG_CONFIG_HOME)
-    /// Falls back to ~/.productaflows if OS dirs unavailable
+    /// - Windows: %APPDATA%/Buildor (e.g., C:\Users\{user}\AppData\Roaming\Buildor)
+    /// - macOS: ~/Library/Application Support/Buildor
+    /// - Linux: ~/.config/Buildor (via XDG_CONFIG_HOME)
+    /// Falls back to ~/.buildor if OS dirs unavailable
     pub fn config_dir() -> PathBuf {
         if let Some(config) = dirs_next::config_dir() {
-            config.join("ProductaFlows")
+            config.join("Buildor")
         } else {
             let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
-            home.join(".productaflows")
+            home.join(".buildor")
         }
     }
 
@@ -48,28 +48,61 @@ impl AppConfig {
         Self::config_dir().join("config.json")
     }
 
-    /// Migrate data from old ~/.productaflows/ to new OS-standard location
+    /// Migrate data from old locations to the current OS-standard location
     pub fn migrate_if_needed() {
-        let home = dirs_next::home_dir().unwrap_or_default();
-        let old_dir = home.join(".productaflows");
         let new_dir = Self::config_dir();
+        if new_dir.join("config.json").exists() {
+            return; // Already have config, no migration needed
+        }
 
-        // Only migrate if old exists and new doesn't have a config yet
-        if old_dir.exists() && old_dir != new_dir && !new_dir.join("config.json").exists() {
-            if let Err(_) = fs::create_dir_all(&new_dir) {
-                return;
-            }
-            // Copy config.json
-            let old_config = old_dir.join("config.json");
-            if old_config.exists() {
-                let _ = fs::copy(&old_config, new_dir.join("config.json"));
-            }
-            // Copy logs.db
-            let old_logs = old_dir.join("logs.db");
-            if old_logs.exists() {
-                let _ = fs::copy(&old_logs, new_dir.join("logs.db"));
+        // Check old locations in order of preference
+        let home = dirs_next::home_dir().unwrap_or_default();
+        let old_locations = vec![
+            // Previous app name in AppData
+            dirs_next::config_dir().map(|d| d.join("ProductaFlows")),
+            // Home dir dotfile variants
+            Some(home.join(".productaflows")),
+            Some(home.join(".buildor")),
+        ];
+
+        for old_dir_opt in old_locations {
+            if let Some(old_dir) = old_dir_opt {
+                if old_dir.exists() && old_dir != new_dir {
+                    if let Err(_) = fs::create_dir_all(&new_dir) {
+                        return;
+                    }
+                    let old_config = old_dir.join("config.json");
+                    if old_config.exists() {
+                        let _ = fs::copy(&old_config, new_dir.join("config.json"));
+                    }
+                    let old_logs = old_dir.join("logs.db");
+                    if old_logs.exists() {
+                        let _ = fs::copy(&old_logs, new_dir.join("logs.db"));
+                    }
+                    // Copy projects directory if it exists
+                    let old_projects = old_dir.join("projects");
+                    if old_projects.exists() {
+                        let _ = Self::copy_dir_recursive(&old_projects, &new_dir.join("projects"));
+                    }
+                    return; // Migrated from first found location
+                }
             }
         }
+    }
+
+    fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+        fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+        for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if src_path.is_dir() {
+                Self::copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                let _ = fs::copy(&src_path, &dst_path);
+            }
+        }
+        Ok(())
     }
 
     pub fn load() -> Result<Self, String> {

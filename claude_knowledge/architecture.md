@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   ProductaFlows                      │
+│                   Buildor                      │
 │                                                      │
 │  ┌─────────────────────────────────────────────┐    │
 │  │           Rust Backend (Tauri)                │    │
@@ -45,7 +45,7 @@ User selects flow (palette or flow builder)
   → App reads flow JSON from workflows repo
   → App resolves stage order (dependencies, parallel groups)
   → For each stage:
-      → App reads scoped context files from ~/.productaflows/
+      → App reads scoped context files from ~/.buildor/
       → App assembles prompt (stage config + context)
       → App spawns Claude Code (SDK or terminal) with prompt
       → Claude does work in the project repo
@@ -77,7 +77,7 @@ All windows share one Rust backend process
 
 ### Isolation
 - Each Claude Code invocation is stateless — no conversation history between flow phases
-- Context passes exclusively via files in `~/.productaflows/`
+- Context passes exclusively via files in `~/.buildor/`
 - Each worktree gets its own Claude session scoped to its directory
 
 ### Separation
@@ -137,7 +137,7 @@ During Session:
   → Claude Chat window scoped to worktree directory
   → Source Control tab scoped to worktree
   → Code Viewer tab scoped to worktree
-  → Issue data in ~/.productaflows/projects/{name}/sessions/{slug}/
+  → Issue data in ~/.buildor/projects/{name}/sessions/{slug}/
 
 Close Session:
   → git worktree remove

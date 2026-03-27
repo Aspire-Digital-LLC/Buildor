@@ -53,10 +53,10 @@ Surprising behaviors, bugs encountered, and non-obvious pitfalls. Each entry des
 
 ### App Data Must Use OS-Standard Paths, Not Home Directory Dotfiles
 
-**Context**: Originally stored config and logs at `~/.productaflows/`. App rebuilds during development wiped this location or created confusion with multiple locations.
-**Surprise**: On Windows, `~/.productaflows/` is non-standard. App updates, reinstalls, or dev rebuilds don't preserve data at custom locations. Users expect app data at `%APPDATA%`.
+**Context**: Originally stored config and logs at `~/.buildor/`. App rebuilds during development wiped this location or created confusion with multiple locations.
+**Surprise**: On Windows, `~/.buildor/` is non-standard. App updates, reinstalls, or dev rebuilds don't preserve data at custom locations. Users expect app data at `%APPDATA%`.
 **Impact**: Projects, settings, and logs disappeared after app rebuilds. Users had to re-add projects.
-**Workaround**: Use `dirs_next::config_dir()` which returns the OS-standard location: `%APPDATA%/ProductaFlows` (Windows), `~/Library/Application Support/ProductaFlows` (macOS), `~/.config/ProductaFlows` (Linux). Added auto-migration from the old `~/.productaflows/` path. All new features must use `AppConfig::config_dir()` as the base path.
+**Workaround**: Use `dirs_next::config_dir()` which returns the OS-standard location: `%APPDATA%/Buildor` (Windows), `~/Library/Application Support/Buildor` (macOS), `~/.config/Buildor` (Linux). Added auto-migration from the old `~/.buildor/` path. All new features must use `AppConfig::config_dir()` as the base path.
 
 ---
 

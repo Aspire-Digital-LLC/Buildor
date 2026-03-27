@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capabilities for ProductaFlows",
+  "description": "Default capabilities for Buildor",
   "windows": ["main", "breakout-*", "claude-*"],
   "permissions": [
     "core:default",

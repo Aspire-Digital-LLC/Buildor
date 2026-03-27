@@ -20,5 +20,5 @@ Thumbs.db
 # Local knowledge (machine-specific)
 claude_knowledge/local_learnings.md
 
-# ProductaFlows app data
-.productaflows/
+# Buildor app data
+.buildor/

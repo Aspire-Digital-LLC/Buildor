@@ -3,7 +3,7 @@
 ## Root Layout
 
 ```
-ProductaFlows/
+Buildor/
 ├── CLAUDE.md                    # Claude Code project instructions
 ├── APP_BUILD_DESCRIPTION.md     # Full feature specification
 ├── claude_knowledge/            # Persistent knowledge base
@@ -52,4 +52,4 @@ ProductaFlows/
 - Frontend and backend communicate via Tauri's IPC command system
 - Each breakout window type has its own entry point in `src/windows/`
 - Git operations always shell out to the `git` CLI — no library abstractions
-- All user data stored in `~/.productaflows/`, never in project repos
+- All user data stored in `~/.buildor/`, never in project repos

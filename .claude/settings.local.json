@@ -36,7 +36,10 @@
       "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 20 2>&1)",
       "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 30 2>&1)",
       "Bash(sqlite3:*)",
-      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 5 2>&1)"
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 5 2>&1)",
+      "Bash(cp \"$APPDATA/ProductaFlows/config.json\" \"$APPDATA/Buildor/config.json\")",
+      "Bash(cp -r \"$APPDATA/ProductaFlows/projects\" \"$APPDATA/Buildor/\")",
+      "Bash(gh repo:*)"
     ]
   }
 }
