@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useTabStore, useProjectStore } from '@/stores';
 import { getGitStatus } from '@/utils/commands/git';
+import { listSessions } from '@/utils/commands/worktree';
 import { StartSessionModal } from '../session/StartSessionModal';
 import type { PanelType } from '@/types';
 
@@ -116,6 +117,24 @@ export function Sidebar() {
 
   const totalChanges = Object.values(changeCounts).reduce((sum, c) => sum + c, 0);
 
+  // Track open session count
+  const [sessionCount, setSessionCount] = useState(0);
+
+  const refreshSessionCount = useCallback(async () => {
+    try {
+      const sessions = await listSessions();
+      setSessionCount(sessions.length);
+    } catch {
+      setSessionCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSessionCount();
+    const interval = setInterval(refreshSessionCount, 5000);
+    return () => clearInterval(interval);
+  }, [refreshSessionCount]);
+
   // Close dropdown on outside click
   useEffect(() => {
     if (!dropdown) return;
@@ -195,7 +214,10 @@ export function Sidebar() {
 
       {navItems.map((item) => {
         const isActive = activeTab?.panelType === item.panelType;
-        const badge = item.panelType === 'source-control' && totalChanges > 0 ? totalChanges : null;
+        const badge =
+          item.panelType === 'source-control' && totalChanges > 0 ? totalChanges :
+          item.panelType === 'worktree-manager' && sessionCount > 0 ? sessionCount :
+          null;
         return (
           <button
             key={item.panelType}
