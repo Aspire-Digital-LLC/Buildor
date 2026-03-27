@@ -23,3 +23,11 @@ export async function stopSession(sessionId: string): Promise<void> {
 export async function listClaudeSessions(): Promise<string[]> {
   return invoke('list_claude_sessions');
 }
+
+export async function respondToPermission(sessionId: string, requestId: string, approved: boolean, toolInput?: Record<string, unknown>): Promise<void> {
+  return invoke('respond_to_permission', { sessionId, requestId, approved, toolInput: toolInput || null });
+}
+
+export async function addPermissionRule(sessionId: string, rule: string): Promise<void> {
+  return invoke('add_permission_rule', { sessionId, rule });
+}

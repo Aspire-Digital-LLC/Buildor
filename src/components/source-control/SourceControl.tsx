@@ -7,7 +7,7 @@ import { DiffViewer } from './DiffViewer';
 import { GitMenu } from './GitMenu';
 
 export function SourceControl() {
-  const { projectName } = useTabContext();
+  const { projectName, browsePath } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
   const {
@@ -29,7 +29,7 @@ export function SourceControl() {
     setCommitMessage,
   } = useGitStore();
 
-  const repoPath = activeProject?.repoPath;
+  const repoPath = browsePath || activeProject?.repoPath;
 
   useEffect(() => {
     if (repoPath) {

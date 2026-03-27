@@ -12,13 +12,34 @@ const panelLabels: Record<PanelType, string> = {
   'settings': 'Settings',
 };
 
+// Short prefixes for tab titles
+const panelShortLabels: Record<string, string> = {
+  'source-control': 'SC',
+  'code-viewer': 'CV',
+};
+
+export interface OpenTabOptions {
+  browsePath?: string;
+  browseBranch?: string;
+  browseIsWorktree?: boolean;
+}
+
 interface TabState {
   tabs: Tab[];
   activeTabId: string | null;
-  openTab: (panelType: PanelType, projectName?: string) => void;
+  openTab: (panelType: PanelType, projectName?: string, options?: OpenTabOptions) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   getActiveTab: () => Tab | undefined;
+  updateCheckedOutBranch: (projectName: string, repoPath: string, newBranch: string) => void;
+}
+
+function makeTitle(panelType: PanelType, projectName?: string, browseBranch?: string): string {
+  const label = panelLabels[panelType] || panelType;
+  if (browseBranch && (panelType === 'code-viewer' || panelType === 'source-control')) {
+    return `${projectName || ''} - ${browseBranch}`;
+  }
+  return projectName ? `${label} - ${projectName}` : label;
 }
 
 let tabCounter = 0;
@@ -27,12 +48,15 @@ export const useTabStore = create<TabState>((set, get) => ({
   tabs: [],
   activeTabId: null,
 
-  openTab: (panelType, projectName) => {
+  openTab: (panelType, projectName, options) => {
     const { tabs } = get();
+    const browsePath = options?.browsePath;
+    const browseBranch = options?.browseBranch;
+    const browseIsWorktree = options?.browseIsWorktree;
 
-    // Check for existing tab with same panelType + projectName
+    // Check for existing tab with same panelType + projectName + browsePath
     const existing = tabs.find(
-      (t) => t.panelType === panelType && t.projectName === projectName
+      (t) => t.panelType === panelType && t.projectName === projectName && t.browsePath === browsePath
     );
     if (existing) {
       set({ activeTabId: existing.id });
@@ -40,10 +64,9 @@ export const useTabStore = create<TabState>((set, get) => ({
     }
 
     const id = `${panelType}-${projectName || 'global'}-${++tabCounter}`;
-    const label = panelLabels[panelType] || panelType;
-    const title = projectName ? `${label} - ${projectName}` : label;
+    const title = makeTitle(panelType, projectName, browseBranch);
 
-    const tab: Tab = { id, panelType, projectName, title };
+    const tab: Tab = { id, panelType, projectName, title, browsePath, browseBranch, browseIsWorktree };
     set((state) => ({
       tabs: [...state.tabs, tab],
       activeTabId: id,
@@ -75,5 +98,25 @@ export const useTabStore = create<TabState>((set, get) => ({
   getActiveTab: () => {
     const { tabs, activeTabId } = get();
     return tabs.find((t) => t.id === activeTabId);
+  },
+
+  // Update all checked-out (non-worktree) tabs for a project when branch changes
+  updateCheckedOutBranch: (projectName, repoPath, newBranch) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (
+          tab.projectName === projectName &&
+          tab.browsePath === repoPath &&
+          !tab.browseIsWorktree
+        ) {
+          return {
+            ...tab,
+            browseBranch: newBranch,
+            title: makeTitle(tab.panelType, projectName, newBranch),
+          };
+        }
+        return tab;
+      }),
+    }));
   },
 }));

@@ -61,20 +61,27 @@ export function ClaudeChatWindow() {
     if (!sessionId) return;
 
     const unlistenOutput = listen<string>(`claude-output-${sessionId}`, (event) => {
-      const parsed = parseStreamEvent(event.payload);
+      const parsed = parseStreamEvent(event.payload, sessionId);
       if (parsed) {
         if (parsed.model && !model) setModel(parsed.model);
+        if (parsed.isResult) {
+          setIsSending(false);
+          // Refocus input when response completes
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }
         setMessages((prev) => [...prev, parsed]);
       }
     });
 
-    const unlistenDone = listen<string>(`claude-done-${sessionId}`, () => {
+    const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
+      setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
+      setSessionId(null);
       setIsSending(false);
     });
 
     return () => {
       unlistenOutput.then((fn) => fn());
-      unlistenDone.then((fn) => fn());
+      unlistenExit.then((fn) => fn());
     };
   }, [sessionId, model]);
 
@@ -110,6 +117,8 @@ export function ClaudeChatWindow() {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
       setIsSending(false);
     }
+    // Keep focus on input after sending
+    inputRef.current?.focus();
   }, [sessionId, input, isSending]);
 
   const handleStop = useCallback(async () => {
@@ -247,7 +256,7 @@ export function ClaudeChatWindow() {
           background: '#010409',
         }}>
           {messages.map((msg, i) => (
-            <ChatMessage key={i} message={msg} isVerbose={isVerbose} />
+            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} />
           ))}
         </div>
 

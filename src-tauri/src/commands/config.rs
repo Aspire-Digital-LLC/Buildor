@@ -1,13 +1,73 @@
+fn config_path() -> Result<std::path::PathBuf, String> {
+    let home = dirs_next::home_dir().ok_or_else(|| "Cannot find home directory".to_string())?;
+    Ok(home.join(".productaflows").join("config.json"))
+}
+
 #[tauri::command]
 pub async fn get_config() -> Result<String, String> {
-    // TODO: Read ~/.productaflows/config.json
-    Ok("{}".to_string())
+    let path = config_path()?;
+    if path.exists() {
+        std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read config: {}", e))
+    } else {
+        Ok("{}".to_string())
+    }
 }
 
 #[tauri::command]
 pub async fn set_config(config: String) -> Result<(), String> {
-    // TODO: Write to ~/.productaflows/config.json
-    Ok(())
+    let path = config_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config dir: {}", e))?;
+    }
+    std::fs::write(&path, &config)
+        .map_err(|e| format!("Failed to write config: {}", e))
+}
+
+/// Scaffold the expected shared memory repo structure, creating missing dirs/files.
+/// Uses .gitkeep for empty directories so they're tracked by git.
+#[tauri::command]
+pub async fn scaffold_shared_repo(repo_path: String) -> Result<Vec<String>, String> {
+    use std::fs;
+    use std::path::Path;
+
+    let root = Path::new(&repo_path);
+    if !root.exists() {
+        return Err(format!("Path does not exist: {}", repo_path));
+    }
+
+    let mut created: Vec<String> = Vec::new();
+
+    // .buildor.json
+    let buildor_json = root.join(".buildor.json");
+    if !buildor_json.exists() {
+        fs::write(&buildor_json, "{\n  \"name\": \"shared-repo\",\n  \"version\": \"1.0.0\"\n}\n")
+            .map_err(|e| format!("Failed to create .buildor.json: {}", e))?;
+        created.push(".buildor.json".to_string());
+    }
+
+    // flows/
+    let flows_dir = root.join("flows");
+    if !flows_dir.exists() {
+        fs::create_dir_all(&flows_dir)
+            .map_err(|e| format!("Failed to create flows/: {}", e))?;
+        fs::write(flows_dir.join(".gitkeep"), "")
+            .map_err(|e| format!("Failed to create flows/.gitkeep: {}", e))?;
+        created.push("flows/".to_string());
+    }
+
+    // skills/
+    let skills_dir = root.join("skills");
+    if !skills_dir.exists() {
+        fs::create_dir_all(&skills_dir)
+            .map_err(|e| format!("Failed to create skills/: {}", e))?;
+        fs::write(skills_dir.join(".gitkeep"), "")
+            .map_err(|e| format!("Failed to create skills/.gitkeep: {}", e))?;
+        created.push("skills/".to_string());
+    }
+
+    Ok(created)
 }
 
 #[tauri::command]

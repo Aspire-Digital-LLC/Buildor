@@ -55,7 +55,7 @@ function ActivePanelRenderer() {
   if (!PanelComponent) return null;
 
   return (
-    <TabContextProvider value={{ projectName: activeTab.projectName, panelType: activeTab.panelType }}>
+    <TabContextProvider value={{ projectName: activeTab.projectName, panelType: activeTab.panelType, browsePath: activeTab.browsePath, browseBranch: activeTab.browseBranch, browseIsWorktree: activeTab.browseIsWorktree }}>
       <PanelComponent />
     </TabContextProvider>
   );

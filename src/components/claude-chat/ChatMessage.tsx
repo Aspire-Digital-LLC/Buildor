@@ -1,14 +1,16 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export interface ChatContent {
-  type: 'text' | 'tool_use' | 'tool_result' | 'thinking';
+  type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'permission_request';
   text?: string;
   name?: string;
   input?: Record<string, unknown>;
   content?: string;
   toolUseId?: string;
+  requestId?: string;
   isError?: boolean;
 }
 
@@ -18,10 +20,12 @@ export interface ParsedMessage {
   model?: string;
   costUsd?: number;
   durationMs?: number;
+  isResult?: boolean;
 }
 
 interface ChatMessageProps {
   message: ParsedMessage;
+  sessionId?: string;
   isVerbose: boolean;
 }
 
@@ -38,7 +42,7 @@ const toolIcons: Record<string, string> = {
   TodoWrite: '📋',
 };
 
-export function ChatMessage({ message, isVerbose }: ChatMessageProps) {
+export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps) {
   if (message.role === 'user') {
     return (
       <div style={{ padding: '8px 12px', marginBottom: 4 }}>
@@ -225,6 +229,20 @@ export function ChatMessage({ message, isVerbose }: ChatMessageProps) {
           );
         }
 
+        if (block.type === 'permission_request') {
+          return (
+            <PermissionCard
+              key={i}
+              toolName={block.name || 'Unknown'}
+              description={block.text || ''}
+              input={block.input}
+              toolUseId={block.toolUseId || ''}
+              requestId={block.requestId || ''}
+              sessionId={sessionId}
+            />
+          );
+        }
+
         return null;
       })}
 
@@ -265,6 +283,164 @@ function ToolCard({ icon, name, children }: {
       </div>
       <div style={{ padding: '6px 10px' }}>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function PermissionCard({ toolName, description, input, toolUseId, requestId, sessionId }: {
+  toolName: string;
+  description: string;
+  input?: Record<string, unknown>;
+  toolUseId: string;
+  requestId: string;
+  sessionId?: string;
+}) {
+  const [resolved, setResolved] = useState<'approved' | 'denied' | null>(null);
+
+  const handleResponse = async (approved: boolean) => {
+    if (!sessionId || resolved) return;
+    try {
+      const { respondToPermission } = await import('@/utils/commands/claude');
+      await respondToPermission(sessionId, requestId, approved, approved ? input : undefined);
+      setResolved(approved ? 'approved' : 'denied');
+
+      const { buildorEvents } = await import('@/utils/buildorEvents');
+      buildorEvents.emit('permission-resolved', {
+        requestId,
+        toolUseId,
+        toolName,
+        approved,
+      }, sessionId);
+    } catch {
+      // silently fail
+    }
+  };
+
+  const icon = toolIcons[toolName] || '🔧';
+
+  return (
+    <div style={{
+      background: '#1a1a2e',
+      border: `1px solid ${resolved === 'approved' ? '#3fb950' : resolved === 'denied' ? '#f85149' : '#d29922'}`,
+      borderRadius: 8,
+      margin: '8px 0',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '8px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        borderBottom: '1px solid #21262d',
+      }}>
+        <span style={{ fontSize: 16 }}>⚠️</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#d29922' }}>
+          Permission Required
+        </span>
+      </div>
+      <div style={{ padding: '10px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span>{icon}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0e0' }}>{toolName}</span>
+        </div>
+        <div style={{
+          fontSize: 12,
+          color: '#adbac7',
+          marginBottom: 8,
+          fontFamily: "'Cascadia Code', monospace",
+        }}>
+          {description}
+        </div>
+        {input && (toolName === 'Bash') && (
+          <div style={{
+            background: '#0d1117',
+            border: '1px solid #21262d',
+            borderRadius: 4,
+            padding: '6px 8px',
+            fontSize: 12,
+            color: '#8b949e',
+            fontFamily: "'Cascadia Code', monospace",
+            marginBottom: 8,
+            whiteSpace: 'pre-wrap',
+          }}>
+            $ {(input as any).command}
+          </div>
+        )}
+        {resolved ? (
+          <div style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: resolved === 'approved' ? '#3fb950' : '#f85149',
+          }}>
+            {resolved === 'approved' ? '✓ Approved' : '✗ Denied'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => handleResponse(true)}
+              style={{
+                background: '#238636',
+                border: 'none',
+                color: '#fff',
+                borderRadius: 6,
+                padding: '5px 14px',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Approve
+            </button>
+            <button
+              onClick={async () => {
+                // Approve this request + save rule to .claude/settings.local.json
+                await handleResponse(true);
+                if (sessionId) {
+                  try {
+                    const { addPermissionRule } = await import('@/utils/commands/claude');
+                    // Build permission rule matching Claude Code's format
+                    let rule = toolName;
+                    if (toolName === 'Bash' && input?.command) {
+                      // Extract the base command for the wildcard pattern
+                      const cmd = String(input.command);
+                      const baseCmd = cmd.split(' ')[0];
+                      rule = `Bash(${baseCmd}:*)`;
+                    }
+                    await addPermissionRule(sessionId, rule);
+                  } catch {
+                    // Best-effort — don't block the approval
+                  }
+                }
+              }}
+              style={{
+                background: '#21262d',
+                border: '1px solid #30363d',
+                color: '#c9d1d9',
+                borderRadius: 6,
+                padding: '5px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Always Allow
+            </button>
+            <button
+              onClick={() => handleResponse(false)}
+              style={{
+                background: '#21262d',
+                border: '1px solid #da3633',
+                color: '#f85149',
+                borderRadius: 6,
+                padding: '5px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Deny
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

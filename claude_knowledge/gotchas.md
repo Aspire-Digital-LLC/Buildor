@@ -60,6 +60,55 @@ Surprising behaviors, bugs encountered, and non-obvious pitfalls. Each entry des
 
 ---
 
+### Claude Code stream-json Permission Protocol is Undocumented
+
+**Context**: Building interactive permission handling for Claude Chat — Approve/Always Allow/Deny buttons
+**Surprise**: The `--permission-prompt-tool stdio` flag enables permission events in stream-json mode, but the response format is completely undocumented. The only reliable source is the Python Agent SDK source code (`claude-agent-sdk` on PyPI, file `_internal/query.py`).
+**Impact**: Three iterations of wrong formats — `permission_response` (wrong type), `control_response` with `decision` field (wrong structure), `control_response` without `updatedInput` (tools don't execute). Each wrong format causes different failure: crash, hang, or silent no-op.
+**Workaround**: The correct format from the Agent SDK source:
+```json
+{"type":"control_response","response":{"subtype":"success","request_id":"...","response":{"behavior":"allow","updatedInput":{...original tool input...}}}}
+```
+Key: `request_id` goes inside `response`, not top-level. `updatedInput` must echo the original tool input or the tool won't execute. Install `claude-agent-sdk` via pip and read `_internal/query.py` for the authoritative format.
+
+---
+
+### git branch --format Output Parsing After trim() Strips Branch Name Chars
+
+**Context**: `git_list_branches` uses `--format=%(HEAD) %(refname:short) %(upstream:short)` and parses output
+**Surprise**: Output lines start with `* ` (current) or `  ` (non-current). After `trim()`, non-current branches lose their leading spaces. The code then did `&line[2..]` unconditionally, chopping 2 chars from the actual branch name ("feature" → "ature", "origin" → "igin").
+**Impact**: All non-current branch names were truncated by 2 characters in the branch list UI.
+**Workaround**: Only skip 2 chars when `line.starts_with('*')`. For non-current branches after trim, the branch name starts at index 0.
+
+---
+
+### React Synthetic Events Become Null After Await in Async Handlers
+
+**Context**: Sidebar dropdown positioning — `e.currentTarget.getBoundingClientRect()` called after `await listSessions()`
+**Surprise**: React recycles synthetic events. After any `await`, `e.currentTarget` becomes null, so `getBoundingClientRect()` fails silently and the dropdown doesn't appear.
+**Impact**: Code Viewer dropdown didn't open when clicked.
+**Workaround**: Capture the rect BEFORE any async call: `const rect = e.currentTarget.getBoundingClientRect();` then do the async work, then use the captured rect.
+
+---
+
+### Stale Rust Build Cache After Project Rename
+
+**Context**: Renamed project from ProductaFlows to Buildor
+**Surprise**: Cargo's incremental build cache stored absolute paths to the old directory. Build failed with "failed to read plugin permissions" pointing to `C:\Git\ProductaFlows\...`.
+**Impact**: `cargo build` / `tauri dev` completely broken until cache cleared.
+**Workaround**: `cargo clean` in src-tauri/ (cleared 5.1GB). Full rebuild required.
+
+---
+
+### changeCounts Double-Counting When Keyed by Both Name and Path
+
+**Context**: Sidebar badge shows total uncommitted changes. We store counts keyed by both `project.name` and `project.repoPath` to support both badge lookup and dropdown lookup.
+**Surprise**: `Object.values(changeCounts).reduce(...)` sums ALL values including duplicates, so the badge showed 2x the real count.
+**Impact**: Badge showed 46 instead of 23.
+**Workaround**: Sum only by project name: `projects.reduce((sum, p) => sum + (changeCounts[p.name] || 0), 0)`.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

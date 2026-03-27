@@ -252,7 +252,7 @@ pub async fn git_list_branches(repo_path: String) -> Result<Vec<BranchInfo>, Str
             continue;
         }
         let current = line.starts_with('*');
-        let rest = if current { &line[2..] } else { &line[2..] };
+        let rest = if current { &line[2..] } else { line };
         let parts: Vec<&str> = rest.splitn(2, ' ').collect();
         let name = parts[0].to_string();
         let remote = parts.get(1).and_then(|r| {
