@@ -39,6 +39,8 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
   const [aiSlug, setAiSlug] = useState<string | null>(null);
   const [aiSlugSource, setAiSlugSource] = useState<string>('');
   const [isGeneratingSlug, setIsGeneratingSlug] = useState(false);
+  const [slugOverride, setSlugOverride] = useState<string | null>(null);
+  const [isEditingSlug, setIsEditingSlug] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -78,6 +80,9 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
   const slugInput = hasIssue ? (issueNumber ? `Issue #${issueNumber}` : '') : description;
 
   useEffect(() => {
+    // Skip if user has manually overridden the slug
+    if (slugOverride !== null) return;
+
     if (!slugInput.trim()) {
       setAiSlug(null);
       setAiSlugSource('');
@@ -91,11 +96,15 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
       setIsGeneratingSlug(true);
       try {
         const result = await generateSlugViaHaiku(slugInput);
-        // Only set if input hasn't changed while we were waiting
         setAiSlug(result);
         setAiSlugSource(slugInput);
-      } catch {
-        // Silently fail — preview will show fallback
+      } catch (e) {
+        logEvent({
+          functionArea: 'worktree',
+          level: 'error',
+          operation: 'generate-slug',
+          message: `Slug generation failed after retries: ${String(e)}`,
+        }).catch(() => {});
       }
       setIsGeneratingSlug(false);
     }, 1000);
@@ -109,21 +118,24 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
     setIsCreating(true);
     setError(null);
 
-    // Use cached Haiku slug if source hasn't changed, otherwise request fresh
-    const currentSlugInput = hasIssue ? `Issue #${issueNumber}` : description;
+    // Use manual override if set, otherwise use cached/fresh Haiku slug
     let slug: string;
-    if (aiSlug && aiSlugSource === currentSlugInput) {
-      slug = aiSlug;
+    if (slugOverride !== null) {
+      slug = slugOverride;
     } else {
-      try {
-        slug = await generateSlugViaHaiku(currentSlugInput);
-      } catch {
-        // Fallback to simple slug
-        slug = currentSlugInput
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .slice(0, 40) || 'session';
+      const currentSlugInput = hasIssue ? `Issue #${issueNumber}` : description;
+      if (aiSlug && aiSlugSource === currentSlugInput) {
+        slug = aiSlug;
+      } else {
+        try {
+          slug = await generateSlugViaHaiku(currentSlugInput);
+        } catch {
+          slug = currentSlugInput
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .slice(0, 40) || 'session';
+        }
       }
     }
 
@@ -399,17 +411,91 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
               borderRadius: 6,
               padding: '8px 12px',
             }}>
-              <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Branch Preview</div>
-              <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
-                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}
-                {isGeneratingSlug ? (
-                  <span style={{ color: '#6e7681', fontStyle: 'italic' }}>generating...</span>
-                ) : aiSlug ? (
-                  <span style={{ color: '#3fb950' }}>{aiSlug}</span>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 4,
+              }}>
+                <span style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase' }}>Branch Preview</span>
+                {!isEditingSlug ? (
+                  <button
+                    onClick={() => {
+                      setIsEditingSlug(true);
+                      setSlugOverride(aiSlug || '');
+                    }}
+                    title="Edit slug manually"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#6e7681',
+                      cursor: 'pointer',
+                      padding: '0 2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
                 ) : (
-                  <span style={{ color: '#6e7681', fontStyle: 'italic' }}>{'<type to generate>'}</span>
+                  <button
+                    onClick={() => {
+                      setIsEditingSlug(false);
+                      setSlugOverride(null);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#6e7681',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                    }}
+                  >
+                    Use AI
+                  </button>
                 )}
               </div>
+              {isEditingSlug ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                  <span style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
+                    {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}
+                  </span>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={slugOverride || ''}
+                    onChange={(e) => setSlugOverride(
+                      e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+                    )}
+                    placeholder="my-slug"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: '1px solid #30363d',
+                      color: '#d29922',
+                      fontSize: 13,
+                      fontFamily: "'Cascadia Code', monospace",
+                      outline: 'none',
+                      padding: '0 2px',
+                      width: 160,
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
+                  {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}
+                  {isGeneratingSlug ? (
+                    <span style={{ color: '#6e7681', fontStyle: 'italic' }}>generating...</span>
+                  ) : aiSlug ? (
+                    <span style={{ color: '#3fb950' }}>{aiSlug}</span>
+                  ) : (
+                    <span style={{ color: '#6e7681', fontStyle: 'italic' }}>{'<type to generate>'}</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
