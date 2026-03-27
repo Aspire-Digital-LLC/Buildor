@@ -1,30 +1,33 @@
 # Project Status
 
-## Current Phase: Core Features Built, UX Refactor + Session System Next
+## Current Phase: Core UX Complete, Session System Next
 
 ### Completed
 - [x] App concept and feature spec (APP_BUILD_DESCRIPTION.md)
 - [x] Tech stack: Tauri v2 + React + TypeScript + Rust
-- [x] Project scaffolded: 99 files, compiles clean (TS + Rust)
+- [x] Project scaffolded, compiles clean (TS + Rust)
 - [x] App launches with `npx tauri dev`
-- [x] Git repo initialized, pushed to Aspire-Digital-LLC/ProductaFlows
+- [x] Git repo: Aspire-Digital-LLC/ProductaFlows on main
 - [x] Dark UI with SVG line icons in sidebar
-- [x] Native window title bar showing "ProductaFlows v0.0.1"
-- [x] Project Manager: add/remove/switch projects via native folder picker, persists to ~/.productaflows/config.json
-- [x] Code Viewer: file tree with .gitignore-aware filtering, Monaco editor with syntax highlighting (50+ languages)
-- [x] Source Control: git status, staged/unstaged/untracked lists, stage/unstage per file and bulk, commit with message, push/pull buttons
-- [x] Source Control hamburger menu: switch/create/delete branch, merge, rebase, stash/pop, fetch, undo last commit, revert last push — with confirmation modals and toast feedback
-- [x] Side-by-side diff viewer (Monaco DiffEditor) — opens when clicking a changed file
-- [x] Serde camelCase alignment between Rust structs and TypeScript types
-- [x] Auto-refresh git status every 5 seconds
-- [x] Knowledge base, mind-map index, /document skill
+- [x] Native window title bar: "ProductaFlows v0.0.1"
+- [x] **Tab system**: VS Code-style tabs, sidebar icons are project-aware launchers with dropdowns, multiple tabs open simultaneously, TabContext provides project scoping
+- [x] **Project Manager**: add/remove projects via native folder picker, persists to %APPDATA%/ProductaFlows/config.json, GitHub-style language breakdown bars with colored percentages
+- [x] **Code Viewer**: file tree (.gitignore-aware, shows dotfiles), Monaco syntax highlighting (50+ languages), Edit/Save/Cancel mode for file editing, breadcrumb path
+- [x] **Source Control**: git status, staged/unstaged/untracked lists, stage/unstage per file and bulk, commit, push/pull, auto-refresh 5s
+- [x] **Source Control hamburger menu**: switch/create/delete branch, merge, rebase, stash/pop, fetch, undo last commit, revert last push — confirmation modals + toast feedback
+- [x] **Diff viewer**: side-by-side Monaco DiffEditor, character-level highlighting, minimap, revert arrows, Stage/Unstage/Discard buttons, full-width header
+- [x] **Source Control badges**: blue badge on sidebar icon showing total uncommitted changes, per-project counts in dropdown, 5s refresh
+- [x] **Logging system**: SQLite at %APPDATA%/ProductaFlows/logs.db, session_id (GUID) correlation, duration_ms timing, all operations instrumented
+- [x] **Settings panel**: sidebar with Projects + Logs sections, log viewer with filtering (level/function/repo/session), "type to confirm" clear
+- [x] **Skills**: /document and /read-logs in .claude/skills/ with description frontmatter
+- [x] **CLI**: scripts/read-logs.sh with --errors, --session, --slow, --stats, --sessions, --since flags
+- [x] **Data persistence**: OS-standard paths (%APPDATA% on Windows), auto-migration from legacy ~/.productaflows/
+- [x] Serde camelCase alignment, no silent failures, CLAUDE.md logging convention
 
 ### In Progress (Build Order)
-1. [x] **Diff viewer fix** — character-level highlighting, minimap, revert arrows with MutationObserver tooltip, Stage/Unstage/Discard buttons, full-width header layout
-2. [ ] **Tab system refactor** — replace React Router pages with VS Code-style tabs, sidebar icons become project-aware launchers with dropdown
-3. [ ] **Start Session modal** — project picker, base branch, type radio (bug/issue/feature/docs/release), GitHub issue integration, Haiku slug generation, worktree creation with animation
-4. [ ] **Worktree Manager panel** — list open worktrees grouped by project, close individual/per-project/global
-5. [ ] **Claude Chat breakout window** — separate Tauri window at 50% screen with skill/flow palette sidebar
+1. [ ] **Start Session modal** — project picker, base branch, type radio (bug/issue/feature/docs/release), GitHub issue integration, Haiku slug generation, worktree creation with animation
+2. [ ] **Worktree Manager panel** — list open worktrees grouped by project, close individual/per-project/global
+3. [ ] **Claude Chat breakout window** — separate Tauri window at 50% screen with skill/flow palette sidebar
 
 ### Not Started
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow)
@@ -40,9 +43,9 @@
 - Node: installed (npm)
 - Dev command: `npx tauri dev` (requires `$HOME/.cargo/bin` in PATH)
 - Remote: https://github.com/Aspire-Digital-LLC/ProductaFlows.git
+- Data: %APPDATA%/ProductaFlows/ (config.json, logs.db)
 
 ### Known Issues
-- Rust warnings: unused variables in stub commands (expected, resolves as stubs are implemented)
+- Rust warnings: unused variables in stub commands (resolves as stubs are implemented)
 - App icon is a placeholder blue 16x16 square
 - Claude Code SDK auth question unresolved (subscription vs API key)
-- Diff viewer needs character-level highlighting and revert arrows (Monaco config fix)

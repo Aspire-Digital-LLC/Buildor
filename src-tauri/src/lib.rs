@@ -54,6 +54,8 @@ pub fn run() {
             commands::window::close_breakout_window,
             commands::filesystem::list_directory_recursive,
             commands::filesystem::read_file_content,
+            commands::filesystem::write_file_content,
+            commands::filesystem::get_language_stats,
             commands::logging::log_event,
             commands::logging::get_logs,
             commands::logging::clear_logs,

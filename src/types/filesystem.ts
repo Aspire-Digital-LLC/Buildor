@@ -10,3 +10,10 @@ export interface FileContent {
   content: string;
   language: string;
 }
+
+export interface LanguageStat {
+  language: string;
+  bytes: number;
+  percentage: number;
+  color: string;
+}

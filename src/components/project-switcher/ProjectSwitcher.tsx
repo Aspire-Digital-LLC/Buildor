@@ -1,25 +1,37 @@
 import { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useProjectStore } from '@/stores';
+import { getLanguageStats } from '@/utils/commands/filesystem';
+import type { LanguageStat } from '@/types';
 
 export function ProjectSwitcher() {
   const {
     projects,
-    activeProject,
     isLoading,
     error,
     addProject,
     removeProject,
-    setActiveProject,
     loadProjects,
   } = useProjectStore();
 
-  // Always refresh projects when this component mounts
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [langStats, setLangStats] = useState<Record<string, LanguageStat[]>>({});
+
   useEffect(() => {
     loadProjects();
   }, []);
-  const [removing, setRemoving] = useState<string | null>(null);
-  const [addError, setAddError] = useState<string | null>(null);
+
+  // Fetch language stats for all projects
+  useEffect(() => {
+    projects.forEach((p) => {
+      if (!langStats[p.name]) {
+        getLanguageStats(p.repoPath).then((stats) => {
+          setLangStats((prev) => ({ ...prev, [p.name]: stats }));
+        }).catch(() => {});
+      }
+    });
+  }, [projects]);
 
   const handleAddProject = async () => {
     setAddError(null);
@@ -30,7 +42,6 @@ export function ProjectSwitcher() {
     });
 
     if (selected && typeof selected === 'string') {
-      // Derive name from folder
       const parts = selected.replace(/\\/g, '/').split('/');
       const name = parts[parts.length - 1] || 'unnamed';
       try {
@@ -43,12 +54,15 @@ export function ProjectSwitcher() {
 
   const handleRemove = async (name: string) => {
     if (removing === name) {
-      // Second click confirms
       await removeProject(name);
       setRemoving(null);
+      setLangStats((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
     } else {
       setRemoving(name);
-      // Auto-cancel after 3 seconds
       setTimeout(() => setRemoving(null), 3000);
     }
   };
@@ -126,41 +140,25 @@ export function ProjectSwitcher() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {projects.map((project) => {
-          const isActive = activeProject?.name === project.name;
           const isConfirmingRemove = removing === project.name;
+          const stats = langStats[project.name] || [];
 
           return (
             <div
               key={project.name}
-              onClick={() => setActiveProject(project)}
               style={{
-                background: isActive ? '#1a2332' : '#161b22',
-                border: `1px solid ${isActive ? '#1f6feb' : '#21262d'}`,
+                background: '#161b22',
+                border: '1px solid #21262d',
                 borderRadius: 8,
                 padding: '12px 16px',
-                cursor: 'pointer',
-                transition: 'border-color 0.15s',
-                position: 'relative',
               }}
             >
+              {/* Header row */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                  }}>
-                    {isActive && (
-                      <span style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: '#3fb950',
-                        flexShrink: 0,
-                      }} />
-                    )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{
                       fontWeight: 600,
                       fontSize: 14,
@@ -196,10 +194,7 @@ export function ProjectSwitcher() {
                   </div>
                 </div>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove(project.name);
-                  }}
+                  onClick={() => handleRemove(project.name)}
                   style={{
                     background: isConfirmingRemove ? '#da3633' : 'transparent',
                     color: isConfirmingRemove ? '#fff' : '#6e7681',
@@ -215,6 +210,66 @@ export function ProjectSwitcher() {
                   {isConfirmingRemove ? 'Confirm' : '\u00d7'}
                 </button>
               </div>
+
+              {/* Language bar */}
+              {stats.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  {/* Color bar */}
+                  <div style={{
+                    display: 'flex',
+                    height: 8,
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    gap: 1,
+                  }}>
+                    {stats.filter((s) => s.percentage >= 0.5).map((stat) => (
+                      <div
+                        key={stat.language}
+                        title={`${stat.language}: ${stat.percentage.toFixed(1)}%`}
+                        style={{
+                          width: `${stat.percentage}%`,
+                          backgroundColor: stat.color,
+                          minWidth: 3,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {/* Legend */}
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '4px 12px',
+                    marginTop: 6,
+                  }}>
+                    {stats.filter((s) => s.percentage >= 1).map((stat) => (
+                      <span
+                        key={stat.language}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: 11,
+                        }}
+                      >
+                        <span style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: stat.color,
+                          display: 'inline-block',
+                          flexShrink: 0,
+                        }} />
+                        <span style={{ color: stat.color, fontWeight: 500 }}>
+                          {stat.language}
+                        </span>
+                        <span style={{ color: '#6e7681' }}>
+                          {stat.percentage.toFixed(1)}%
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

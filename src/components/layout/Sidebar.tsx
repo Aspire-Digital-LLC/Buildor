@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useTabStore, useProjectStore } from '@/stores';
+import { getGitStatus } from '@/utils/commands/git';
 import type { PanelType } from '@/types';
 
 const iconProps = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -84,6 +85,35 @@ export function Sidebar() {
   const [dropdown, setDropdown] = useState<{ panelType: PanelType; rect: DOMRect } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Track uncommitted change counts per project
+  const [changeCounts, setChangeCounts] = useState<Record<string, number>>({});
+
+  const refreshChangeCounts = useCallback(async () => {
+    const currentProjects = useProjectStore.getState().projects;
+    if (currentProjects.length === 0) return;
+    const counts: Record<string, number> = {};
+    await Promise.all(
+      currentProjects.map(async (p) => {
+        try {
+          const status = await getGitStatus(p.repoPath);
+          counts[p.name] = status.staged.length + status.unstaged.length + status.untracked.length;
+        } catch {
+          counts[p.name] = 0;
+        }
+      })
+    );
+    setChangeCounts(counts);
+  }, []);
+
+  // Poll every 10 seconds
+  useEffect(() => {
+    refreshChangeCounts();
+    const interval = setInterval(refreshChangeCounts, 5000);
+    return () => clearInterval(interval);
+  }, [refreshChangeCounts, projects]);
+
+  const totalChanges = Object.values(changeCounts).reduce((sum, c) => sum + c, 0);
+
   // Close dropdown on outside click
   useEffect(() => {
     if (!dropdown) return;
@@ -138,6 +168,7 @@ export function Sidebar() {
     }}>
       {navItems.map((item) => {
         const isActive = activeTab?.panelType === item.panelType;
+        const badge = item.panelType === 'source-control' && totalChanges > 0 ? totalChanges : null;
         return (
           <button
             key={item.panelType}
@@ -156,9 +187,31 @@ export function Sidebar() {
               cursor: 'pointer',
               borderRadius: 4,
               color: isActive ? '#e0e0e0' : '#8b949e',
+              position: 'relative',
             }}
           >
             {item.icon}
+            {badge !== null && (
+              <span style={{
+                position: 'absolute',
+                bottom: 4,
+                right: 4,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 8,
+                backgroundColor: '#1f6feb',
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 3px',
+                lineHeight: 1,
+              }}>
+                {badge > 99 ? '99+' : badge}
+              </span>
+            )}
           </button>
         );
       })}
@@ -216,30 +269,56 @@ export function Sidebar() {
           }}>
             Select Project
           </div>
-          {projects.map((project) => (
-            <div
-              key={project.name}
-              onClick={() => {
-                openTab(dropdown.panelType, project.name);
-                setDropdown(null);
-              }}
-              style={{
-                padding: '8px 12px',
-                fontSize: 13,
-                color: '#e0e0e0',
-                cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-            >
-              <div style={{ fontWeight: 500 }}>{project.name}</div>
-              {project.currentBranch && (
-                <div style={{ fontSize: 11, color: '#6e7681', marginTop: 1 }}>
-                  {project.currentBranch}
+          {projects.map((project) => {
+            const count = changeCounts[project.name] || 0;
+            return (
+              <div
+                key={project.name}
+                onClick={() => {
+                  openTab(dropdown.panelType, project.name);
+                  setDropdown(null);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  color: '#e0e0e0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#1c2128'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <div>
+                  <div style={{ fontWeight: 500 }}>{project.name}</div>
+                  {project.currentBranch && (
+                    <div style={{ fontSize: 11, color: '#6e7681', marginTop: 1 }}>
+                      {project.currentBranch}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+                {dropdown.panelType === 'source-control' && count > 0 && (
+                  <span style={{
+                    minWidth: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: '#1f6feb',
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 5px',
+                    flexShrink: 0,
+                  }}>
+                    {count}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </nav>
