@@ -159,7 +159,11 @@ export const useUsageStore = create<UsageState>((set, get) => ({
       newOutput += data.outputTokens;
     }
 
-    const contextUsed = data.inputTokens > 0 ? data.inputTokens : prev.contextUsedTokens;
+    // Context = all input tokens (new + cache read + cache creation)
+    // input_tokens from API only counts non-cached; real context includes cached tokens
+    const totalInputThisTurn = (data.inputTokens || 0) + (data.cacheReadTokens || 0) + (data.cacheCreationTokens || 0);
+    // If we got real data, use it (may decrease after compression). If zero, hold previous.
+    const contextUsed = totalInputThisTurn > 0 ? totalInputThisTurn : prev.contextUsedTokens;
     const contextPct = Math.min(100, Math.round((contextUsed / contextLimit) * 100));
 
     return {

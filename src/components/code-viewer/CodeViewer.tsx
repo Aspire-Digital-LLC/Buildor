@@ -4,6 +4,7 @@ import { useTabContext } from '@/contexts/TabContext';
 import { FileTree } from './FileTree';
 import { EditorPanel } from './EditorPanel';
 import { BranchSwitcher } from './BranchSwitcher';
+import { ResizeHandle } from '../shared/ResizeHandle';
 import { logEvent } from '@/utils/commands/logging';
 import { buildorEvents } from '@/utils/buildorEvents';
 
@@ -14,6 +15,7 @@ export function CodeViewer() {
   const { tree, isLoadingTree, loadTree, clearSelection } = useFileTreeStore();
   const updateCheckedOutBranch = useTabStore((s) => s.updateCheckedOutBranch);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(260);
 
   const rootPath = browsePath || activeProject?.repoPath;
 
@@ -68,9 +70,9 @@ export function CodeViewer() {
     <div style={{ display: 'flex', height: '100%' }}>
       {/* File Tree Sidebar */}
       <div style={{
-        width: 260,
-        minWidth: 180,
-        borderRight: '1px solid var(--border-primary)',
+        width: sidebarWidth,
+        minWidth: 140,
+        maxWidth: 600,
         background: 'var(--bg-primary)',
         display: 'flex',
         flexDirection: 'column',
@@ -168,6 +170,8 @@ export function CodeViewer() {
           />
         )}
       </div>
+
+      <ResizeHandle onResize={(delta) => setSidebarWidth((w) => Math.max(140, Math.min(600, w + delta)))} />
 
       {/* Editor */}
       <EditorPanel />

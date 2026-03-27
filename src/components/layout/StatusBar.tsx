@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { useUsageStore, useTabStore } from '@/stores';
 import { queryClaudeStatus } from '@/utils/commands/claude';
-import { openLoginWindow, fetchClaudeUsage, hasClaudeSession } from '@/utils/commands/account';
-import { logEvent } from '@/utils/commands/logging';
+import { openLoginWindow, fetchClaudeUsage, hasClaudeSession, startUsagePolling } from '@/utils/commands/account';
+import { buildorEvents } from '@/utils/buildorEvents';
 import type { ClaudeStatusInfo } from '@/stores/usageStore';
 
 // ── Parse credentials JSON from Rust backend ────────────────────────────
@@ -167,27 +167,25 @@ function ClockIcon() {
   );
 }
 
-// Claude logo silhouette — simplified iconic shape
+// Claude sparkle icon — matches the actual Claude logo shape
 function ClaudeIcon({ loggedIn, size = 16 }: { loggedIn: boolean; size?: number }) {
-  const color = loggedIn ? '#d4a27a' : '#484f58';
-  const opacity = loggedIn ? 1 : 0.5;
+  const color = loggedIn ? '#d4a27a' : '#6e7681';
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox="0 0 24 24" style={{ opacity }}>
-        {/* Simplified Claude sparkle/asterisk shape */}
-        <circle cx="12" cy="12" r="10" fill={loggedIn ? color + '22' : 'none'} stroke={color} strokeWidth="1.5" />
-        {/* Inner asterisk pattern — Claude's signature */}
-        <line x1="12" y1="5" x2="12" y2="19" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="5.5" y1="8.5" x2="18.5" y2="15.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="5.5" y1="15.5" x2="18.5" y2="8.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+        {/* Claude sparkle — 6 rounded petals radiating from center */}
+        <ellipse cx="12" cy="5.5" rx="2" ry="4" />
+        <ellipse cx="12" cy="18.5" rx="2" ry="4" />
+        <ellipse cx="5.5" cy="8.5" rx="2" ry="4" transform="rotate(-60 5.5 8.5)" />
+        <ellipse cx="18.5" cy="15.5" rx="2" ry="4" transform="rotate(-60 18.5 15.5)" />
+        <ellipse cx="5.5" cy="15.5" rx="2" ry="4" transform="rotate(60 5.5 15.5)" />
+        <ellipse cx="18.5" cy="8.5" rx="2" ry="4" transform="rotate(60 18.5 8.5)" />
+        <circle cx="12" cy="12" r="2.5" />
       </svg>
-      {/* Slash-through when not logged in */}
       {!loggedIn && (
-        <svg
-          width={size} height={size} viewBox="0 0 24 24"
-          style={{ position: 'absolute', top: 0, left: 0 }}
-        >
-          <line x1="4" y1="4" x2="20" y2="20" stroke="#f85149" strokeWidth="2" strokeLinecap="round" />
+        <svg width={size} height={size} viewBox="0 0 24 24"
+          style={{ position: 'absolute', top: 0, left: 0 }}>
+          <line x1="4" y1="4" x2="20" y2="20" stroke="#f85149" strokeWidth="2.5" strokeLinecap="round" />
         </svg>
       )}
     </div>
@@ -246,8 +244,13 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
   const setStatus = useUsageStore((s) => s.setStatus);
   const setStatusLoading = useUsageStore((s) => s.setStatusLoading);
   const [hasSession, setHasSession] = useState(false);
-  const isLoggedIn = hasSession || !!(status.planType && status.planType !== 'Plan');
+  const isLoggedIn = hasSession || !!(status.planType && status.planType !== 'Plan' && status.planType !== '...');
   const openTab = useTabStore((s) => s.openTab);
+
+  // Check session immediately on mount
+  useEffect(() => {
+    hasClaudeSession().then(setHasSession).catch(() => {});
+  }, []);
   // Per-session CTX: use explicit sessionId, or find the most active session
   const sessionCtx = useUsageStore((s) => {
     if (sessionId && s.sessions[sessionId]) return s.sessions[sessionId];
@@ -267,33 +270,25 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
   }, []);
 
   // ── Fetch plan info from credentials on mount + every 5 minutes ──
+  // Use getState() to avoid stale closure race conditions between fetchStatus and fetchUsage
   const fetchStatus = useCallback(async () => {
     setStatusLoading(true);
     try {
       const raw = await queryClaudeStatus();
       const parsed = parseCredentialsJson(raw);
-      // Merge — preserve rate-limit data from stream events
+      const current = useUsageStore.getState().status;
       setStatus({
-        ...status,
-        planType: parsed.planType ?? status.planType,
-        planPrice: parsed.planPrice ?? status.planPrice,
-        version: parsed.version ?? status.version,
+        ...current,
+        planType: parsed.planType ?? current.planType,
+        planPrice: parsed.planPrice ?? current.planPrice,
+        version: parsed.version ?? current.version,
         raw: parsed.raw,
       });
-      logEvent({
-        functionArea: 'system', level: 'debug',
-        operation: 'query-status', message: `Plan: ${parsed.planType || 'unknown'}, v${parsed.version || '?'}`,
-      }).catch(() => {});
-    } catch (e) {
-      logEvent({
-        functionArea: 'system', level: 'debug',
-        operation: 'query-status', message: `Status query failed: ${String(e).substring(0, 120)}`,
-      }).catch(() => {});
-    }
+    } catch { /* silent */ }
     setStatusLoading(false);
-  }, [setStatus, setStatusLoading, status]);
+  }, [setStatus, setStatusLoading]);
 
-  // Fetch usage from claude.ai API (requires session cookie)
+  // Fetch usage from claude.ai stored session data
   const fetchUsage = useCallback(async () => {
     try {
       const has = await hasClaudeSession();
@@ -302,9 +297,9 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
 
       const raw = await fetchClaudeUsage();
       const data = JSON.parse(raw);
+      const current = useUsageStore.getState().status;
 
-      // Parse five_hour (session) and seven_day (weekly) utilization
-      const updates: Partial<typeof status> = {};
+      const updates: Partial<typeof current> = {};
       if (data.five_hour) {
         updates.tokenUsedPercent = Math.round(data.five_hour.utilization ?? 0);
         updates.tokenResetAt = data.five_hour.resets_at ?? null;
@@ -315,27 +310,47 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
       }
 
       if (Object.keys(updates).length > 0) {
-        setStatus({ ...status, ...updates });
+        setStatus({ ...current, ...updates });
       }
-    } catch {
-      // Session might not exist or be expired — silent fail
-    }
-  }, [status, setStatus]);
+    } catch { /* silent */ }
+  }, [setStatus]);
 
   useEffect(() => {
     fetchStatus();
     fetchUsage();
-    pollRef.current = setInterval(() => { fetchStatus(); fetchUsage(); }, 5 * 60 * 1000);
+    // Start the persistent usage poller (hidden webview, 60s interval)
+    startUsagePolling().catch(() => {});
+    // Refresh credentials every 5 min
+    pollRef.current = setInterval(fetchStatus, 5 * 60 * 1000);
 
-    // Refresh usage when login completes
-    const unlisten = listen('login-complete', () => {
+    // Listen for live usage updates from the poller
+    const unlistenRefresh = listen<string>('usage-refreshed', (event) => {
+      try {
+        const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+        if (payload?.usage) {
+          const current = useUsageStore.getState().status;
+          setStatus({
+            ...current,
+            tokenUsedPercent: payload.usage.five_hour ? Math.round(payload.usage.five_hour.utilization) : current.tokenUsedPercent,
+            tokenResetAt: payload.usage.five_hour?.resets_at ?? current.tokenResetAt,
+            weeklyUsedPercent: payload.usage.seven_day ? Math.round(payload.usage.seven_day.utilization) : current.weeklyUsedPercent,
+            weeklyResetAt: payload.usage.seven_day?.resets_at ?? current.weeklyResetAt,
+          });
+        }
+      } catch { /* ignore */ }
+    });
+
+    // Refresh when login completes
+    const unlistenLogin = listen('login-complete', () => {
       setHasSession(true);
       fetchUsage();
+      startUsagePolling().catch(() => {});
     });
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
-      unlisten.then((fn) => fn());
+      unlistenRefresh.then((fn) => fn());
+      unlistenLogin.then((fn) => fn());
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -479,6 +494,8 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
             onClick={() => {
               if (isLoggedIn) {
                 openTab('settings');
+                // Navigate to Account section
+                setTimeout(() => buildorEvents.emit('navigate-settings', { section: 'account' }), 100);
               } else {
                 openLoginWindow().catch(console.error);
               }

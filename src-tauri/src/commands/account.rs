@@ -12,7 +12,8 @@ pub async fn open_login_window(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let url = WebviewUrl::External("https://claude.ai/login".parse().unwrap());
+    // Open to / — if already logged in, stays on claude.ai; if not, redirects to /login
+    let url = WebviewUrl::External("https://claude.ai/".parse().unwrap());
 
     let _win = WebviewWindowBuilder::new(&app, label, url)
         .title("Sign in to Claude")
@@ -21,75 +22,112 @@ pub async fn open_login_window(app: AppHandle) -> Result<(), String> {
         .build()
         .map_err(|e| format!("Failed to open login window: {}", e))?;
 
-    // Poll the webview — inject JS that writes cookies to the page title
-    // (title is readable from Rust via win.title())
+    // Strategy: poll URL. Once not on /login, navigate to API endpoints directly.
+    // The webview sends cookies automatically, so the API responds with JSON.
     let app_handle = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(4));
+        std::thread::sleep(std::time::Duration::from_secs(3));
+
+        let mut phase = 0; // 0=wait for login, 1=fetching orgs, 2=fetching usage
+        let mut org_id: Option<String> = None;
 
         for _ in 0..150 {
-            if let Some(win) = app_handle.get_webview_window("claude-login") {
-                // Check current URL via title trick: inject JS to set title to current cookies
-                let _ = win.eval(r#"
-                    (function() {
+            let Some(win) = app_handle.get_webview_window("claude-login") else {
+                break;
+            };
+
+            match phase {
+                0 => {
+                    // Phase 0: Wait for login — try navigating to org list API
+                    // If user is logged in, this returns JSON. If not, it redirects to login.
+                    let api_url: tauri::Url = "https://claude.ai/api/organizations".parse().unwrap();
+                    let _ = win.navigate(api_url);
+                    phase = 1;
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                }
+                1 => {
+                    // Phase 1: Extract UUID from org list page
+                    // Use location.hash to communicate (document.title doesn't sync to native title)
+                    let _ = win.eval(r#"
                         try {
-                            var c = document.cookie || '';
-                            if (c.includes('sessionKey=')) {
-                                document.title = 'LOGGED_IN:' + c;
+                            var text = document.body?.innerText || '';
+                            var match = text.match(/"uuid"\s*:\s*"([a-f0-9-]{36})"/);
+                            if (match) {
+                                window.location.hash = 'buildor_org_' + match[1];
                             }
                         } catch(e) {}
-                    })();
-                "#);
+                    "#);
+                    std::thread::sleep(std::time::Duration::from_millis(800));
 
-                // Check if title has been set to cookie data
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                if let Ok(title) = win.title() {
-                    if title.starts_with("LOGGED_IN:") {
-                        let cookie_str = title.trim_start_matches("LOGGED_IN:");
-                        if let Err(e) = store_session_from_cookies(cookie_str) {
-                            eprintln!("Failed to store session: {}", e);
-                        } else {
-                            let _ = app_handle.emit("login-complete", "ok");
+                    if let Ok(url) = win.url() {
+                        let url_str = url.as_str();
+                        if let Some(pos) = url_str.find("#buildor_org_") {
+                            let id = url_str[pos + 13..].to_string();
+                            org_id = Some(id.clone());
+                            let usage_url: tauri::Url = format!(
+                                "https://claude.ai/api/organizations/{}/usage", id
+                            ).parse().unwrap();
+                            let _ = win.navigate(usage_url);
+                            phase = 2;
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+                            continue;
+                        } else if url_str.contains("/login") {
+                            phase = 0;
                         }
-                        // Close login window
-                        let _ = win.close();
-                        break;
                     }
+                    std::thread::sleep(std::time::Duration::from_secs(2));
                 }
-            } else {
-                break; // Window closed by user
+                2 => {
+                    // Phase 2: Read usage JSON via hash
+                    let _ = win.eval(r#"
+                        try {
+                            var text = (document.body?.innerText || '').trim();
+                            if (text.startsWith('{') && text.includes('utilization')) {
+                                window.location.hash = 'buildor_usage_' + encodeURIComponent(text);
+                            }
+                        } catch(e) {}
+                    "#);
+                    std::thread::sleep(std::time::Duration::from_millis(800));
+
+                    if let Ok(url) = win.url() {
+                        let url_str = url.as_str();
+                        if let Some(pos) = url_str.find("#buildor_usage_") {
+                            let encoded = &url_str[pos + 15..];
+                            if let Ok(usage_json) = urlencoding::decode(encoded) {
+                                let oid = org_id.clone().unwrap_or_default();
+                                let result = format!(
+                                    r#"{{"orgId":"{}","usage":{}}}"#,
+                                    oid, usage_json
+                                );
+                                if let Err(e) = store_session_data(&result) {
+                                    eprintln!("Failed to store: {}", e);
+                                }
+                                let _ = app_handle.emit("login-complete", result);
+                                let _ = win.close();
+                                return;
+                            }
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+                _ => break,
             }
-            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+
+        // Timeout — close window
+        if let Some(win) = app_handle.get_webview_window("claude-login") {
+            let _ = win.close();
         }
     });
 
     Ok(())
 }
 
-/// Parse cookie string and store session credentials
-fn store_session_from_cookies(raw: &str) -> Result<(), String> {
-    // Cookie string from document.cookie: "key=value; key2=value2"
-    // Remove surrounding quotes if present
-    let cleaned = raw.trim_matches('"').replace("\\\"", "\"");
+/// Store org ID and usage data fetched from inside the webview
+fn store_session_data(json_str: &str) -> Result<(), String> {
+    let data: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| format!("Failed to parse session data: {}", e))?;
 
-    let mut session_key: Option<String> = None;
-    let mut org_id: Option<String> = None;
-
-    for part in cleaned.split(';') {
-        let part = part.trim();
-        if let Some((key, value)) = part.split_once('=') {
-            let key = key.trim();
-            let value = value.trim();
-            if key == "sessionKey" || key.contains("sessionKey") {
-                session_key = Some(value.to_string());
-            }
-            if key == "lastActiveOrg" {
-                org_id = Some(value.to_string());
-            }
-        }
-    }
-
-    // Store to ~/.buildor/claude_session.json
     let config_dir = dirs_next::data_dir()
         .or_else(dirs_next::home_dir)
         .ok_or_else(|| "Cannot find config directory".to_string())?
@@ -99,8 +137,9 @@ fn store_session_from_cookies(raw: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to create config dir: {}", e))?;
 
     let session_data = serde_json::json!({
-        "sessionKey": session_key,
-        "orgId": org_id,
+        "orgId": data["orgId"],
+        "usage": data["usage"],
+        "loggedIn": true,
         "capturedAt": chrono::Utc::now().to_rfc3339(),
     });
 
@@ -111,10 +150,9 @@ fn store_session_from_cookies(raw: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Fetch usage data from claude.ai using stored session
+/// Fetch usage data — returns stored usage from last login/refresh
 #[tauri::command]
 pub async fn fetch_claude_usage() -> Result<String, String> {
-    // Read stored session
     let config_dir = dirs_next::data_dir()
         .or_else(dirs_next::home_dir)
         .ok_or_else(|| "Cannot find config directory".to_string())?
@@ -130,42 +168,110 @@ pub async fn fetch_claude_usage() -> Result<String, String> {
     let session: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse session: {}", e))?;
 
-    let session_key = session["sessionKey"].as_str()
-        .ok_or_else(|| "No sessionKey in stored session".to_string())?;
-    let org_id = session["orgId"].as_str()
-        .ok_or_else(|| "No orgId in stored session. Please log in again.".to_string())?;
-
-    // Call the usage API with reqwest
-    let url = format!("https://claude.ai/api/organizations/{}/usage", org_id);
-
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(false)
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let resp = client
-        .get(&url)
-        .header("Cookie", format!("sessionKey={}", session_key))
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
-
-    let status = resp.status();
-    let body = resp.text().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-    if status.is_success() {
-        Ok(body)
-    } else if status.as_u16() == 403 || status.as_u16() == 401 {
-        // Session expired — delete stored session
-        let _ = std::fs::remove_file(&session_path);
-        Err(format!("Session expired. Please log in again. ({})", body))
+    // Return the stored usage data
+    if let Some(usage) = session.get("usage") {
+        Ok(serde_json::to_string(usage).unwrap_or_else(|_| "{}".to_string()))
     } else {
-        Err(format!("Usage API error {}: {}", status, body))
+        Err("No usage data. Please log in again to refresh.".to_string())
     }
+}
+
+/// Start persistent usage polling — hidden webview that fetches every 60s
+#[tauri::command]
+pub async fn start_usage_polling(app: AppHandle) -> Result<(), String> {
+    let label = "claude-usage-poller";
+
+    // Already running
+    if app.get_webview_window(label).is_some() {
+        return Ok(());
+    }
+
+    // Need org ID
+    let config_dir = dirs_next::data_dir()
+        .or_else(dirs_next::home_dir)
+        .ok_or_else(|| "Cannot find config directory".to_string())?
+        .join("Buildor");
+    let session_path = config_dir.join("claude_session.json");
+    if !session_path.exists() {
+        return Err("No session. Please log in first.".to_string());
+    }
+    let content = std::fs::read_to_string(&session_path).unwrap_or_default();
+    let session: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+    let org_id = session["orgId"].as_str()
+        .ok_or_else(|| "No org ID. Please log in again.".to_string())?
+        .to_string();
+
+    // Create a tiny hidden webview — it holds the claude.ai session cookies
+    let url = WebviewUrl::External(
+        format!("https://claude.ai/api/organizations/{}/usage", org_id).parse().unwrap()
+    );
+    let _win = WebviewWindowBuilder::new(&app, label, url)
+        .title("Buildor Usage Poller")
+        .inner_size(1.0, 1.0)
+        .position(-9999.0, -9999.0)   // Off-screen
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| format!("Failed to create poller: {}", e))?;
+
+    // Background thread: every 60s navigate to the usage endpoint and read the JSON
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        // Initial wait for page to load
+        std::thread::sleep(std::time::Duration::from_secs(4));
+
+        loop {
+            if let Some(win) = app_handle.get_webview_window("claude-usage-poller") {
+                // Read the JSON from the page body via URL hash trick
+                let _ = win.eval(r#"
+                    try {
+                        var text = (document.body?.innerText || '').trim();
+                        if (text.startsWith('{') && text.includes('utilization')) {
+                            window.location.hash = 'buildor_usage_' + encodeURIComponent(text);
+                        }
+                    } catch(e) {}
+                "#);
+
+                std::thread::sleep(std::time::Duration::from_millis(800));
+
+                if let Ok(url) = win.url() {
+                    let url_str = url.as_str();
+                    if let Some(pos) = url_str.find("#buildor_usage_") {
+                        let encoded = &url_str[pos + 15..];
+                        if let Ok(usage_json) = urlencoding::decode(encoded) {
+                            let result = format!(
+                                r#"{{"orgId":"{}","usage":{}}}"#,
+                                org_id, usage_json
+                            );
+                            let _ = store_session_data(&result);
+                            let _ = app_handle.emit("usage-refreshed", result);
+                        }
+                    }
+                }
+
+                // Navigate back to refresh (gets fresh data)
+                let usage_url: tauri::Url = format!(
+                    "https://claude.ai/api/organizations/{}/usage", org_id
+                ).parse().unwrap();
+                let _ = win.navigate(usage_url);
+
+                // Wait 60 seconds before next poll
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            } else {
+                break; // Poller window was closed
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Stop usage polling
+#[tauri::command]
+pub async fn stop_usage_polling(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("claude-usage-poller") {
+        let _ = win.close();
+    }
+    Ok(())
 }
 
 /// Check if a stored session exists

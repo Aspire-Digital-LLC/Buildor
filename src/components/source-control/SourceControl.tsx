@@ -1,10 +1,11 @@
-import { useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useProjectStore, useGitStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import { ChangeList } from './ChangeList';
 import { UntrackedList } from './UntrackedList';
 import { DiffViewer } from './DiffViewer';
 import { GitMenu } from './GitMenu';
+import { ResizeHandle } from '../shared/ResizeHandle';
 
 export function SourceControl() {
   const { projectName, browsePath } = useTabContext();
@@ -29,6 +30,7 @@ export function SourceControl() {
     discardUntrackedFile,
     setCommitMessage,
   } = useGitStore();
+  const [fileListWidth, setFileListWidth] = useState(280);
 
   const repoPath = browsePath || activeProject?.repoPath;
 
@@ -238,9 +240,9 @@ export function SourceControl() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* File list */}
         <div style={{
-          width: diff ? 280 : '100%',
-          minWidth: diff ? 220 : undefined,
-          borderRight: diff ? '1px solid var(--border-primary)' : 'none',
+          width: diff ? fileListWidth : '100%',
+          minWidth: diff ? 180 : undefined,
+          maxWidth: diff ? 600 : undefined,
           overflow: 'auto',
           flexShrink: 0,
         }}>
@@ -294,7 +296,8 @@ export function SourceControl() {
           )}
         </div>
 
-        {/* Diff viewer — fills remaining space */}
+        {/* Resize handle + Diff viewer */}
+        {diff && <ResizeHandle onResize={(delta) => setFileListWidth((w) => Math.max(180, Math.min(600, w + delta)))} />}
         {diff && <DiffViewer />}
       </div>
     </div>

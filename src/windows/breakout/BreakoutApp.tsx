@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import type { PanelType } from '../../types';
+import { useThemeStore } from '@/stores/themeStore';
+import { applyTheme } from '@/themes/themes';
 import { SourceControl } from '../../components/source-control/SourceControl';
 import { CodeViewer } from '../../components/code-viewer/CodeViewer';
 import { FlowBuilder } from '../../components/flow-builder/FlowBuilder';
@@ -39,6 +42,9 @@ interface BreakoutAppProps {
 }
 
 export function BreakoutApp({ panelType }: BreakoutAppProps) {
+  const themeId = useThemeStore((s) => s.themeId);
+  useEffect(() => { applyTheme(themeId); }, [themeId]);
+
   const PanelComponent = panelMap[panelType] || SourceControl;
   const label = panelLabels[panelType] || 'Unknown Panel';
 

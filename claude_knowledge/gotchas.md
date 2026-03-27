@@ -109,6 +109,33 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Claude.ai Usage API Requires Web Session, Not OAuth Token
+
+**Context**: Trying to fetch usage data (session %, weekly %) from `claude.ai/api/organizations/{orgId}/usage`
+**Surprise**: The OAuth token from `~/.claude/.credentials.json` (`sk-ant-oat01-*`) works for Claude Code CLI and some `/api/bootstrap` endpoints, but NOT for the usage endpoint. It returns `account_session_invalid`. The usage API requires a web session with HttpOnly cookies that can't be read via `document.cookie`.
+**Impact**: Can't fetch usage stats with simple HTTP calls from Rust.
+**Workaround**: Open a Tauri webview to `claude.ai` which gets the session cookies. Navigate the webview to the API endpoint. Read JSON from the page body using `win.eval()` + `window.location.hash` (not `document.title` — Tauri doesn't sync document.title to native window title). Store org ID + usage in `%APPDATA%/Buildor/claude_session.json`. For continuous polling, keep a persistent hidden webview (1x1px, off-screen) that refetches every 60 seconds.
+
+---
+
+### Tauri document.title Not Synced to Native Window Title
+
+**Context**: Trying to pass data from injected JS in an external webview back to Rust via `document.title` / `win.title()`
+**Surprise**: In Tauri v2, setting `document.title` in a webview (via `win.eval()`) does NOT update what `win.title()` returns in Rust. The native window title is set independently by `WebviewWindowBuilder`.
+**Impact**: The `document.title` communication trick used in many Electron apps doesn't work in Tauri.
+**Workaround**: Use `window.location.hash` instead — set it from JS via `window.location.hash = 'buildor_data_' + encodedPayload`, then read it from Rust via `win.url()` and parse the hash fragment.
+
+---
+
+### Zustand Stores Not Shared Across Tauri Windows
+
+**Context**: Breakout windows (separate Tauri webviews) had missing usage data and theme despite the main window having it
+**Surprise**: Each Tauri webview has its own JavaScript context. Zustand stores are per-window — state changes in the main window don't propagate to breakout windows, even with `persist` middleware (different localStorage scopes).
+**Impact**: Breakout windows showed stale/empty data for usage stats and wrong theme.
+**Workaround**: Use Tauri events to broadcast across windows. For themes: `applyTheme()` emits `theme-changed` via `@tauri-apps/api/event.emit()`, all windows listen. For usage: a hidden poller webview emits `usage-refreshed`, all StatusBar instances listen. For per-window state that needs fresh data: read from shared files (like `claude_session.json`) or Rust backend on mount.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

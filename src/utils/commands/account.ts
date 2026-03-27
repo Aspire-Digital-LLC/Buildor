@@ -19,3 +19,11 @@ export async function clearClaudeSession(): Promise<void> {
 export async function triggerCliLogin(): Promise<string> {
   return invoke('trigger_cli_login');
 }
+
+export async function startUsagePolling(): Promise<void> {
+  return invoke('start_usage_polling');
+}
+
+export async function stopUsagePolling(): Promise<void> {
+  return invoke('stop_usage_polling');
+}

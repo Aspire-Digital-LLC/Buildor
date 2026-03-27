@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { LogsViewer } from './LogsViewer';
 import { ProjectSwitcher } from '../project-switcher/ProjectSwitcher';
 import { SharedMemory } from './SharedMemory';
 import { UpdateChecker } from './UpdateChecker';
 import { ThemeSettings } from './ThemeSettings';
+import { AccountSettings } from './AccountSettings';
 
-type SettingsSection = 'projects' | 'themes' | 'logs' | 'shared-memory' | 'updates';
+type SettingsSection = 'account' | 'projects' | 'themes' | 'logs' | 'shared-memory' | 'updates';
 
 const sections: { id: SettingsSection; label: string }[] = [
+  { id: 'account', label: 'Account' },
   { id: 'projects', label: 'Projects' },
   { id: 'themes', label: 'Themes' },
   { id: 'logs', label: 'Logs' },
@@ -16,7 +19,19 @@ const sections: { id: SettingsSection; label: string }[] = [
 ];
 
 export function Settings() {
-  const [active, setActive] = useState<SettingsSection>('projects');
+  const [active, setActive] = useState<SettingsSection>('account');
+
+  // Listen for navigation events from other components (e.g. status bar icon)
+  useEffect(() => {
+    const handler = (event: BuildorEvent) => {
+      const section = (event.data as { section?: string })?.section;
+      if (section && sections.some((s) => s.id === section)) {
+        setActive(section as SettingsSection);
+      }
+    };
+    buildorEvents.on('navigate-settings', handler);
+    return () => { buildorEvents.off('navigate-settings', handler); };
+  }, []);
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
@@ -66,6 +81,7 @@ export function Settings() {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
+        {active === 'account' && <AccountSettings />}
         {active === 'projects' && <ProjectSwitcher />}
         {active === 'themes' && <ThemeSettings />}
         {active === 'logs' && <LogsViewer />}

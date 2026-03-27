@@ -28,7 +28,13 @@
 - [x] **Always Allow persistence**: saves permission rules to .claude/settings.local.json
 - [x] **Collapsible Skills & Flows palette**: right-side panel, collapses to thin vertical bar with sideways text, click to expand/collapse
 - [x] **Event system**: buildorEvents bus (permissions, costs, branch-switched, turn-completed, usage-updated)
-- [x] **StatusBar**: VS Code-style full-width bottom bar with git branch, project, model, session cost, plan type badge, context window % (with mini progress bar), session token count, weekly usage %, reset countdown. Uses usageStore (Zustand) subscribed to event bus. Polls `claude status` CLI every 5min for plan/quota data.
+- [x] **StatusBar**: VS Code-style full-width bottom bar — plan badge (reads ~/.claude/.credentials.json), CTX % (per-session, from stream tokens), session usage % + reset time, weekly usage % + reset time. Claude sparkle icon (right corner) — slashed when logged out, solid when logged in, click opens login or settings. Usage polling via hidden webview every 60s.
+- [x] **Claude Account (Settings)**: Login via Tauri webview to claude.ai, captures org ID + usage data. Account section shows plan, usage bars with Refresh, sign out. Session stored at %APPDATA%/Buildor/claude_session.json.
+- [x] **Usage data pipeline**: Hidden webview polls claude.ai/api/organizations/{orgId}/usage every 60s. Emits `usage-refreshed` Tauri event. All windows (main + breakout) listen and update status bars in real-time.
+- [x] **Chat UX polish**: Escape interrupts Claude, Send button becomes Stop (circle-square icon) while thinking, ThinkingIndicator with waveform animation + tool activity label, sticky permission banner above input, resizable side panels (Code Viewer + Source Control).
+- [x] **Conversation mode**: System messages/tool cards fade out after 5s. Only user bubbles (right-aligned), assistant bubbles (left-aligned), and pending permissions remain. Cost/turn stats verbose-only. Resolved permissions fade after 3s.
+- [x] **Glowing border (breakout windows)**: Chat area border pulses blue when working, flutters orange for attention/permissions, solid red on error. Driven by event bus. 4px border + 6px outline + inset shadow.
+- [x] **Theme sync across windows**: applyTheme broadcasts `theme-changed` Tauri event. All breakout windows listen and apply immediately.
 - [x] **Theme system**: 7 themes (Midnight, Ocean, Forest, Aurora, Copper, Arctic, Sakura) with CSS variable architecture, persisted via Zustand+localStorage, dynamic Tauri title bar dark/light switching, ThemeSettings picker in Settings panel with mini app-mockup previews
 - [x] **Skills**: /document and /read-logs in .claude/skills/
 - [x] **Data persistence**: OS-standard paths (%APPDATA% on Windows)

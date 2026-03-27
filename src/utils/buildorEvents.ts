@@ -24,7 +24,8 @@ export type BuildorEventType =
   | 'cost-updated'            // Running cost changed
   | 'turn-completed'          // Claude finished responding to a message
   | 'branch-switched'         // User switched a checked-out branch
-  | 'usage-updated';          // Token usage / context window updated
+  | 'usage-updated'           // Token usage / context window updated
+  | 'navigate-settings';      // Navigate to a specific settings section
 
 export interface BuildorEvent<T = unknown> {
   type: BuildorEventType;

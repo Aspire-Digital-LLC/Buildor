@@ -204,7 +204,7 @@ export function getThemeById(id: string): ThemeDefinition {
 }
 
 /** Apply a theme's CSS variables to the document root and update the window chrome */
-export function applyTheme(themeId: string): void {
+export function applyTheme(themeId: string, broadcast = true): void {
   const t = getThemeById(themeId);
   const root = document.documentElement;
   for (const [key, value] of Object.entries(t.vars)) {
@@ -215,5 +215,21 @@ export function applyTheme(themeId: string): void {
   // Update Tauri window title bar theme (dark/light)
   import('@tauri-apps/api/app').then(({ setTheme }) => {
     setTheme(t.dark ? 'dark' : 'light').catch(() => {});
+  }).catch(() => {});
+
+  // Broadcast to all windows so breakout windows sync
+  if (broadcast) {
+    import('@tauri-apps/api/event').then(({ emit }) => {
+      emit('theme-changed', themeId).catch(() => {});
+    }).catch(() => {});
+  }
+}
+
+// Listen for theme changes from other windows
+if (typeof window !== 'undefined') {
+  import('@tauri-apps/api/event').then(({ listen }) => {
+    listen<string>('theme-changed', (event) => {
+      applyTheme(event.payload, false); // false = don't re-broadcast
+    }).catch(() => {});
   }).catch(() => {});
 }

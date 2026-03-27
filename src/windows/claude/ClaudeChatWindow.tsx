@@ -2,11 +2,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
+import { useThemeStore } from '@/stores/themeStore';
+import { applyTheme } from '@/themes/themes';
 import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
+import type { ChatContent } from '@/components/claude-chat/ChatMessage';
+import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
 import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from '@/components/claude-chat/SlashCommandMenu';
+import { ThinkingIndicator } from '@/components/claude-chat/ThinkingIndicator';
+import { useChatGlow, getGlowStyle } from '@/components/claude-chat/useChatGlow';
 import { StatusBar } from '@/components/layout/StatusBar';
 
 export function ClaudeChatWindow() {
@@ -25,8 +31,17 @@ export function ClaudeChatWindow() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dynamicCommands, setDynamicCommands] = useState<SlashCommand[]>([]);
+  const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatState = useChatGlow(sessionId, isSending);
+  const glowStyle = getGlowStyle(chatState);
+
+  // Apply theme to this window (breakout windows have their own document)
+  const themeId = useThemeStore((s) => s.themeId);
+  useEffect(() => {
+    applyTheme(themeId);
+  }, [themeId]);
 
   // Auto-scroll
   useEffect(() => {
@@ -91,6 +106,10 @@ export function ClaudeChatWindow() {
           setIsSending(false);
           setTimeout(() => inputRef.current?.focus(), 50);
         }
+        const permBlock = parsed.content.find((c: ChatContent) => c.type === 'permission_request');
+        if (permBlock && permBlock.requestId) {
+          setPermissionQueue((q) => [...q, permBlock.requestId!]);
+        }
         setMessages((prev) => [...prev, parsed]);
       }
     });
@@ -101,9 +120,20 @@ export function ClaudeChatWindow() {
       setIsSending(false);
     });
 
+    const onPermResolved = (event: BuildorEvent) => {
+      if (event.sessionId === sessionId) {
+        const data = event.data as { requestId?: string };
+        if (data.requestId) {
+          setPermissionQueue((q) => q.filter((id) => id !== data.requestId));
+        }
+      }
+    };
+    buildorEvents.on('permission-resolved', onPermResolved);
+
     return () => {
       unlistenOutput.then((fn) => fn());
       unlistenExit.then((fn) => fn());
+      buildorEvents.off('permission-resolved', onPermResolved);
     };
   }, [sessionId, model]);
 
@@ -372,6 +402,16 @@ export function ClaudeChatWindow() {
       setShowModelPicker(false);
       return;
     }
+    // Escape interrupts while Claude is thinking
+    if (e.key === 'Escape' && isSending && sessionId) {
+      e.preventDefault();
+      stopSession(sessionId).then(() => {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Interrupted.' }] }]);
+        setSessionId(null);
+        setIsSending(false);
+      });
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -387,11 +427,8 @@ export function ClaudeChatWindow() {
       color: 'var(--text-primary)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     }}>
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-      {/* Chat area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{
+      {/* Header — above the glow */}
+      <div style={{
           padding: '8px 12px',
           borderBottom: '1px solid var(--border-primary)',
           display: 'flex',
@@ -466,6 +503,13 @@ export function ClaudeChatWindow() {
           </div>
         </div>
 
+      {/* Body — glow wraps messages + palette + input */}
+      <div style={{
+        display: 'flex', flex: 1, overflow: 'hidden',
+        transition: 'box-shadow 0.5s ease',
+        ...glowStyle,
+      }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Messages */}
         <div ref={outputRef} style={{
           flex: 1,
@@ -473,9 +517,13 @@ export function ClaudeChatWindow() {
           background: 'var(--bg-inset)',
         }}>
           {messages.map((msg, i) => (
-            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} />
+            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} activePermissionId={permissionQueue[0] || null} />
           ))}
         </div>
+
+        {/* Thinking animation */}
+        {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}
+
 
         {/* Input */}
         {sessionId && (
@@ -527,22 +575,28 @@ export function ClaudeChatWindow() {
                 opacity: isSending ? 0.6 : 1,
               }}
             />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isSending}
-              style={{
-                background: input.trim() && !isSending ? '#238636' : 'var(--border-primary)',
-                border: 'none',
-                color: input.trim() && !isSending ? '#fff' : 'var(--text-tertiary)',
-                borderRadius: 6,
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: input.trim() && !isSending ? 'pointer' : 'default',
-              }}
-            >
-              Send
-            </button>
+            {isSending ? (
+              <button onClick={handleStop} style={{
+                background: '#da3633', border: 'none', color: '#fff',
+                borderRadius: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              }} title="Stop (Esc)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="#fff" strokeWidth="2" />
+                  <rect x="8" y="8" width="8" height="8" rx="1" fill="#fff" />
+                </svg>
+                Stop
+              </button>
+            ) : (
+              <button onClick={handleSend} disabled={!input.trim()} style={{
+                background: input.trim() ? '#238636' : 'var(--border-primary)',
+                border: 'none', color: input.trim() ? '#fff' : 'var(--text-tertiary)',
+                borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                cursor: input.trim() ? 'pointer' : 'default',
+              }}>
+                Send
+              </button>
+            )}
           </div>
         )}
       </div>

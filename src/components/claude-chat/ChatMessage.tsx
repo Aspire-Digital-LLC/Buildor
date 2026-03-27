@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -27,6 +27,7 @@ interface ChatMessageProps {
   message: ParsedMessage;
   sessionId?: string;
   isVerbose: boolean;
+  activePermissionId?: string | null;
 }
 
 const toolIcons: Record<string, string> = {
@@ -42,22 +43,34 @@ const toolIcons: Record<string, string> = {
   TodoWrite: '📋',
 };
 
-export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps) {
+export function ChatMessage({ message, isVerbose, sessionId, activePermissionId }: ChatMessageProps) {
   if (message.role === 'user') {
     return (
-      <div style={{ padding: '8px 12px', marginBottom: 4 }}>
+      <div style={{ padding: '8px 12px', marginBottom: 4, display: 'flex', justifyContent: 'flex-end' }}>
         <div style={{
-          fontSize: 13,
-          color: 'var(--accent-primary)',
-          fontWeight: 600,
-          marginBottom: 4,
-        }}>You</div>
-        <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{message.content[0]?.text || ''}</div>
+          maxWidth: '80%',
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-secondary)',
+          borderRadius: 12,
+          borderBottomRightRadius: 4,
+          padding: '8px 14px',
+        }}>
+          <div style={{
+            fontSize: 13,
+            color: 'var(--accent-primary)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}>{message.content[0]?.text || ''}</div>
+        </div>
       </div>
     );
   }
 
   if (message.role === 'system') {
+    if (!isVerbose) {
+      // In conversation mode, system messages fade out after 5s
+      return <FadingMessage>{message.content[0]?.text || ''}</FadingMessage>;
+    }
     return (
       <div style={{
         padding: '4px 12px',
@@ -70,12 +83,28 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
     );
   }
 
+  // In conversation mode, skip messages that have no visible content (only tools, no text)
+  if (!isVerbose) {
+    const hasText = message.content.some((b) => b.type === 'text' && b.text);
+    const hasPending = message.content.some((b) => b.type === 'permission_request');
+    if (!hasText && !hasPending) return null;
+  }
+
   return (
-    <div style={{ padding: '8px 12px', marginBottom: 4 }}>
+    <div style={{ padding: '8px 12px', marginBottom: 4, maxWidth: '90%' }}>
       {message.content.map((block, i) => {
         if (block.type === 'text' && block.text) {
+          // In conversation mode, put assistant text in a left-aligned bubble
+          const bubbleStyle = !isVerbose ? {
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-primary)',
+            borderRadius: 12,
+            borderBottomLeftRadius: 4,
+            padding: '10px 16px',
+          } : {};
           return (
-            <div key={i} className="chat-markdown" style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+            <div key={i} style={bubbleStyle}>
+            <div className="chat-markdown" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}
                 components={{
                   code({ className, children, ...props }) {
@@ -153,13 +182,24 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
                   a({ href, children }) {
                     return <a href={href} style={{ color: 'var(--accent-primary)' }} target="_blank" rel="noopener noreferrer">{children}</a>;
                   },
+                  ul({ children }) {
+                    return <ul style={{ margin: '4px 0', paddingLeft: '1.2em', listStylePosition: 'outside' }}>{children}</ul>;
+                  },
+                  ol({ children }) {
+                    return <ol style={{ margin: '4px 0', paddingLeft: '1.2em', listStylePosition: 'outside' }}>{children}</ol>;
+                  },
+                  li({ children }) {
+                    return <li style={{ marginBottom: 2 }}>{children}</li>;
+                  },
                 }}
               >{block.text}</ReactMarkdown>
+            </div>
             </div>
           );
         }
 
         if (block.type === 'tool_use') {
+          if (!isVerbose) return null;
           const icon = toolIcons[block.name || ''] || '🔧';
           const isEdit = block.name === 'Edit';
           return (
@@ -230,6 +270,8 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
         }
 
         if (block.type === 'permission_request') {
+          // Only show if this is the active (first unresolved) permission
+          if (activePermissionId && block.requestId !== activePermissionId) return null;
           return (
             <PermissionCard
               key={i}
@@ -239,6 +281,7 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
               toolUseId={block.toolUseId || ''}
               requestId={block.requestId || ''}
               sessionId={sessionId}
+              isVerbose={isVerbose}
             />
           );
         }
@@ -246,12 +289,40 @@ export function ChatMessage({ message, isVerbose, sessionId }: ChatMessageProps)
         return null;
       })}
 
-      {/* Cost badge */}
-      {message.costUsd !== undefined && message.costUsd > 0 && (
+      {/* Cost badge — verbose only */}
+      {isVerbose && message.costUsd !== undefined && message.costUsd > 0 && (
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>
           ${message.costUsd.toFixed(4)} · {message.durationMs ? `${(message.durationMs / 1000).toFixed(1)}s` : ''}
         </div>
       )}
+    </div>
+  );
+}
+
+function FadingMessage({ children }: { children: ReactNode }) {
+  const [phase, setPhase] = useState<'visible' | 'fading' | 'gone'>('visible');
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase('fading'), 4000);
+    const t2 = setTimeout(() => setPhase('gone'), 5500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
+  if (phase === 'gone') return null;
+
+  return (
+    <div style={{
+      fontSize: 11,
+      color: 'var(--text-tertiary)',
+      fontStyle: 'italic',
+      overflow: 'hidden',
+      transition: 'opacity 1.2s ease-out, max-height 0.8s ease-out, padding 0.8s ease-out, margin 0.8s ease-out',
+      opacity: phase === 'fading' ? 0 : 0.7,
+      maxHeight: phase === 'fading' ? 0 : 60,
+      padding: phase === 'fading' ? '0 12px' : '3px 12px',
+      margin: phase === 'fading' ? 0 : undefined,
+    }}>
+      {children}
     </div>
   );
 }
@@ -288,15 +359,29 @@ function ToolCard({ icon, name, children }: {
   );
 }
 
-function PermissionCard({ toolName, description, input, toolUseId, requestId, sessionId }: {
+function PermissionCard({ toolName, description, input, toolUseId, requestId, sessionId, isVerbose }: {
   toolName: string;
   description: string;
   input?: Record<string, unknown>;
   toolUseId: string;
   requestId: string;
   sessionId?: string;
+  isVerbose: boolean;
 }) {
   const [resolved, setResolved] = useState<'approved' | 'denied' | null>(null);
+  const [fading, setFading] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  // In conversation mode, fade out after resolution
+  useEffect(() => {
+    if (resolved && !isVerbose) {
+      const fadeTimer = setTimeout(() => setFading(true), 3000);
+      const hideTimer = setTimeout(() => setHidden(true), 4500);
+      return () => { clearTimeout(fadeTimer); clearTimeout(hideTimer); };
+    }
+  }, [resolved, isVerbose]);
+
+  if (hidden) return null;
 
   const handleResponse = async (approved: boolean) => {
     if (!sessionId || resolved) return;
@@ -325,6 +410,9 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
       border: `1px solid ${resolved === 'approved' ? '#3fb950' : resolved === 'denied' ? '#f85149' : '#d29922'}`,
       borderRadius: 8,
       margin: '8px 0',
+      transition: 'opacity 1.5s ease-out, max-height 0.5s ease-out',
+      opacity: fading ? 0 : 1,
+      maxHeight: fading ? 0 : 500,
       overflow: 'hidden',
     }}>
       <div style={{

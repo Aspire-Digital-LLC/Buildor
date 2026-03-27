@@ -4,10 +4,12 @@ import { useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import { invoke } from '@tauri-apps/api/core';
 import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
+import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
-import { ChatMessage, type ParsedMessage } from './ChatMessage';
+import { ChatMessage, type ParsedMessage, type ChatContent } from './ChatMessage';
 import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from './SlashCommandMenu';
+import { ThinkingIndicator } from './ThinkingIndicator';
 
 export function ClaudeChat() {
   const { projectName, browsePath, browseBranch } = useTabContext();
@@ -28,8 +30,10 @@ export function ClaudeChat() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dynamicCommands, setDynamicCommands] = useState<SlashCommand[]>([]);
+  const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Glow is only for breakout windows — not used here
 
   // Auto-scroll
   useEffect(() => {
@@ -64,6 +68,11 @@ export function ClaudeChat() {
           setIsSending(false);
           setTimeout(() => inputRef.current?.focus(), 50);
         }
+        // Queue permission requests — only first unresolved one shows at a time
+        const permBlock = parsed.content.find((c: ChatContent) => c.type === 'permission_request');
+        if (permBlock && permBlock.requestId) {
+          setPermissionQueue((q) => [...q, permBlock.requestId!]);
+        }
         setMessages((prev) => [...prev, parsed]);
       }
     });
@@ -74,9 +83,21 @@ export function ClaudeChat() {
       setIsSending(false);
     });
 
+    // When a permission is resolved, remove it from queue so next one shows
+    const onPermResolved = (event: BuildorEvent) => {
+      if (event.sessionId === sessionId) {
+        const data = event.data as { requestId?: string };
+        if (data.requestId) {
+          setPermissionQueue((q) => q.filter((id) => id !== data.requestId));
+        }
+      }
+    };
+    buildorEvents.on('permission-resolved', onPermResolved);
+
     return () => {
       unlistenOutput.then((fn) => fn());
       unlistenExit.then((fn) => fn());
+      buildorEvents.off('permission-resolved', onPermResolved);
     };
   }, [sessionId, model]);
 
@@ -291,6 +312,16 @@ export function ClaudeChat() {
       if (e.key === 'Escape') { setShowSlashMenu(false); return; }
     }
     if (showModelPicker && e.key === 'Escape') { setShowModelPicker(false); return; }
+    // Escape interrupts while Claude is thinking
+    if (e.key === 'Escape' && isSending && sessionId) {
+      e.preventDefault();
+      stopSession(sessionId).then(() => {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Interrupted.' }] }]);
+        setSessionId(null);
+        setIsSending(false);
+      });
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
@@ -305,65 +336,69 @@ export function ClaudeChat() {
   const branchLabel = browseBranch || activeProject.currentBranch || 'main';
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      {/* Chat area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid var(--border-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-          background: 'var(--bg-secondary)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Claude Chat</span>
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 10 }}>
-              {activeProject.name}
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--accent-primary)', fontFamily: "'Cascadia Code', monospace" }}>
-              {branchLabel}
-            </span>
-            {sessionId && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block' }} />}
-            {model && <span style={{ fontSize: 10, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 8 }}>{model}</span>}
-            {isSending && <span style={{ fontSize: 11, color: '#d29922', fontStyle: 'italic' }}>thinking...</span>}
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => setIsVerbose(!isVerbose)} style={{
-              background: isVerbose ? 'var(--bg-active)' : 'var(--border-primary)',
-              border: `1px solid ${isVerbose ? 'var(--accent-secondary)' : 'var(--border-secondary)'}`,
-              color: isVerbose ? 'var(--accent-primary)' : 'var(--text-secondary)',
-              borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-            }}>
-              {isVerbose ? 'Verbose' : 'Conversation'}
-            </button>
-            {!sessionId && repoPath ? (
-              <button onClick={() => startClaude(repoPath)} disabled={isStarting} style={{
-                background: '#238636', border: 'none', color: '#fff', borderRadius: 6,
-                padding: '4px 14px', fontSize: 13, fontWeight: 600,
-                cursor: isStarting ? 'default' : 'pointer', opacity: isStarting ? 0.6 : 1,
-              }}>
-                {isStarting ? 'Starting...' : 'Restart'}
-              </button>
-            ) : sessionId ? (
-              <button onClick={handleStop} style={{
-                background: 'var(--border-primary)', border: '1px solid #da3633', color: '#f85149',
-                borderRadius: 6, padding: '4px 12px', fontSize: 13, cursor: 'pointer',
-              }}>
-                Stop
-              </button>
-            ) : null}
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header — above the glow */}
+      <div style={{
+        padding: '8px 12px',
+        borderBottom: '1px solid var(--border-primary)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+        background: 'var(--bg-secondary)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Claude Chat</span>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 10 }}>
+            {activeProject.name}
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--accent-primary)', fontFamily: "'Cascadia Code', monospace" }}>
+            {branchLabel}
+          </span>
+          {sessionId && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block' }} />}
+          {model && <span style={{ fontSize: 10, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 8 }}>{model}</span>}
+          {isSending && <span style={{ fontSize: 11, color: '#d29922', fontStyle: 'italic' }}>thinking...</span>}
         </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setIsVerbose(!isVerbose)} style={{
+            background: isVerbose ? 'var(--bg-active)' : 'var(--border-primary)',
+            border: `1px solid ${isVerbose ? 'var(--accent-secondary)' : 'var(--border-secondary)'}`,
+            color: isVerbose ? 'var(--accent-primary)' : 'var(--text-secondary)',
+            borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+          }}>
+            {isVerbose ? 'Verbose' : 'Conversation'}
+          </button>
+          {!sessionId && repoPath ? (
+            <button onClick={() => startClaude(repoPath)} disabled={isStarting} style={{
+              background: '#238636', border: 'none', color: '#fff', borderRadius: 6,
+              padding: '4px 14px', fontSize: 13, fontWeight: 600,
+              cursor: isStarting ? 'default' : 'pointer', opacity: isStarting ? 0.6 : 1,
+            }}>
+              {isStarting ? 'Starting...' : 'Restart'}
+            </button>
+          ) : sessionId ? (
+            <button onClick={handleStop} style={{
+              background: 'var(--border-primary)', border: '1px solid #da3633', color: '#f85149',
+              borderRadius: 6, padding: '4px 12px', fontSize: 13, cursor: 'pointer',
+            }}>
+              Stop
+            </button>
+          ) : null}
+        </div>
+      </div>
 
+      {/* Body — messages + palette + input */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Messages */}
         <div ref={outputRef} style={{ flex: 1, overflow: 'auto', background: 'var(--bg-inset)' }}>
           {messages.map((msg, i) => (
-            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} />
+            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} activePermissionId={permissionQueue[0] || null} />
           ))}
         </div>
+
+        {/* Thinking animation */}
+        {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}
 
         {/* Input */}
         {sessionId && (
@@ -385,19 +420,33 @@ export function ClaudeChat() {
                 fontFamily: "'Cascadia Code', 'Consolas', monospace", opacity: isSending ? 0.6 : 1,
               }}
             />
-            <button onClick={handleSend} disabled={!input.trim() || isSending} style={{
-              background: input.trim() && !isSending ? '#238636' : 'var(--border-primary)',
-              border: 'none', color: input.trim() && !isSending ? '#fff' : 'var(--text-tertiary)',
-              borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              cursor: input.trim() && !isSending ? 'pointer' : 'default',
-            }}>
-              Send
-            </button>
+            {isSending ? (
+              <button onClick={handleStop} style={{
+                background: '#da3633', border: 'none', color: '#fff',
+                borderRadius: 6, padding: '8px 14px', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              }} title="Stop (Esc)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="#fff" strokeWidth="2" />
+                  <rect x="8" y="8" width="8" height="8" rx="1" fill="#fff" />
+                </svg>
+                Stop
+              </button>
+            ) : (
+              <button onClick={handleSend} disabled={!input.trim()} style={{
+                background: input.trim() ? '#238636' : 'var(--border-primary)',
+                border: 'none', color: input.trim() ? '#fff' : 'var(--text-tertiary)',
+                borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                cursor: input.trim() ? 'pointer' : 'default',
+              }}>
+                Send
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Collapsible palette sidebar — RIGHT side */}
+      {/* Collapsible palette sidebar — inside the glow wrapper */}
       {paletteOpen ? (
         <div style={{
           width: 220,
@@ -462,6 +511,7 @@ export function ClaudeChat() {
           Skills & Flows
         </div>
       )}
+      </div>{/* close glow wrapper */}
     </div>
   );
 }

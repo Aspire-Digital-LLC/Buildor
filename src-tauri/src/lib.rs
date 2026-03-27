@@ -82,6 +82,8 @@ pub fn run() {
             commands::account::has_claude_session,
             commands::account::clear_claude_session,
             commands::account::trigger_cli_login,
+            commands::account::start_usage_polling,
+            commands::account::stop_usage_polling,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
