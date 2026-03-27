@@ -118,3 +118,30 @@ Architectural and design decisions with rationale. Each entry explains why X was
 **Rejected**: Custom rendered title bar within the webview
 
 **Why**: A custom title bar created a duplicate bar below the native one — confusing and wasteful of vertical space. The native title bar is free, always visible, and consistent with OS conventions. Version comes from tauri.conf.json, synced with the VERSION file.
+
+---
+
+## Grouped Sidebar Dropdowns over Flat Project Lists
+
+**Choice**: Sidebar icons for Code Viewer, Source Control, and Claude Chat show a grouped dropdown with project headers (non-clickable), checked-out branches, and worktree branches beneath each project
+**Rejected**: Flat project list where clicking opens the panel for the whole project
+
+**Why**: Developers work across multiple branches and worktrees simultaneously. A flat list forces one view per project. The grouped dropdown lets you open separate tabs for each branch/worktree — "Code Viewer for optiai-me/main" alongside "Code Viewer for optiai-me/feature-branch". Claude Chat dropdown intentionally excludes worktrees since those have their own breakout windows.
+
+---
+
+## Slash Commands Handled at App Layer over Pass-Through
+
+**Choice**: Intercept /commands in the chat input and handle them in Buildor's app code
+**Rejected**: Passing slash commands through to the Claude Code CLI
+
+**Why**: Claude Code's slash commands only work in interactive terminal mode — they're not supported in `--print` mode with `stream-json` protocol. By handling them in the app layer, we can implement equivalents: `/model` restarts the session with `--model` flag and replays conversation context; `/login` and `/logout` spawn `claude login/logout` as separate subprocesses for browser OAuth; `/clear` resets the session. The autocomplete UX matches developer expectations from VS Code command palettes.
+
+---
+
+## Collapsible Palette as Vertical Bar over Toggle Button
+
+**Choice**: Skills & Flows palette collapses to a thin vertical bar with sideways text on the right edge
+**Rejected**: Toggle button in the header that shows/hides the palette completely
+
+**Why**: A toggle button that makes the palette disappear entirely loses the visual affordance — users forget it exists. A persistent thin bar with sideways "SKILLS & FLOWS" text (VS Code's Debug Console pattern) maintains discoverability while reclaiming horizontal space. Clicking the bar expands, clicking the header chevron collapses.

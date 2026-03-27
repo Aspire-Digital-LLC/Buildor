@@ -439,7 +439,7 @@ export function Sidebar() {
                       <path d="M6 3v12" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
                     </svg>
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{project.currentBranch || 'main'}</span>
-                    {(changeCounts[project.repoPath] || 0) > 0 && (
+                    {dropdown.panelType === 'source-control' && (changeCounts[project.repoPath] || 0) > 0 && (
                       <span style={{
                         minWidth: 18, height: 18, borderRadius: 9,
                         backgroundColor: '#1f6feb', color: '#fff',
@@ -452,8 +452,8 @@ export function Sidebar() {
                     )}
                   </div>
 
-                  {/* Worktrees (only if any exist for this project) */}
-                  {projectSessions.length > 0 && (
+                  {/* Worktrees (only for code-viewer and source-control, not claude-chat) */}
+                  {dropdown.panelType !== 'claude-chat' && projectSessions.length > 0 && (
                     <>
                       <div style={{
                         padding: '6px 12px 2px 20px',
@@ -492,7 +492,7 @@ export function Sidebar() {
                             <path d="M6 3v18" /><path d="M6 9h6a2 2 0 0 1 2 2v0a2 2 0 0 0 2 2h2" />
                           </svg>
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.branchName}</span>
-                          {(changeCounts[session.worktreePath] || 0) > 0 && (
+                          {dropdown.panelType === 'source-control' && (changeCounts[session.worktreePath] || 0) > 0 && (
                             <span style={{
                               minWidth: 18, height: 18, borderRadius: 9,
                               backgroundColor: '#1f6feb', color: '#fff',

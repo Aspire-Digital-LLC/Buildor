@@ -271,18 +271,6 @@ export function ClaudeChat() {
             }}>
               {isVerbose ? 'Verbose' : 'Conversation'}
             </button>
-            {/* Palette toggle */}
-            <button onClick={() => setPaletteOpen(!paletteOpen)} style={{
-              background: paletteOpen ? '#1a2332' : '#21262d',
-              border: `1px solid ${paletteOpen ? '#1f6feb' : '#30363d'}`,
-              color: paletteOpen ? '#58a6ff' : '#8b949e',
-              borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer',
-            }} title="Toggle palette">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M15 3v18" />
-              </svg>
-            </button>
             {!sessionId && repoPath ? (
               <button onClick={() => startClaude(repoPath)} disabled={isStarting} style={{
                 background: '#238636', border: 'none', color: '#fff', borderRadius: 6,
@@ -342,7 +330,7 @@ export function ClaudeChat() {
       </div>
 
       {/* Collapsible palette sidebar — RIGHT side */}
-      {paletteOpen && (
+      {paletteOpen ? (
         <div style={{
           width: 220,
           borderLeft: '1px solid #21262d',
@@ -351,16 +339,26 @@ export function ClaudeChat() {
           flexDirection: 'column',
           flexShrink: 0,
         }}>
-          <div style={{
-            padding: '12px',
-            fontSize: 11,
-            fontWeight: 600,
-            color: '#8b949e',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            borderBottom: '1px solid #21262d',
-          }}>
+          <div
+            onClick={() => setPaletteOpen(false)}
+            style={{
+              padding: '12px',
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#8b949e',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              borderBottom: '1px solid #21262d',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
             Skills & Flows
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
           </div>
           <div style={{
             padding: 16, color: '#484f58', fontSize: 12, textAlign: 'center',
@@ -368,6 +366,32 @@ export function ClaudeChat() {
           }}>
             Command palette coming soon
           </div>
+        </div>
+      ) : (
+        <div
+          onClick={() => setPaletteOpen(true)}
+          style={{
+            width: 28,
+            borderLeft: '1px solid #21262d',
+            background: '#0d1117',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            cursor: 'pointer',
+            writingMode: 'vertical-rl',
+            textOrientation: 'mixed',
+            fontSize: 10,
+            fontWeight: 600,
+            color: '#484f58',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            userSelect: 'none',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#161b22'; e.currentTarget.style.color = '#8b949e'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#0d1117'; e.currentTarget.style.color = '#484f58'; }}
+        >
+          Skills & Flows
         </div>
       )}
     </div>
