@@ -39,7 +39,8 @@
       "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 5 2>&1)",
       "Bash(cp \"$APPDATA/ProductaFlows/config.json\" \"$APPDATA/Buildor/config.json\")",
       "Bash(cp -r \"$APPDATA/ProductaFlows/projects\" \"$APPDATA/Buildor/\")",
-      "Bash(gh repo:*)"
+      "Bash(gh repo:*)",
+      "Bash(bash C:/Git/ProductaFlows/scripts/read-logs.sh --last 15 2>&1)"
     ]
   }
 }

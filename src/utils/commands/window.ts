@@ -5,7 +5,7 @@ import type { PanelType } from '@/types';
 export async function openBreakoutWindow(panelType: PanelType, title: string): Promise<WebviewWindow> {
   const label = `breakout-${panelType}-${Date.now()}`;
   const webview = new WebviewWindow(label, {
-    url: 'index.html',
+    url: '/',
     title,
     width: 800,
     height: 600,

@@ -142,7 +142,7 @@ export function WorktreeManager() {
       const label = `claude-${session.sessionId.slice(0, 8)}`;
 
       const webview = new WebviewWindow(label, {
-        url: 'index.html',
+        url: '/',
         title: `Claude — ${session.branchName}`,
         width: Math.floor(screenWidth * 0.5),
         height: Math.floor(screenHeight * 0.85),

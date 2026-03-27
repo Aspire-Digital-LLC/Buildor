@@ -258,7 +258,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
 
                   const label = `claude-${createdSession.sessionId.slice(0, 8)}`;
                   const webview = new WebviewWindow(label, {
-                    url: `index.html`,
+                    url: '/',
                     title: `Claude — ${createdSession.branchName}`,
                     width: winWidth,
                     height: winHeight,
@@ -273,7 +273,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
                       functionArea: 'claude-chat',
                       level: 'error',
                       operation: 'launch-window',
-                      message: `Failed to open Claude window: ${String(e)}`,
+                      message: `Failed to open Claude window: ${JSON.stringify(e)}`,
                     }).catch(() => {});
                   });
 
