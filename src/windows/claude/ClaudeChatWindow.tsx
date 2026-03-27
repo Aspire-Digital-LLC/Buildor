@@ -14,6 +14,7 @@ import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, t
 import { ThinkingIndicator } from '@/components/claude-chat/ThinkingIndicator';
 import { useChatGlow, getGlowStyle } from '@/components/claude-chat/useChatGlow';
 import { StatusBar } from '@/components/layout/StatusBar';
+import '@/utils/sounds'; // Initialize sound event listeners
 
 export function ClaudeChatWindow() {
   const [sessionId, setSessionId] = useState<string | null>(null);
