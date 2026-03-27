@@ -41,6 +41,7 @@ pub fn run() {
             commands::flow::list_flows,
             commands::flow::get_flow,
             commands::flow::execute_flow,
+            commands::claude::generate_slug,
             commands::claude::start_session,
             commands::claude::send_message,
             commands::claude::get_session_status,

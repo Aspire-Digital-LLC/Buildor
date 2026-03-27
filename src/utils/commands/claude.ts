@@ -1,5 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 
+export async function generateSlug(description: string): Promise<string> {
+  return invoke('generate_slug', { description });
+}
+
 export async function startClaudeSession(workingDir: string): Promise<string> {
   return invoke('start_session', { workingDir });
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/stores';
-import { getBranchesForRepo } from '@/utils/commands/worktree';
-import { createSession } from '@/utils/commands/worktree';
+import { getBranchesForRepo, createSession } from '@/utils/commands/worktree';
+import { generateSlug as generateSlugViaHaiku } from '@/utils/commands/claude';
 import { logEvent } from '@/utils/commands/logging';
 import type { Project, SessionInfo, SessionType } from '@/types';
 
@@ -69,7 +69,8 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
     b.toLowerCase().includes(branchSearch.toLowerCase())
   );
 
-  const generateSlug = (text: string): string => {
+  // Local slug for live preview (instant, no API)
+  const previewSlug = (text: string): string => {
     return text
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
@@ -82,11 +83,18 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
   const handleCreate = useCallback(async () => {
     if (!selectedProject || !selectedBranch) return;
 
-    const slugSource = hasIssue ? `issue-${issueNumber}` : description;
-    const slug = generateSlug(slugSource) || 'session';
-
     setIsCreating(true);
     setError(null);
+
+    // Generate slug via Haiku subagent
+    const slugSource = hasIssue ? `Issue #${issueNumber}` : description;
+    let slug: string;
+    try {
+      slug = await generateSlugViaHaiku(slugSource);
+    } catch {
+      // Fallback to local slug if Haiku is unavailable
+      slug = previewSlug(slugSource) || 'session';
+    }
 
     const startTime = new Date().toISOString();
     try {
@@ -362,7 +370,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
             }}>
               <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', marginBottom: 4 }}>Branch Preview</div>
               <div style={{ fontSize: 13, color: '#58a6ff', fontFamily: "'Cascadia Code', monospace" }}>
-                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}{generateSlug(hasIssue ? `issue-${issueNumber}` : description) || '...'}
+                {sessionType}/{selectedBranch}/{hasIssue && issueNumber ? `${issueNumber}/` : ''}{previewSlug(hasIssue ? `issue-${issueNumber}` : description) || '...'}
               </div>
             </div>
           )}
@@ -393,7 +401,7 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
               cursor: canCreate && !isCreating ? 'pointer' : 'default',
             }}
           >
-            {isCreating ? 'Creating...' : 'Create Session'}
+            {isCreating ? 'Generating slug & creating...' : 'Create Session'}
           </button>
         </div>
       </div>

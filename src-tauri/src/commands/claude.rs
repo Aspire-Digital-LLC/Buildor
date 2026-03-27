@@ -1,3 +1,40 @@
+use std::process::Command;
+
+#[tauri::command]
+pub async fn generate_slug(description: String) -> Result<String, String> {
+    let prompt = format!(
+        "Generate a short git branch slug (2-5 words, lowercase, hyphen-separated, no special characters) for this task description. Return ONLY the slug, nothing else.\n\nDescription: {}",
+        description
+    );
+
+    let output = Command::new("claude")
+        .args([
+            "--print",
+            "--model", "haiku",
+            &prompt,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run claude: {}", e))?;
+
+    if output.status.success() {
+        let slug = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .to_lowercase()
+            .replace(|c: char| !c.is_alphanumeric() && c != '-', "")
+            .replace("--", "-")
+            .trim_matches('-')
+            .to_string();
+
+        if slug.is_empty() {
+            return Err("Haiku returned empty slug".to_string());
+        }
+        Ok(slug)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(format!("Claude failed: {}", stderr.trim()))
+    }
+}
+
 #[tauri::command]
 pub async fn start_session(working_dir: String) -> Result<String, String> {
     // TODO: Spawn Claude Code process for working_dir
