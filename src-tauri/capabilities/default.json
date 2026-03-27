@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Default capabilities for ProductaFlows",
-  "windows": ["main", "breakout-*"],
+  "windows": ["main", "breakout-*", "claude-*"],
   "permissions": [
     "core:default",
     "core:window:default",
