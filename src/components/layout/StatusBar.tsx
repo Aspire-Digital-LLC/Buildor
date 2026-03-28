@@ -357,7 +357,7 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
   // ── Derived values — all bars show "% used" (full = bad) ──
   const contextUsedPct = sessionCtx?.contextPercent ?? 0;
   const contextUsedTokens = sessionCtx?.contextUsedTokens ?? 0;
-  const contextLimitTokens = sessionCtx?.contextLimitTokens ?? 200_000;
+  const contextLimitTokens = sessionCtx?.contextLimitTokens ?? 1_000_000;
   const contextColor = getUsageColor(contextUsedPct);
 
   const { label: planLabel, color: planColor } = getPlanBadge(status.planType, status.planPrice);

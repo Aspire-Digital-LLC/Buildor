@@ -2,25 +2,9 @@ import { create } from 'zustand';
 import { buildorEvents } from '@/utils/buildorEvents';
 import type { BuildorEvent } from '@/utils/buildorEvents';
 
-// Known context window sizes per model family
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'opus': 200_000,
-  'sonnet': 200_000,
-  'haiku': 200_000,
-  'opus-4-6[1m]': 1_000_000,
-  'claude-opus-4-6': 200_000,
-  'claude-sonnet-4-6': 200_000,
-  'claude-haiku-4-5': 200_000,
-};
-
-function getContextLimit(model: string | null): number {
-  if (!model) return 200_000;
-  const lower = model.toLowerCase();
-  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
-    if (lower.includes(key)) return limit;
-  }
-  return 200_000;
-}
+// Claude Code runs all models at 1M context as of 2026
+// The actual context window is also reported in stream result events (modelUsage.contextWindow)
+const DEFAULT_CONTEXT_LIMIT = 1_000_000;
 
 export interface SessionContext {
   inputTokens: number;
@@ -78,7 +62,7 @@ const DEFAULT_SESSION: SessionContext = {
   durationMs: 0,
   model: null,
   contextUsedTokens: 0,
-  contextLimitTokens: 200_000,
+  contextLimitTokens: DEFAULT_CONTEXT_LIMIT,
   contextPercent: 0,
 };
 
@@ -146,7 +130,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 
     const prev = state.sessions[sessionId] || { ...DEFAULT_SESSION };
     const model = data.model || prev.model;
-    const contextLimit = getContextLimit(model);
+    const contextLimit = DEFAULT_CONTEXT_LIMIT;
 
     let newInput = prev.inputTokens;
     let newOutput = prev.outputTokens;
@@ -201,7 +185,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 
   initSession: (sessionId, data) => set((state) => {
     const model = data.model || null;
-    const contextLimit = getContextLimit(model);
+    const contextLimit = DEFAULT_CONTEXT_LIMIT;
     return {
       sessions: {
         ...state.sessions,
