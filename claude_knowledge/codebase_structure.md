@@ -6,6 +6,7 @@
 Buildor/
 ├── CLAUDE.md                    # Claude Code project instructions
 ├── APP_BUILD_DESCRIPTION.md     # Full feature specification
+├── buildor_context.md           # Buildor self-identity context (injected into Claude chats)
 ├── claude_knowledge/            # Persistent knowledge base
 │   ├── mind-map.json            # Knowledge file index (read first)
 │   ├── codebase_structure.md    # This file
