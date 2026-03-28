@@ -6,13 +6,17 @@ import { SharedMemory } from './SharedMemory';
 import { UpdateChecker } from './UpdateChecker';
 import { ThemeSettings } from './ThemeSettings';
 import { AccountSettings } from './AccountSettings';
+import { PersonalitySettings } from './PersonalitySettings';
+import { WorktreeSettings } from './WorktreeSettings';
 
-type SettingsSection = 'account' | 'projects' | 'themes' | 'logs' | 'shared-memory' | 'updates';
+type SettingsSection = 'account' | 'projects' | 'themes' | 'personality' | 'worktrees' | 'logs' | 'shared-memory' | 'updates';
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'account', label: 'Account' },
   { id: 'projects', label: 'Projects' },
   { id: 'themes', label: 'Themes' },
+  { id: 'personality', label: 'Personality' },
+  { id: 'worktrees', label: 'Worktrees' },
   { id: 'logs', label: 'Logs' },
   { id: 'shared-memory', label: 'Shared Memory' },
   { id: 'updates', label: 'Updates' },
@@ -84,6 +88,8 @@ export function Settings() {
         {active === 'account' && <AccountSettings />}
         {active === 'projects' && <ProjectSwitcher />}
         {active === 'themes' && <ThemeSettings />}
+        {active === 'personality' && <PersonalitySettings />}
+        {active === 'worktrees' && <WorktreeSettings />}
         {active === 'logs' && <LogsViewer />}
         {active === 'shared-memory' && <SharedMemory />}
         {active === 'updates' && <UpdateChecker />}

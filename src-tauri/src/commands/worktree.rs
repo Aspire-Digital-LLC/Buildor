@@ -317,6 +317,93 @@ pub async fn get_branches_for_repo(repo_path: String) -> Result<Vec<String>, Str
     Ok(branches)
 }
 
+#[tauri::command]
+pub async fn setup_worktree_deps(
+    worktree_path: String,
+    repo_path: String,
+    strategy: String,
+) -> Result<String, String> {
+    let wt = Path::new(&worktree_path);
+
+    // Detect: does this worktree have a package.json?
+    if !wt.join("package.json").exists() {
+        return Ok("skipped:no-package-json".to_string());
+    }
+
+    match strategy.as_str() {
+        "none" => Ok("skipped:strategy-none".to_string()),
+
+        "symlink" => {
+            let source = Path::new(&repo_path).join("node_modules");
+            let target = wt.join("node_modules");
+
+            if !source.exists() {
+                return Err("Main repo has no node_modules — run npm/pnpm install there first.".to_string());
+            }
+            if target.exists() {
+                return Ok("skipped:node-modules-exists".to_string());
+            }
+
+            // Platform-specific symlink/junction
+            #[cfg(windows)]
+            {
+                // Use directory junction on Windows (no admin required)
+                let output = Command::new("cmd")
+                    .args(["/C", "mklink", "/J",
+                        &target.to_string_lossy(),
+                        &source.to_string_lossy()])
+                    .output()
+                    .map_err(|e| format!("Failed to create junction: {}", e))?;
+                if !output.status.success() {
+                    return Err(format!("mklink /J failed: {}", String::from_utf8_lossy(&output.stderr)));
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                std::os::unix::fs::symlink(&source, &target)
+                    .map_err(|e| format!("Failed to create symlink: {}", e))?;
+            }
+
+            Ok("ok:symlink".to_string())
+        }
+
+        "pnpm" => {
+            let output = Command::new("pnpm")
+                .arg("install")
+                .arg("--frozen-lockfile")
+                .current_dir(&worktree_path)
+                .output()
+                .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
+            if !output.status.success() {
+                // Retry without --frozen-lockfile (lockfile may differ on branch)
+                let retry = Command::new("pnpm")
+                    .arg("install")
+                    .current_dir(&worktree_path)
+                    .output()
+                    .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
+                if !retry.status.success() {
+                    return Err(format!("pnpm install failed: {}", String::from_utf8_lossy(&retry.stderr)));
+                }
+            }
+            Ok("ok:pnpm".to_string())
+        }
+
+        "npm" => {
+            let output = Command::new("npm")
+                .arg("install")
+                .current_dir(&worktree_path)
+                .output()
+                .map_err(|e| format!("Failed to run npm install: {}", e))?;
+            if !output.status.success() {
+                return Err(format!("npm install failed: {}", String::from_utf8_lossy(&output.stderr)));
+            }
+            Ok("ok:npm".to_string())
+        }
+
+        _ => Err(format!("Unknown strategy: {}", strategy)),
+    }
+}
+
 /// Simple UUID v4 generator (no external crate needed)
 fn uuid_v4() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};

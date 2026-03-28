@@ -151,3 +151,13 @@ Displays open sessions/worktrees grouped by project:
 - Only shows projects that have open worktrees
 - Close individual worktree, all in a project, or global close all
 - Each entry shows: branch name, worktree path, type badge
+
+## Claude Chat Context Injection
+
+When Buildor starts a Claude Code session, it injects context at the top so Claude understands it is operating as Buildor. The injection layers are:
+
+1. **Buildor identity** (`buildor_context.md`) — always injected. Tells Claude who it is, what it can do, what's planned. This file lives at the project root.
+2. **Personality** — injected from user settings. The user selects a personality/tone in the Settings panel, and it gets prepended in parallel with the identity context.
+3. **Project-scoped context** — stage prompts, skills, flow context files from `~/.buildor/` as needed.
+
+The identity and personality layers are separate so personality is user-configurable without editing the core identity file.

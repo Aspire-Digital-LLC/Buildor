@@ -6,6 +6,7 @@
 Buildor/
 ├── CLAUDE.md                    # Claude Code project instructions
 ├── APP_BUILD_DESCRIPTION.md     # Full feature specification
+├── buildor_context.md           # Buildor self-identity context (injected into Claude chats)
 ├── claude_knowledge/            # Persistent knowledge base
 │   ├── mind-map.json            # Knowledge file index (read first)
 │   ├── codebase_structure.md    # This file
@@ -21,7 +22,8 @@ Buildor/
 │   ├── components/              # React components
 │   ├── hooks/                   # Custom React hooks
 │   ├── themes/                  # Theme definitions (themes.ts — 7 themes, CSS variable system)
-│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore)
+│   ├── personalities/           # Personality definitions (personalities.ts — 6 built-in, type exports)
+│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore, personalityStore, worktreeConfigStore)
 │   ├── types/                   # TypeScript type definitions
 │   ├── utils/                   # Frontend utilities
 │   └── windows/                 # Per-window entry points

@@ -5,6 +5,8 @@ import { useTabContext } from '@/contexts/TabContext';
 import { invoke } from '@tauri-apps/api/core';
 import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
+import { usePersonalityStore } from '@/stores';
+import { getPersonalityById } from '@/personalities/personalities';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage, type ChatContent } from './ChatMessage';
@@ -104,7 +106,9 @@ export function ClaudeChat() {
   const startClaude = async (dir: string, modelOverride?: string) => {
     setIsStarting(true);
     try {
-      const sid = await startClaudeSession(dir, modelOverride || selectedModel);
+      const { selectedId, customPersonalities } = usePersonalityStore.getState();
+      const personality = getPersonalityById(selectedId, customPersonalities);
+      const sid = await startClaudeSession(dir, modelOverride || selectedModel, personality?.prompt);
       setSessionId(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
       logEvent({
@@ -219,7 +223,9 @@ export function ClaudeChat() {
     if (repoPath) {
       setIsStarting(true);
       try {
-        const sid = await startClaudeSession(repoPath, modelId);
+        const { selectedId: pId, customPersonalities: cp } = usePersonalityStore.getState();
+        const p = getPersonalityById(pId, cp);
+        const sid = await startClaudeSession(repoPath, modelId, p?.prompt);
         setSessionId(sid);
         setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
         if (conversationHistory.trim()) {
