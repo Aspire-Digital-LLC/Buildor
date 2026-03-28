@@ -7,3 +7,5 @@ export { useFileTreeStore } from './fileTreeStore';
 export { useTabStore } from './tabStore';
 export { useUsageStore } from './usageStore';
 export { useThemeStore } from './themeStore';
+export { usePersonalityStore } from './personalityStore';
+export { useWorktreeConfigStore } from './worktreeConfigStore';
