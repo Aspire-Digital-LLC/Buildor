@@ -12,6 +12,7 @@ interface BranchSwitcherProps {
 }
 
 export function BranchSwitcher({ repoPath, currentBranch, projectName, onBranchSwitched, onClose }: BranchSwitcherProps) {
+  void currentBranch; void projectName; // reserved for future filtering
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filter, setFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);

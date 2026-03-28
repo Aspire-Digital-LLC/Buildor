@@ -12,11 +12,6 @@ const panelLabels: Record<PanelType, string> = {
   'settings': 'Settings',
 };
 
-// Short prefixes for tab titles
-const panelShortLabels: Record<string, string> = {
-  'source-control': 'SC',
-  'code-viewer': 'CV',
-};
 
 export interface OpenTabOptions {
   browsePath?: string;
