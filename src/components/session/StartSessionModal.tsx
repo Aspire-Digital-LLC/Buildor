@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/stores';
-import { getBranchesForRepo, createSession } from '@/utils/commands/worktree';
+import { getBranchesForRepo, createSession, setupWorktreeDeps } from '@/utils/commands/worktree';
+import { useWorktreeConfigStore } from '@/stores';
 import { generateSlug as generateSlugViaHaiku } from '@/utils/commands/claude';
 import { openClaudeWindow } from '@/utils/commands/window';
 import { logEvent } from '@/utils/commands/logging';
@@ -180,6 +181,31 @@ export function StartSessionModal({ onClose, onSessionCreated }: StartSessionMod
         endTime,
         durationMs,
       }).catch(() => {});
+
+      // Post-create: set up dependencies based on worktree config
+      const { nodeDepsStrategy } = useWorktreeConfigStore.getState();
+      if (nodeDepsStrategy !== 'none') {
+        try {
+          const result = await setupWorktreeDeps(session.worktreePath, selectedProject.repoPath, nodeDepsStrategy);
+          logEvent({
+            sessionId: session.sessionId,
+            repo: selectedProject.repoPath,
+            functionArea: 'worktree',
+            level: 'info',
+            operation: 'setup-deps',
+            message: `Dependency setup: ${result}`,
+          }).catch(() => {});
+        } catch (depErr) {
+          logEvent({
+            sessionId: session.sessionId,
+            repo: selectedProject.repoPath,
+            functionArea: 'worktree',
+            level: 'warn',
+            operation: 'setup-deps',
+            message: `Dependency setup failed: ${String(depErr)}`,
+          }).catch(() => {});
+        }
+      }
 
       setCreatedSession(session);
       onSessionCreated(session);

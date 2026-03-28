@@ -122,7 +122,7 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn start_session(app: AppHandle, working_dir: String, model: Option<String>) -> Result<String, String> {
+pub async fn start_session(app: AppHandle, working_dir: String, model: Option<String>, system_prompt: Option<String>) -> Result<String, String> {
     let session_id = uuid::Uuid::new_v4().to_string();
 
     let mut args = vec![
@@ -136,6 +136,10 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
     if let Some(ref m) = model {
         args.push("--model".to_string());
         args.push(m.clone());
+    }
+    if let Some(ref prompt) = system_prompt {
+        args.push("--append-system-prompt".to_string());
+        args.push(prompt.clone());
     }
 
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();

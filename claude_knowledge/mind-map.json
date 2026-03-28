@@ -49,6 +49,11 @@
       "keywords": ["status", "progress", "done", "todo", "current", "phase", "roadmap", "what's done", "what's next"]
     },
     {
+      "file": "personality_and_worktree_config.md",
+      "description": "Personality system (built-in + custom prompt injection) and worktree dependency setup strategies",
+      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps"]
+    },
+    {
       "file": "../buildor_context.md",
       "description": "Buildor self-identity and capability summary — injected at the top of Claude chat sessions so Buildor always knows who it is regardless of which repo it is working in",
       "keywords": ["identity", "context", "who am I", "buildor", "capabilities", "features", "inject", "chat context", "self-awareness"]

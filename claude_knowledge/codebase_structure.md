@@ -22,7 +22,8 @@ Buildor/
 │   ├── components/              # React components
 │   ├── hooks/                   # Custom React hooks
 │   ├── themes/                  # Theme definitions (themes.ts — 7 themes, CSS variable system)
-│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore)
+│   ├── personalities/           # Personality definitions (personalities.ts — 6 built-in, type exports)
+│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore, personalityStore, worktreeConfigStore)
 │   ├── types/                   # TypeScript type definitions
 │   ├── utils/                   # Frontend utilities
 │   └── windows/                 # Per-window entry points

@@ -49,3 +49,7 @@ export async function cleanWorktrees(repoPath: string): Promise<void> {
 export async function getBranchesForRepo(repoPath: string): Promise<string[]> {
   return invoke('get_branches_for_repo', { repoPath });
 }
+
+export async function setupWorktreeDeps(worktreePath: string, repoPath: string, strategy: string): Promise<string> {
+  return invoke('setup_worktree_deps', { worktreePath, repoPath, strategy });
+}
