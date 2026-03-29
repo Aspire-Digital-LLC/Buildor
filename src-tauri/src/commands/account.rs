@@ -208,7 +208,7 @@ pub async fn start_usage_polling(app: AppHandle) -> Result<(), String> {
     let _win = WebviewWindowBuilder::new(&app, label, url)
         .title("Buildor Usage Poller")
         .inner_size(1.0, 1.0)
-        .position(-9999.0, -9999.0)   // Off-screen
+        .visible(false)
         .skip_taskbar(true)
         .build()
         .map_err(|e| format!("Failed to create poller: {}", e))?;
