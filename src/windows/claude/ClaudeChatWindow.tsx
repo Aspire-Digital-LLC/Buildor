@@ -7,8 +7,7 @@ import { applyTheme } from '@/themes/themes';
 import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
 import type { ChatContent } from '@/components/claude-chat/ChatMessage';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
-import { usePersonalityStore } from '@/stores';
-import { getPersonalityById } from '@/personalities/personalities';
+import { buildSystemPrompt } from '@/utils/buildSystemPrompt';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
@@ -143,9 +142,7 @@ export function ClaudeChatWindow() {
   const startClaude = async (dir: string, modelOverride?: string) => {
     setIsStarting(true);
     try {
-      const { selectedId, customPersonalities } = usePersonalityStore.getState();
-      const personality = getPersonalityById(selectedId, customPersonalities);
-      const sid = await startClaudeSession(dir, modelOverride || selectedModel, personality?.prompt);
+      const sid = await startClaudeSession(dir, modelOverride || selectedModel, buildSystemPrompt());
       setSessionId(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Claude ready.` }] }]);
       logEvent({
@@ -282,9 +279,7 @@ export function ClaudeChatWindow() {
     if (workingDir) {
       setIsStarting(true);
       try {
-        const { selectedId: pId, customPersonalities: cp } = usePersonalityStore.getState();
-        const p = getPersonalityById(pId, cp);
-        const sid = await startClaudeSession(workingDir, modelId, p?.prompt);
+        const sid = await startClaudeSession(workingDir, modelId, buildSystemPrompt());
         setSessionId(sid);
         setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
 
@@ -372,7 +367,7 @@ export function ClaudeChatWindow() {
     if (workingDir) {
       setIsStarting(true);
       try {
-        const sid = await startClaudeSession(workingDir, selectedModel);
+        const sid = await startClaudeSession(workingDir, selectedModel, buildSystemPrompt());
         setSessionId(sid);
         if (history.trim()) {
           await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
