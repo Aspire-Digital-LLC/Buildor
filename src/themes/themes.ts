@@ -197,7 +197,7 @@ export const themes: ThemeDefinition[] = [
   }),
 ];
 
-export const defaultThemeId = 'midnight';
+export const defaultThemeId = 'arctic';
 
 export function getThemeById(id: string): ThemeDefinition {
   return themes.find((t) => t.id === id) || themes[0];

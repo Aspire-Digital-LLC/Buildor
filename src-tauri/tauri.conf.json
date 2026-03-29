@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicerdicer/tauri/refs/heads/v2/crates/tauri-schema-generator/schemas/config.schema.json",
   "productName": "Buildor",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "identifier": "com.productaflows.app",
   "build": {
     "frontendDist": "../dist",
@@ -10,16 +10,27 @@
     "beforeBuildCommand": "npm run build"
   },
   "bundle": {
+    "active": true,
+    "targets": ["nsis"],
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Buildor v0.0.1",
+        "title": "Buildor v0.0.2",
         "width": 1400,
         "height": 900,
         "center": true,

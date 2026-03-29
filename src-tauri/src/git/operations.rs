@@ -1,7 +1,7 @@
 use std::process::Command;
 
 pub async fn run_git_command(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::no_window_command("git")
         .args(args)
         .current_dir(repo_path)
         .output()

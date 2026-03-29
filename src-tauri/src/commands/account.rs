@@ -208,7 +208,7 @@ pub async fn start_usage_polling(app: AppHandle) -> Result<(), String> {
     let _win = WebviewWindowBuilder::new(&app, label, url)
         .title("Buildor Usage Poller")
         .inner_size(1.0, 1.0)
-        .position(-9999.0, -9999.0)   // Off-screen
+        .visible(false)
         .skip_taskbar(true)
         .build()
         .map_err(|e| format!("Failed to create poller: {}", e))?;
@@ -305,7 +305,7 @@ pub async fn clear_claude_session() -> Result<(), String> {
 /// Also trigger `claude login` for CLI OAuth token
 #[tauri::command]
 pub async fn trigger_cli_login() -> Result<String, String> {
-    let output = Command::new("claude")
+    let output = crate::no_window_command("claude")
         .args(["login"])
         .output()
         .map_err(|e| format!("Failed to run claude login: {}", e))?;

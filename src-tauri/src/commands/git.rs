@@ -29,7 +29,7 @@ pub struct BranchInfo {
 }
 
 fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::no_window_command("git")
         .args(args)
         .current_dir(repo_path)
         .output()

@@ -26,7 +26,7 @@ pub struct SessionInfo {
 }
 
 fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::no_window_command("git")
         .args(args)
         .current_dir(repo_path)
         .output()
@@ -497,7 +497,7 @@ pub async fn setup_worktree_deps(
             #[cfg(windows)]
             {
                 // Use directory junction on Windows (no admin required)
-                let output = Command::new("cmd")
+                let output = crate::no_window_command("cmd")
                     .args(["/C", "mklink", "/J",
                         &target.to_string_lossy(),
                         &source.to_string_lossy()])
@@ -517,7 +517,7 @@ pub async fn setup_worktree_deps(
         }
 
         "pnpm" => {
-            let output = Command::new("pnpm")
+            let output = crate::no_window_command("pnpm")
                 .arg("install")
                 .arg("--frozen-lockfile")
                 .current_dir(&worktree_path)
@@ -525,7 +525,7 @@ pub async fn setup_worktree_deps(
                 .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
             if !output.status.success() {
                 // Retry without --frozen-lockfile (lockfile may differ on branch)
-                let retry = Command::new("pnpm")
+                let retry = crate::no_window_command("pnpm")
                     .arg("install")
                     .current_dir(&worktree_path)
                     .output()
@@ -538,7 +538,7 @@ pub async fn setup_worktree_deps(
         }
 
         "npm" => {
-            let output = Command::new("npm")
+            let output = crate::no_window_command("npm")
                 .arg("install")
                 .current_dir(&worktree_path)
                 .output()
