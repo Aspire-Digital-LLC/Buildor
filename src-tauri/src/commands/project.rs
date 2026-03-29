@@ -53,7 +53,7 @@ pub async fn remove_project(name: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_current_branch(repo_path: String) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = crate::no_window_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&repo_path)
         .output()

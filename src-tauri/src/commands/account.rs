@@ -305,7 +305,7 @@ pub async fn clear_claude_session() -> Result<(), String> {
 /// Also trigger `claude login` for CLI OAuth token
 #[tauri::command]
 pub async fn trigger_cli_login() -> Result<String, String> {
-    let output = Command::new("claude")
+    let output = crate::no_window_command("claude")
         .args(["login"])
         .output()
         .map_err(|e| format!("Failed to run claude login: {}", e))?;

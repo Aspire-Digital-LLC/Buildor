@@ -5,6 +5,18 @@ mod claude;
 mod config;
 mod logging;
 
+/// Create a Command with CREATE_NO_WINDOW on Windows to prevent console flashing
+/// when the app runs as a GUI (production builds).
+pub fn no_window_command(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

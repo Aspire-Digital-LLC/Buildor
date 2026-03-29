@@ -10,10 +10,21 @@
     "beforeBuildCommand": "npm run build"
   },
   "bundle": {
+    "active": true,
+    "targets": ["nsis"],
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
   },
   "app": {
     "windows": [

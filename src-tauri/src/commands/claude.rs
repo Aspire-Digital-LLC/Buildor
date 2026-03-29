@@ -56,7 +56,7 @@ fn clean_response(raw: &str) -> String {
 }
 
 fn call_haiku(prompt: &str) -> Result<String, String> {
-    let output = Command::new("claude")
+    let output = crate::no_window_command("claude")
         .args(["--print", "--model", "haiku", prompt])
         .output()
         .map_err(|e| format!("Failed to run claude: {}", e))?;
@@ -152,7 +152,7 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
 
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-    let mut child = std::process::Command::new("claude")
+    let mut child = crate::no_window_command("claude")
         .args(&args_refs)
         .current_dir(&working_dir)
         .stdin(Stdio::piped())
@@ -530,7 +530,7 @@ pub async fn query_claude_status() -> Result<String, String> {
     }
 
     // 2. Get claude CLI version
-    if let Ok(output) = Command::new("claude").args(["--version"]).output() {
+    if let Ok(output) = crate::no_window_command("claude").args(["--version"]).output() {
         if output.status.success() {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             result["version"] = serde_json::Value::String(version);
@@ -543,7 +543,7 @@ pub async fn query_claude_status() -> Result<String, String> {
 /// Run a claude CLI command (e.g., login, logout) and return its output
 #[tauri::command]
 pub async fn run_claude_cli(args: Vec<String>) -> Result<String, String> {
-    let output = Command::new("claude")
+    let output = crate::no_window_command("claude")
         .args(&args)
         .output()
         .map_err(|e| format!("Failed to run claude: {}", e))?;

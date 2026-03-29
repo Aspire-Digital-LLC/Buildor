@@ -76,7 +76,7 @@ pub async fn check_for_update() -> Result<(String, String, bool), String> {
     let local_ver = std::env!("CARGO_PKG_VERSION").to_string();
 
     // Fetch remote VERSION from GitHub
-    let curl_output = std::process::Command::new("curl")
+    let curl_output = crate::no_window_command("curl")
         .args(["-sSfkL", "https://raw.githubusercontent.com/Aspire-Digital-LLC/Buildor/main/VERSION"])
         .output()
         .map_err(|e| format!("Failed to fetch VERSION: {}", e))?;
