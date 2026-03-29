@@ -4,7 +4,12 @@ export async function generateSlug(description: string): Promise<string> {
   return invoke('generate_slug', { description });
 }
 
-export async function startClaudeSession(workingDir: string, model?: string, systemPrompt?: string): Promise<string> {
+export interface SessionStartResult {
+  sessionId: string;
+  pid: number | null;
+}
+
+export async function startClaudeSession(workingDir: string, model?: string, systemPrompt?: string): Promise<SessionStartResult> {
   return invoke('start_session', { workingDir, model: model || null, systemPrompt: systemPrompt || null });
 }
 

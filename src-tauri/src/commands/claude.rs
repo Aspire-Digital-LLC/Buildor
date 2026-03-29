@@ -16,6 +16,14 @@ struct ClaudeSession {
     #[allow(dead_code)]
     child: Option<std::process::Child>,
     working_dir: String,
+    pid: Option<u32>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStartResult {
+    pub session_id: String,
+    pub pid: Option<u32>,
 }
 
 fn is_valid_slug(s: &str) -> bool {
@@ -122,7 +130,7 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn start_session(app: AppHandle, working_dir: String, model: Option<String>, system_prompt: Option<String>) -> Result<String, String> {
+pub async fn start_session(app: AppHandle, working_dir: String, model: Option<String>, system_prompt: Option<String>) -> Result<SessionStartResult, String> {
     let session_id = uuid::Uuid::new_v4().to_string();
 
     let mut args = vec![
@@ -152,6 +160,8 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+
+    let pid = child.id();
 
     let stdout = child.stdout.take()
         .ok_or_else(|| "Failed to capture stdout".to_string())?;
@@ -203,9 +213,10 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
         stdin: Some(stdin),
         child: Some(child),
         working_dir,
+        pid: Some(pid),
     });
 
-    Ok(session_id)
+    Ok(SessionStartResult { session_id, pid: Some(pid) })
 }
 
 #[tauri::command]
@@ -316,6 +327,32 @@ pub async fn stop_session(session_id: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Stop all Claude sessions whose working directory matches the given path.
+/// Called by worktree close to release file locks before directory removal.
+pub fn stop_sessions_in_dir(dir: &str) {
+    let normalized = dir.replace('\\', "/");
+    let sessions = get_sessions();
+    let mut map = match sessions.lock() {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+
+    let to_remove: Vec<String> = map.iter()
+        .filter(|(_, s)| s.working_dir.replace('\\', "/") == normalized)
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    for id in to_remove {
+        if let Some(mut session) = map.remove(&id) {
+            drop(session.stdin.take());
+            if let Some(mut child) = session.child.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
 }
 
 #[tauri::command]

@@ -327,8 +327,14 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
         }
     }
 
+    // Stop any Claude sessions running in this worktree (releases file locks)
+    super::claude::stop_sessions_in_dir(&worktree_path);
+
     // Merge permission rules from worktree back to main repo before removal
     merge_permission_rules(&worktree_path, &repo_path);
+
+    // Brief pause to let processes fully exit and release file handles
+    std::thread::sleep(std::time::Duration::from_millis(300));
 
     // Remove worktree — try git first, fall back to manual deletion on Windows lock errors
     let remove_result = run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"]);

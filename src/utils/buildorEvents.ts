@@ -25,7 +25,8 @@ export type BuildorEventType =
   | 'turn-completed'          // Claude finished responding to a message
   | 'branch-switched'         // User switched a checked-out branch
   | 'usage-updated'           // Token usage / context window updated
-  | 'navigate-settings';      // Navigate to a specific settings section
+  | 'navigate-settings'       // Navigate to a specific settings section
+  | 'tasks-updated';          // Claude updated task list (TodoWrite)
 
 export interface BuildorEvent<T = unknown> {
   type: BuildorEventType;

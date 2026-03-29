@@ -13,6 +13,7 @@ import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
 import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from '@/components/claude-chat/SlashCommandMenu';
 import { ThinkingIndicator } from '@/components/claude-chat/ThinkingIndicator';
+import { TaskTracker } from '@/components/claude-chat/TaskTracker';
 import { useChatGlow, getGlowStyle } from '@/components/claude-chat/useChatGlow';
 import { StatusBar } from '@/components/layout/StatusBar';
 import '@/utils/sounds'; // Initialize sound event listeners
@@ -25,6 +26,7 @@ export function ClaudeChatWindow() {
   const [isSending, setIsSending] = useState(false);
   const [isVerbose, setIsVerbose] = useState(false);
   const [workingDir, setWorkingDir] = useState<string | null>(null);
+  const [worktreeSessionId, setWorktreeSessionId] = useState<string | null>(null);
   const [windowTitle, setWindowTitle] = useState('Claude Chat');
   const [model, setModel] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
@@ -67,6 +69,7 @@ export function ClaudeChatWindow() {
         const session = sessions.find((s) => s.sessionId.startsWith(idPrefix));
         if (session) {
           setWorkingDir(session.worktreePath);
+          setWorktreeSessionId(session.sessionId);
           setMessages([{
             role: 'system',
             content: [{ type: 'text', text: `Session: ${session.branchName}\nWorktree: ${session.worktreePath}` }],
@@ -142,15 +145,16 @@ export function ClaudeChatWindow() {
   const startClaude = async (dir: string, modelOverride?: string) => {
     setIsStarting(true);
     try {
-      const sid = await startClaudeSession(dir, modelOverride || selectedModel, buildSystemPrompt());
+      const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, buildSystemPrompt());
       setSessionId(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Claude ready.` }] }]);
       logEvent({
+        sessionId: worktreeSessionId || undefined,
         repo: dir,
         functionArea: 'claude-chat',
         level: 'info',
         operation: 'session-start',
-        message: `Claude session started: ${sid}${modelOverride ? ` (model: ${modelOverride})` : ''}`,
+        message: `Claude session started: ${sid} (PID: ${pid ?? 'unknown'})${modelOverride ? ` (model: ${modelOverride})` : ''}`,
       }).catch(() => {});
       inputRef.current?.focus();
     } catch (e) {
@@ -160,7 +164,7 @@ export function ClaudeChatWindow() {
   };
 
   // Handle slash commands
-  const handleSlashCommand = useCallback(async (command: string) => {
+  const handleSlashCommand = useCallback(async (command: string, fullMessage?: string) => {
     setInput('');
     setShowSlashMenu(false);
 
@@ -231,16 +235,17 @@ export function ClaudeChatWindow() {
     // Non-builtin command — scan .claude/ first, then decide
     if (!isBuiltinCommand(command)) {
       if (!workingDir) return;
+      const msgToSend = fullMessage || command;
       try {
         await invoke('resolve_claude_command', {
           repoPath: workingDir,
           commandName: command,
         });
-        // Found — send to Claude
+        // Found — send full message (command + args) to Claude
         if (sessionId) {
-          setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: `${command}` }] }]);
+          setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msgToSend }] }]);
           setIsSending(true);
-          await sendClaudeMessage(sessionId, command);
+          await sendClaudeMessage(sessionId, msgToSend);
         }
       } catch {
         // Not found in .claude/ — show error
@@ -279,7 +284,7 @@ export function ClaudeChatWindow() {
     if (workingDir) {
       setIsStarting(true);
       try {
-        const sid = await startClaudeSession(workingDir, modelId, buildSystemPrompt());
+        const { sessionId: sid } = await startClaudeSession(workingDir, modelId, buildSystemPrompt());
         setSessionId(sid);
         setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
 
@@ -291,6 +296,7 @@ export function ClaudeChatWindow() {
         }
 
         logEvent({
+          sessionId: worktreeSessionId || undefined,
           repo: workingDir,
           functionArea: 'claude-chat',
           level: 'info',
@@ -310,30 +316,23 @@ export function ClaudeChatWindow() {
     const msg = input.trim();
 
     // Check for slash commands
-    if (msg.startsWith('/') && !msg.includes(' ')) {
-      // Pure slash command — route through handler with scan
-      handleSlashCommand(msg.toLowerCase());
-      return;
-    }
     if (msg.startsWith('/')) {
       const cmdName = msg.split(' ')[0].toLowerCase();
-      if (isBuiltinCommand(cmdName) || dynamicCommands.some((c) => c.name === cmdName)) {
+      const hasArgs = msg.includes(' ');
+      if (!hasArgs) {
+        // Pure slash command (no args)
         handleSlashCommand(cmdName);
+        return;
+      }
+      // Slash command with args
+      if (isBuiltinCommand(cmdName) || dynamicCommands.some((c) => c.name === cmdName)) {
+        handleSlashCommand(cmdName, msg);
         return;
       }
       // Unknown /command with args — scan before sending
       if (workingDir) {
         setInput('');
-        try {
-          await invoke('resolve_claude_command', { repoPath: workingDir, commandName: cmdName });
-          if (sessionId) {
-            setIsSending(true);
-            setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
-            await sendClaudeMessage(sessionId, msg);
-          }
-        } catch {
-          setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Unknown command: ${cmdName}\nType /help to see available commands.` }] }]);
-        }
+        handleSlashCommand(cmdName, msg);
         return;
       }
     }
@@ -367,7 +366,7 @@ export function ClaudeChatWindow() {
     if (workingDir) {
       setIsStarting(true);
       try {
-        const sid = await startClaudeSession(workingDir, selectedModel, buildSystemPrompt());
+        const { sessionId: sid } = await startClaudeSession(workingDir, selectedModel, buildSystemPrompt());
         setSessionId(sid);
         if (history.trim()) {
           await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
@@ -538,9 +537,11 @@ export function ClaudeChatWindow() {
           ))}
         </div>
 
+        {/* Sticky task tracker */}
+        {sessionId && <TaskTracker sessionId={sessionId} />}
+
         {/* Thinking animation */}
         {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}
-
 
         {/* Input */}
         {sessionId && (

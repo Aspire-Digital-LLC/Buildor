@@ -11,6 +11,7 @@ import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage, type ChatContent } from './ChatMessage';
 import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from './SlashCommandMenu';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { TaskTracker } from './TaskTracker';
 
 export function ClaudeChat() {
   const { projectName, browsePath, browseBranch } = useTabContext();
@@ -106,7 +107,7 @@ export function ClaudeChat() {
     setIsStarting(true);
     try {
       const systemPrompt = buildSystemPrompt();
-      const sid = await startClaudeSession(dir, modelOverride || selectedModel, systemPrompt);
+      const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, systemPrompt);
       setSessionId(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
       logEvent({
@@ -114,7 +115,7 @@ export function ClaudeChat() {
         functionArea: 'claude-chat',
         level: 'info',
         operation: 'session-start',
-        message: `Claude session started: ${sid}`,
+        message: `Claude session started: ${sid} (PID: ${pid ?? 'unknown'})`,
       }).catch(() => {});
       inputRef.current?.focus();
     } catch (e) {
@@ -130,7 +131,7 @@ export function ClaudeChat() {
     }
   }, [repoPath]);
 
-  const handleSlashCommand = useCallback(async (command: string) => {
+  const handleSlashCommand = useCallback(async (command: string, fullMessage?: string) => {
     setInput('');
     setShowSlashMenu(false);
 
@@ -184,16 +185,17 @@ export function ClaudeChat() {
     // Non-builtin command — scan .claude/ first, then decide
     if (!isBuiltinCommand(command)) {
       if (!repoPath) return;
+      const msgToSend = fullMessage || command;
       try {
         await invoke('resolve_claude_command', {
           repoPath,
           commandName: command,
         });
-        // Found — send to Claude
+        // Found — send full message (command + args) to Claude
         if (sessionId) {
-          setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: `${command}` }] }]);
+          setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msgToSend }] }]);
           setIsSending(true);
-          await sendClaudeMessage(sessionId, command);
+          await sendClaudeMessage(sessionId, msgToSend);
         }
       } catch {
         // Not found in .claude/ — show error
@@ -221,7 +223,7 @@ export function ClaudeChat() {
     if (repoPath) {
       setIsStarting(true);
       try {
-        const sid = await startClaudeSession(repoPath, modelId, buildSystemPrompt());
+        const { sessionId: sid } = await startClaudeSession(repoPath, modelId, buildSystemPrompt());
         setSessionId(sid);
         setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
         if (conversationHistory.trim()) {
@@ -239,32 +241,23 @@ export function ClaudeChat() {
   const handleSend = useCallback(async () => {
     if (!sessionId || !input.trim() || isSending) return;
     const msg = input.trim();
-    if (msg.startsWith('/') && !msg.includes(' ')) {
-      // Pure slash command (no args) — route through command handler with scan
-      handleSlashCommand(msg.toLowerCase());
-      return;
-    }
     if (msg.startsWith('/')) {
-      // Slash command with args — check if the base command exists
       const cmdName = msg.split(' ')[0].toLowerCase();
-      if (isBuiltinCommand(cmdName) || dynamicCommands.some((c) => c.name === cmdName)) {
+      const hasArgs = msg.includes(' ');
+      if (!hasArgs) {
+        // Pure slash command (no args)
         handleSlashCommand(cmdName);
+        return;
+      }
+      // Slash command with args
+      if (isBuiltinCommand(cmdName) || dynamicCommands.some((c) => c.name === cmdName)) {
+        handleSlashCommand(cmdName, msg);
         return;
       }
       // Unknown /command with args — scan before sending
       if (repoPath) {
         setInput('');
-        try {
-          await invoke('resolve_claude_command', { repoPath, commandName: cmdName });
-          // Found — send the full message (command + args) to Claude
-          if (sessionId) {
-            setIsSending(true);
-            setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
-            await sendClaudeMessage(sessionId, msg);
-          }
-        } catch {
-          setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Unknown command: ${cmdName}\nType /help to see available commands.` }] }]);
-        }
+        handleSlashCommand(cmdName, msg);
         return;
       }
     }
@@ -298,7 +291,7 @@ export function ClaudeChat() {
     // Auto-restart and replay context so Claude doesn't lose the conversation
     setIsStarting(true);
     try {
-      const sid = await startClaudeSession(repoPath, selectedModel, buildSystemPrompt());
+      const { sessionId: sid } = await startClaudeSession(repoPath, selectedModel, buildSystemPrompt());
       setSessionId(sid);
       if (history.trim()) {
         await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
@@ -414,6 +407,9 @@ export function ClaudeChat() {
             <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} activePermissionId={permissionQueue[0] || null} />
           ))}
         </div>
+
+        {/* Sticky task tracker */}
+        {sessionId && <TaskTracker sessionId={sessionId} />}
 
         {/* Thinking animation */}
         {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}

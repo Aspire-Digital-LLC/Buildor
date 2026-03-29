@@ -26,12 +26,10 @@ const panelComponents: Record<PanelType, React.ComponentType> = {
 };
 
 function ActivePanelRenderer() {
-  const activeTab = useTabStore((s) => {
-    const tab = s.tabs.find((t) => t.id === s.activeTabId);
-    return tab;
-  });
+  const tabs = useTabStore((s) => s.tabs);
+  const activeTabId = useTabStore((s) => s.activeTabId);
 
-  if (!activeTab) {
+  if (tabs.length === 0) {
     return (
       <div style={{
         height: '100%',
@@ -52,13 +50,29 @@ function ActivePanelRenderer() {
     );
   }
 
-  const PanelComponent = panelComponents[activeTab.panelType];
-  if (!PanelComponent) return null;
-
   return (
-    <TabContextProvider value={{ projectName: activeTab.projectName, panelType: activeTab.panelType, browsePath: activeTab.browsePath, browseBranch: activeTab.browseBranch, browseIsWorktree: activeTab.browseIsWorktree }}>
-      <PanelComponent />
-    </TabContextProvider>
+    <>
+      {tabs.map((tab) => {
+        const PanelComponent = panelComponents[tab.panelType];
+        if (!PanelComponent) return null;
+        const isActive = tab.id === activeTabId;
+        return (
+          <div
+            key={tab.id}
+            style={{
+              display: isActive ? 'flex' : 'none',
+              flexDirection: 'column',
+              height: '100%',
+              width: '100%',
+            }}
+          >
+            <TabContextProvider value={{ projectName: tab.projectName, panelType: tab.panelType, browsePath: tab.browsePath, browseBranch: tab.browseBranch, browseIsWorktree: tab.browseIsWorktree }}>
+              <PanelComponent />
+            </TabContextProvider>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

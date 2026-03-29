@@ -282,98 +282,122 @@ export function LogsViewer() {
           </div>
         )}
 
-        {logs.map((log) => (
-          <div
-            key={log.id}
-            onClick={() => setSelectedLog(selectedLog?.id === log.id ? null : log)}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '140px 50px 60px 80px 80px auto 70px',
-              gap: 0,
-              fontSize: 12,
-              padding: '4px 12px',
-              cursor: 'pointer',
-              borderBottom: '1px solid var(--bg-primary)',
-              color: 'var(--text-secondary)',
-              fontFamily: "'Cascadia Code', 'Consolas', monospace",
-              background: selectedLog?.id === log.id ? 'var(--bg-active)' : 'transparent',
-            }}
-            onMouseEnter={(e) => {
-              if (selectedLog?.id !== log.id) e.currentTarget.style.background = 'var(--bg-tertiary)';
-            }}
-            onMouseLeave={(e) => {
-              if (selectedLog?.id !== log.id) e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            <span style={{ color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {formatTimestamp(log.timestamp)}
-            </span>
-            <span style={{
-              color: levelColors[log.level] || 'var(--text-secondary)',
-              fontWeight: 600,
-              fontSize: 10,
-              textTransform: 'uppercase',
-            }}>
-              {log.level}
-            </span>
-            <span style={{
-              fontSize: 10,
-              background: 'var(--border-primary)',
-              borderRadius: 3,
-              padding: '0 4px',
-              display: 'inline-block',
-              textAlign: 'center',
-              color: 'var(--text-secondary)',
-              maxWidth: 50,
-            }}>
-              {functionIcons[log.functionArea] || log.functionArea.slice(0, 2).toUpperCase()}
-            </span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
-              {log.repo || '—'}
-            </span>
-            <span
-              onClick={(e) => {
-                if (log.sessionId) {
-                  e.stopPropagation();
-                  setFilterSession(log.sessionId);
-                }
-              }}
-              style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                color: log.sessionId ? 'var(--accent-primary)' : 'var(--text-tertiary)',
-                cursor: log.sessionId ? 'pointer' : 'default',
-                fontSize: 10,
-              }}
-              title={log.sessionId ? `Filter by session: ${log.sessionId}` : ''}
-            >
-              {log.sessionId ? log.sessionId.slice(0, 8) : '—'}
-            </span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {log.operation}: {log.message}
-            </span>
-            <span style={{ textAlign: 'right', color: log.durationMs ? '#d29922' : 'var(--text-tertiary)' }}>
-              {formatDuration(log.durationMs)}
-            </span>
-          </div>
-        ))}
+        {logs.map((log) => {
+          const isSelected = selectedLog?.id === log.id;
+          return (
+            <div key={log.id}>
+              <div
+                onClick={() => setSelectedLog(isSelected ? null : log)}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '140px 50px 60px 80px 80px auto 70px',
+                  gap: 0,
+                  fontSize: 12,
+                  padding: '4px 12px',
+                  cursor: 'pointer',
+                  borderBottom: isSelected ? 'none' : '1px solid var(--bg-primary)',
+                  color: 'var(--text-secondary)',
+                  fontFamily: "'Cascadia Code', 'Consolas', monospace",
+                  background: isSelected ? 'var(--bg-active)' : 'transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) e.currentTarget.style.background = 'var(--bg-tertiary)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <span style={{ color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {formatTimestamp(log.timestamp)}
+                </span>
+                <span style={{
+                  color: levelColors[log.level] || 'var(--text-secondary)',
+                  fontWeight: 600,
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                }}>
+                  {log.level}
+                </span>
+                <span style={{
+                  fontSize: 10,
+                  background: 'var(--border-primary)',
+                  borderRadius: 3,
+                  padding: '0 4px',
+                  display: 'inline-block',
+                  textAlign: 'center',
+                  color: 'var(--text-secondary)',
+                  maxWidth: 50,
+                }}>
+                  {functionIcons[log.functionArea] || log.functionArea.slice(0, 2).toUpperCase()}
+                </span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
+                  {log.repo || '—'}
+                </span>
+                <span
+                  onClick={(e) => {
+                    if (log.sessionId) {
+                      e.stopPropagation();
+                      setFilterSession(log.sessionId);
+                    }
+                  }}
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: log.sessionId ? 'var(--accent-primary)' : 'var(--text-tertiary)',
+                    cursor: log.sessionId ? 'pointer' : 'default',
+                    fontSize: 10,
+                  }}
+                  title={log.sessionId ? `Filter by session: ${log.sessionId}` : ''}
+                >
+                  {log.sessionId ? log.sessionId.slice(0, 8) : '—'}
+                </span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {log.operation}: {log.message}
+                </span>
+                <span style={{ textAlign: 'right', color: log.durationMs ? '#d29922' : 'var(--text-tertiary)' }}>
+                  {formatDuration(log.durationMs)}
+                </span>
+              </div>
 
-        {/* Expanded detail view */}
-        {selectedLog && selectedLog.details && (
-          <div style={{
-            padding: '8px 12px',
-            background: 'var(--bg-primary)',
-            borderBottom: '1px solid var(--border-primary)',
-            fontSize: 12,
-            color: 'var(--text-secondary)',
-            fontFamily: "'Cascadia Code', 'Consolas', monospace",
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-all',
-          }}>
-            {selectedLog.details}
-          </div>
-        )}
+              {/* Inline expanded detail panel */}
+              {isSelected && (
+                <div style={{
+                  padding: '8px 12px 8px 24px',
+                  background: 'var(--bg-active)',
+                  borderBottom: '1px solid var(--border-primary)',
+                  borderLeft: '3px solid var(--accent-primary)',
+                  fontSize: 12,
+                  fontFamily: "'Cascadia Code', 'Consolas', monospace",
+                  color: 'var(--text-secondary)',
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr',
+                  gap: '2px 12px',
+                  rowGap: 4,
+                }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Operation</span>
+                  <span>{log.operation}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Message</span>
+                  <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{log.message}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Function</span>
+                  <span>{log.functionArea}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Repo</span>
+                  <span>{log.repo || '—'}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Session ID</span>
+                  <span style={{ color: log.sessionId ? 'var(--accent-primary)' : 'var(--text-tertiary)' }}>{log.sessionId || '—'}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Timestamp</span>
+                  <span>{log.timestamp}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>End</span>
+                  <span>{log.endTimestamp || '—'}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Duration</span>
+                  <span style={{ color: log.durationMs ? '#d29922' : 'var(--text-tertiary)' }}>{log.durationMs !== null ? `${log.durationMs}ms` : '—'}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Details</span>
+                  <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{log.details || '—'}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

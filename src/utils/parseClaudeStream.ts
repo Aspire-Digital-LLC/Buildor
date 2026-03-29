@@ -43,6 +43,19 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
             toolUseId: block.id,
             input: block.input,
           }, sessionId);
+
+          // Intercept task tools to update the sticky task tracker
+          if (block.name === 'TodoWrite') {
+            const input = block.input || {};
+            if (input.todos) {
+              buildorEvents.emit('tasks-updated', { action: 'replace', todos: input.todos }, sessionId);
+            }
+          } else if (block.name === 'TaskCreate' || block.name === 'TaskOutput') {
+            buildorEvents.emit('tasks-updated', { action: 'create', task: block.input }, sessionId);
+          } else if (block.name === 'TaskUpdate') {
+            buildorEvents.emit('tasks-updated', { action: 'update', task: block.input }, sessionId);
+          }
+
           return {
             type: 'tool_use' as const,
             name: block.name,
