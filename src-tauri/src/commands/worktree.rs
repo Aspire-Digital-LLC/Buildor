@@ -53,6 +53,84 @@ fn worktree_base_dir(repo_path: &str) -> PathBuf {
     parent.join(format!("{}-worktrees", repo_name))
 }
 
+/// Merge .claude/settings.local.json permission rules from a worktree back into the main repo.
+/// New rules discovered in the worktree are added to the main repo's allow list (union merge).
+fn merge_permission_rules(worktree_path: &str, repo_path: &str) {
+    let wt_settings = Path::new(worktree_path).join(".claude").join("settings.local.json");
+    let repo_settings = Path::new(repo_path).join(".claude").join("settings.local.json");
+
+    // Nothing to merge if the worktree has no settings file
+    if !wt_settings.exists() {
+        return;
+    }
+
+    let wt_content = match std::fs::read_to_string(&wt_settings) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let wt_json: serde_json::Value = match serde_json::from_str(&wt_content) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    // Extract worktree rules
+    let wt_rules: Vec<String> = wt_json
+        .get("permissions")
+        .and_then(|p| p.get("allow"))
+        .and_then(|a| a.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    if wt_rules.is_empty() {
+        return;
+    }
+
+    // Load or create main repo settings
+    let mut repo_json: serde_json::Value = if repo_settings.exists() {
+        std::fs::read_to_string(&repo_settings)
+            .ok()
+            .and_then(|c| serde_json::from_str(&c).ok())
+            .unwrap_or_else(|| serde_json::json!({"permissions": {"allow": []}}))
+    } else {
+        serde_json::json!({"permissions": {"allow": []}})
+    };
+
+    // Get mutable reference to the allow array
+    let allow = repo_json
+        .as_object_mut()
+        .and_then(|obj| {
+            obj.entry("permissions")
+                .or_insert_with(|| serde_json::json!({"allow": []}))
+                .as_object_mut()
+        })
+        .and_then(|perms| {
+            perms.entry("allow")
+                .or_insert_with(|| serde_json::json!([]))
+                .as_array_mut()
+        });
+
+    if let Some(allow) = allow {
+        let existing: std::collections::HashSet<String> = allow
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+
+        for rule in &wt_rules {
+            if !existing.contains(rule) {
+                allow.push(serde_json::Value::String(rule.clone()));
+            }
+        }
+
+        // Write back
+        let claude_dir = Path::new(repo_path).join(".claude");
+        let _ = std::fs::create_dir_all(&claude_dir);
+        let _ = std::fs::write(
+            &repo_settings,
+            serde_json::to_string_pretty(&repo_json).unwrap_or_default(),
+        );
+    }
+}
+
 fn sessions_dir(project_name: &str) -> PathBuf {
     AppConfig::config_dir().join("projects").join(project_name).join("sessions")
 }
@@ -140,6 +218,14 @@ pub async fn create_session(
     // Add worktree
     run_git(&repo_path, &["worktree", "add", &wt_path_str, &branch_name])?;
 
+    // Copy .claude/settings.local.json from main repo to worktree (inherit permission rules)
+    let source_settings = Path::new(&repo_path).join(".claude").join("settings.local.json");
+    if source_settings.exists() {
+        let wt_claude_dir = wt_path.join(".claude");
+        let _ = std::fs::create_dir_all(&wt_claude_dir);
+        let _ = std::fs::copy(&source_settings, wt_claude_dir.join("settings.local.json"));
+    }
+
     let created_at = chrono::Utc::now().to_rfc3339();
 
     let session = SessionInfo {
@@ -225,6 +311,9 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
             }
         }
     }
+
+    // Merge permission rules from worktree back to main repo before removal
+    merge_permission_rules(&worktree_path, &repo_path);
 
     // Remove worktree
     run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"])?;
