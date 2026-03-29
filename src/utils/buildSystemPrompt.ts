@@ -26,9 +26,14 @@ export function buildSystemPrompt(...extra: (string | null | undefined)[]): stri
   const { selectedId, customPersonalities } = usePersonalityStore.getState();
   const personality = getPersonalityById(selectedId, customPersonalities);
 
+  // Wrap personality in explicit framing so it doesn't get lost after the identity context
+  const personalityBlock = personality?.prompt
+    ? `## Communication Style (MUST follow)\nYour personality is set to "${personality.name}". This overrides your default tone for ALL responses:\n${personality.prompt}\nAlways respond in this style, even when describing yourself or Buildor features.`
+    : null;
+
   return contextOnStart(
     buildorContext,
-    personality?.prompt,
+    personalityBlock,
     ...extra,
   );
 }
