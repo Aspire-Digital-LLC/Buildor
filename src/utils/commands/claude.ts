@@ -44,3 +44,16 @@ export async function addPermissionRule(sessionId: string, rule: string): Promis
 export async function queryClaudeStatus(): Promise<string> {
   return invoke('query_claude_status');
 }
+
+export interface ImageAttachment {
+  media_type: string;
+  data: string; // base64
+}
+
+export async function sendClaudeMessageWithImages(sessionId: string, text: string, images: ImageAttachment[]): Promise<void> {
+  return invoke('send_message_with_images', { sessionId, text, images });
+}
+
+export async function readFileBase64(path: string): Promise<[string, string]> {
+  return invoke('read_file_base64', { path });
+}

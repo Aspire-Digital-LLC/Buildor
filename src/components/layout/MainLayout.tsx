@@ -1,5 +1,8 @@
-import { useTabStore, useThemeStore } from '@/stores';
+import { useEffect, useRef } from 'react';
+import { useTabStore, useThemeStore, useProjectStore } from '@/stores';
 import { TabContextProvider } from '@/contexts/TabContext';
+import { buildorEvents } from '@/utils/buildorEvents';
+import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './Sidebar';
 import { PanelContainer } from './PanelContainer';
 import { TabBar } from './TabBar';
@@ -76,9 +79,37 @@ function ActivePanelRenderer() {
   );
 }
 
+/** Poll checked-out branches every 15s and sync UI when they change */
+function useBranchPoller() {
+  const branchCache = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    const poll = async () => {
+      const projects = useProjectStore.getState().projects;
+      for (const project of projects) {
+        try {
+          const branch: string = await invoke('get_current_branch', { repoPath: project.repoPath });
+          const prev = branchCache.current[project.name];
+          if (prev && branch !== prev) {
+            useTabStore.getState().updateCheckedOutBranch(project.name, project.repoPath, branch);
+            useProjectStore.getState().refreshCurrentBranch(project.name);
+            buildorEvents.emit('branch-switched', { projectName: project.name, branch });
+          }
+          branchCache.current[project.name] = branch;
+        } catch { /* repo may be unavailable */ }
+      }
+    };
+
+    poll(); // initial check
+    const interval = setInterval(poll, 15000);
+    return () => clearInterval(interval);
+  }, []);
+}
+
 export function MainLayout() {
   // Ensure theme store is initialized (triggers rehydration + applyTheme)
   useThemeStore();
+  useBranchPoller();
 
   return (
     <div style={{

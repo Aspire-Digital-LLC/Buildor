@@ -106,7 +106,9 @@ export function TaskTracker({ sessionId }: TaskTrackerProps) {
 
   useEffect(() => {
     const handler = (event: { sessionId?: string; data: unknown }) => {
-      if (sessionId && event.sessionId && event.sessionId !== sessionId) return;
+      // Accept events from current session, or any session if we don't have one yet
+      // This preserves tasks across session restarts (stop → new session)
+
       const data = event.data as {
         action: 'replace' | 'create' | 'update';
         todos?: TaskItem[];

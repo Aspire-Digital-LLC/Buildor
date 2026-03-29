@@ -211,12 +211,14 @@ pub async fn create_session(
     let _ = run_git(&repo_path, &["fetch", "--all"]);
 
     // Create branch and worktree
-    // First try to create the branch from the base
-    run_git(&repo_path, &["branch", &branch_name, &format!("origin/{}", base_branch)])
-        .or_else(|_| run_git(&repo_path, &["branch", &branch_name, &base_branch]))?;
+    run_git(&repo_path, &["branch", "--no-track", &branch_name, &format!("origin/{}", base_branch)])
+        .or_else(|_| run_git(&repo_path, &["branch", "--no-track", &branch_name, &base_branch]))?;
 
     // Add worktree
     run_git(&repo_path, &["worktree", "add", &wt_path_str, &branch_name])?;
+
+    // Push branch to remote and set upstream tracking
+    let _ = run_git(&wt_path_str, &["push", "-u", "origin", &branch_name]);
 
     // Copy .claude/settings.local.json from main repo to worktree (inherit permission rules)
     let source_settings = Path::new(&repo_path).join(".claude").join("settings.local.json");
@@ -310,19 +312,36 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
             return Err("Session has uncommitted changes. Commit or discard them first, or force-close.".to_string());
         }
 
-        // Check for unpushed commits (no upstream = unpushed)
-        let has_upstream = run_git(&worktree_path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok();
-        if has_upstream {
-            let ahead = run_git(&worktree_path, &["rev-list", "--count", "@{u}..HEAD"]).unwrap_or_default();
-            if ahead.trim().parse::<i32>().unwrap_or(0) > 0 {
-                return Err("Session has unpushed commits. Push first, or force-close.".to_string());
-            }
+        // Read the session file to get the base branch for accurate comparison
+        let session_file = sessions_dir(&project_name).join(format!("{}.json", session_id));
+        let base_branch = if let Ok(content) = std::fs::read_to_string(&session_file) {
+            serde_json::from_str::<SessionInfo>(&content)
+                .ok()
+                .map(|s| s.base_branch)
         } else {
-            // No upstream — check if there are any commits beyond the base
-            let log = run_git(&worktree_path, &["log", "--oneline", "-1"]).unwrap_or_default();
-            if !log.trim().is_empty() {
-                // Branch exists with commits but was never pushed
-                return Err("Session branch was never pushed to remote. Push first, or force-close.".to_string());
+            None
+        };
+
+        // Check for unpushed work: compare HEAD against the base branch (origin/{base})
+        // rather than @{u}, since worktree branches are created with --no-track
+        // and may not have an upstream, or may track the wrong one.
+        if let Some(ref base) = base_branch {
+            let base_ref = format!("origin/{}", base);
+            // Check if branch has commits beyond the base
+            let ahead = run_git(&worktree_path, &["rev-list", "--count", &format!("{}..HEAD", base_ref)]).unwrap_or_default();
+            if ahead.trim().parse::<i32>().unwrap_or(0) > 0 {
+                // Has local commits — check if they've been pushed to a remote branch
+                let branch_name = run_git(&worktree_path, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+                let remote_ref = format!("origin/{}", branch_name.trim());
+                let remote_exists = run_git(&worktree_path, &["rev-parse", "--verify", &remote_ref]).is_ok();
+                if !remote_exists {
+                    return Err("Session branch was never pushed to remote. Push first, or force-close.".to_string());
+                }
+                // Remote exists — check if local is ahead of it
+                let ahead_of_remote = run_git(&worktree_path, &["rev-list", "--count", &format!("{}..HEAD", remote_ref)]).unwrap_or_default();
+                if ahead_of_remote.trim().parse::<i32>().unwrap_or(0) > 0 {
+                    return Err("Session has unpushed commits. Push first, or force-close.".to_string());
+                }
             }
         }
     }

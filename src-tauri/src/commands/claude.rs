@@ -253,6 +253,81 @@ pub async fn send_message(session_id: String, message: String) -> Result<(), Str
     Ok(())
 }
 
+/// Send a message with optional image attachments to Claude
+/// Images are provided as objects with { media_type, data } (base64)
+#[tauri::command]
+pub async fn send_message_with_images(
+    session_id: String,
+    text: String,
+    images: Vec<serde_json::Value>,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    let session = map.get_mut(&session_id)
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let stdin = session.stdin.as_mut()
+        .ok_or_else(|| "Session stdin not available".to_string())?;
+
+    // Build content array: images first, then text
+    let mut content = Vec::new();
+    for img in &images {
+        content.push(serde_json::json!({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": img["media_type"],
+                "data": img["data"]
+            }
+        }));
+    }
+    if !text.is_empty() {
+        content.push(serde_json::json!({
+            "type": "text",
+            "text": text
+        }));
+    }
+
+    let input_msg = serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": content
+        }
+    });
+
+    let json_str = serde_json::to_string(&input_msg)
+        .map_err(|e| format!("Failed to serialize message: {}", e))?;
+
+    writeln!(stdin, "{}", json_str)
+        .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    stdin.flush()
+        .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+
+    Ok(())
+}
+
+/// Read a file as base64 (for image attachments)
+#[tauri::command]
+pub async fn read_file_base64(path: String) -> Result<(String, String), String> {
+    use base64::Engine;
+    let data = std::fs::read(&path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+    let media_type = match path.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        _ => "image/png",
+    };
+    Ok((media_type.to_string(), b64))
+}
+
 /// Send a permission response (approve/deny) back to Claude
 #[tauri::command]
 pub async fn respond_to_permission(

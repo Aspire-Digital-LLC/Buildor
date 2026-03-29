@@ -416,6 +416,8 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
       opacity: fading ? 0 : 1,
       maxHeight: fading ? 0 : 500,
       overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
       <div style={{
         padding: '8px 12px',
@@ -423,13 +425,14 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
         alignItems: 'center',
         gap: 8,
         borderBottom: '1px solid var(--border-primary)',
+        flexShrink: 0,
       }}>
         <span style={{ fontSize: 16 }}>⚠️</span>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#d29922' }}>
           Permission Required
         </span>
       </div>
-      <div style={{ padding: '10px 12px' }}>
+      <div style={{ padding: '10px 12px', overflow: 'auto', flex: 1, minHeight: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <span>{icon}</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{toolName}</span>
@@ -457,6 +460,9 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
             $ {(input as any).command}
           </div>
         )}
+      </div>
+      {/* Action buttons — always visible at bottom */}
+      <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border-primary)', flexShrink: 0 }}>
         {resolved ? (
           <div style={{
             fontSize: 12,
@@ -484,23 +490,18 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
             </button>
             <button
               onClick={async () => {
-                // Approve this request + save rule to .claude/settings.local.json
                 await handleResponse(true);
                 if (sessionId) {
                   try {
                     const { addPermissionRule } = await import('@/utils/commands/claude');
-                    // Build permission rule matching Claude Code's format
                     let rule = toolName;
                     if (toolName === 'Bash' && input?.command) {
-                      // Extract the base command for the wildcard pattern
                       const cmd = String(input.command);
                       const baseCmd = cmd.split(' ')[0];
                       rule = `Bash(${baseCmd}:*)`;
                     }
                     await addPermissionRule(sessionId, rule);
-                  } catch {
-                    // Best-effort — don't block the approval
-                  }
+                  } catch { /* best-effort */ }
                 }
               }}
               style={{

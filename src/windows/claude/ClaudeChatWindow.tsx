@@ -4,7 +4,9 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
 import { useThemeStore } from '@/stores/themeStore';
 import { applyTheme } from '@/themes/themes';
-import { startClaudeSession, sendClaudeMessage, stopSession, runClaudeCli } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, runClaudeCli } from '@/utils/commands/claude';
+import { useImageAttachments } from '@/components/claude-chat/useImageAttachments';
+import { ImagePreviewStrip } from '@/components/claude-chat/ImagePreviewStrip';
 import type { ChatContent } from '@/components/claude-chat/ChatMessage';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { buildSystemPrompt } from '@/utils/buildSystemPrompt';
@@ -38,6 +40,7 @@ export function ClaudeChatWindow() {
   const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
   const chatState = useChatGlow(sessionId, isSending);
   const glowStyle = getGlowStyle(chatState);
 
@@ -312,7 +315,7 @@ export function ClaudeChatWindow() {
   }, [sessionId, workingDir, messages]);
 
   const handleSend = useCallback(async () => {
-    if (!sessionId || !input.trim() || isSending) return;
+    if (!sessionId || (!input.trim() && !hasImages) || isSending) return;
     const msg = input.trim();
 
     // Check for slash commands
@@ -320,16 +323,13 @@ export function ClaudeChatWindow() {
       const cmdName = msg.split(' ')[0].toLowerCase();
       const hasArgs = msg.includes(' ');
       if (!hasArgs) {
-        // Pure slash command (no args)
         handleSlashCommand(cmdName);
         return;
       }
-      // Slash command with args
       if (isBuiltinCommand(cmdName) || dynamicCommands.some((c) => c.name === cmdName)) {
         handleSlashCommand(cmdName, msg);
         return;
       }
-      // Unknown /command with args — scan before sending
       if (workingDir) {
         setInput('');
         handleSlashCommand(cmdName, msg);
@@ -339,15 +339,28 @@ export function ClaudeChatWindow() {
 
     setInput('');
     setIsSending(true);
-    setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: msg }] }]);
+    const userContent: ChatContent[] = [];
+    if (hasImages) {
+      for (const img of images) {
+        userContent.push({ type: 'text', text: `[Image: ${img.name}]` });
+      }
+    }
+    if (msg) userContent.push({ type: 'text', text: msg });
+    setMessages((prev) => [...prev, { role: 'user', content: userContent }]);
     try {
-      await sendClaudeMessage(sessionId, msg);
+      if (hasImages) {
+        const attachments = getAttachments();
+        clearImages();
+        await sendClaudeMessageWithImages(sessionId, msg, attachments);
+      } else {
+        await sendClaudeMessage(sessionId, msg);
+      }
     } catch (e) {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
       setIsSending(false);
     }
     inputRef.current?.focus();
-  }, [sessionId, input, isSending, handleSlashCommand]);
+  }, [sessionId, input, isSending, hasImages, images, getAttachments, clearImages, handleSlashCommand]);
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
@@ -538,23 +551,34 @@ export function ClaudeChatWindow() {
         </div>
 
         {/* Sticky task tracker */}
-        {sessionId && <TaskTracker sessionId={sessionId} />}
+        <TaskTracker sessionId={sessionId || undefined} />
 
         {/* Thinking animation */}
         {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}
 
         {/* Input */}
         {sessionId && (
-          <div style={{
-            padding: 8,
-            borderTop: '1px solid var(--border-primary)',
-            background: 'var(--bg-primary)',
-            display: 'flex',
-            gap: 6,
-            flexShrink: 0,
-            position: 'relative',
-          }}>
-            {/* Slash command autocomplete */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const files = e.dataTransfer?.files;
+              if (files) {
+                for (const file of Array.from(files)) {
+                  if (file.type.startsWith('image/')) await addImageFromFile(file);
+                }
+              }
+            }}
+            style={{
+              borderTop: '1px solid var(--border-primary)',
+              background: 'var(--bg-primary)',
+              flexShrink: 0,
+              position: 'relative',
+            }}
+          >
+            <ImagePreviewStrip images={images} onRemove={removeImage} />
+            <div style={{ padding: 8, display: 'flex', gap: 6 }}>
             {showSlashMenu && (
               <SlashCommandMenu
                 filter={input}
@@ -564,7 +588,6 @@ export function ClaudeChatWindow() {
                 dynamicCommands={dynamicCommands}
               />
             )}
-            {/* Model picker */}
             {showModelPicker && (
               <ModelPicker
                 currentModel={model}
@@ -578,7 +601,19 @@ export function ClaudeChatWindow() {
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder={isSending ? 'Claude is thinking...' : 'Type a message or / for commands...'}
+              onPaste={async (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (const item of Array.from(items)) {
+                  if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) await addImageFromFile(file);
+                    return;
+                  }
+                }
+              }}
+              placeholder={isSending ? 'Claude is thinking...' : hasImages ? 'Add a message about the image(s)...' : 'Type a message or / for commands...'}
               disabled={isSending}
               style={{
                 flex: 1,
@@ -606,15 +641,16 @@ export function ClaudeChatWindow() {
                 Pause
               </button>
             ) : (
-              <button onClick={handleSend} disabled={!input.trim()} style={{
-                background: input.trim() ? '#238636' : 'var(--border-primary)',
-                border: 'none', color: input.trim() ? '#fff' : 'var(--text-tertiary)',
+              <button onClick={handleSend} disabled={!input.trim() && !hasImages} style={{
+                background: (input.trim() || hasImages) ? '#238636' : 'var(--border-primary)',
+                border: 'none', color: (input.trim() || hasImages) ? '#fff' : 'var(--text-tertiary)',
                 borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-                cursor: input.trim() ? 'pointer' : 'default',
+                cursor: (input.trim() || hasImages) ? 'pointer' : 'default',
               }}>
                 Send
               </button>
             )}
+            </div>
           </div>
         )}
       </div>
