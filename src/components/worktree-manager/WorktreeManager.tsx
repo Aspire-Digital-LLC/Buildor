@@ -31,6 +31,7 @@ export function WorktreeManager() {
   const [closing, setClosing] = useState<string | null>(null);
   const [forceClosing, setForceClosing] = useState<string | null>(null);
   const [closingProject, setClosingProject] = useState<string | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
   const [globalConfirmText, setGlobalConfirmText] = useState('');
 
@@ -85,6 +86,8 @@ export function WorktreeManager() {
             message: `Blocked close: ${errMsg}`,
           }).catch(() => {});
         } else {
+          setCloseError(errMsg);
+          setTimeout(() => setCloseError(null), 8000);
           logEvent({
             sessionId: session.sessionId,
             repo: session.repoPath,
@@ -249,6 +252,23 @@ export function WorktreeManager() {
           )}
         </div>
       </div>
+
+      {/* Close error banner */}
+      {closeError && (
+        <div style={{
+          padding: '8px 12px',
+          marginBottom: 12,
+          background: '#3d1f1f',
+          border: '1px solid #6e3030',
+          borderRadius: 6,
+          color: '#f85149',
+          fontSize: 12,
+        }}>
+          {closeError.includes('Permission denied')
+            ? 'Cannot close — files are locked by another process (VS Code, Claude, etc). Close the program using this worktree and try again.'
+            : closeError}
+        </div>
+      )}
 
       {/* Global confirm */}
       {showGlobalConfirm && (

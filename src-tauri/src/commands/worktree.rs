@@ -287,6 +287,21 @@ pub async fn list_sessions() -> Result<Vec<SessionInfo>, String> {
 pub async fn close_session(session_id: String, project_name: String, repo_path: String, worktree_path: String, force: Option<bool>) -> Result<(), String> {
     let force = force.unwrap_or(false);
 
+    // If the worktree directory no longer exists, just clean up the session file and prune
+    let wt_path = Path::new(&worktree_path);
+    if !wt_path.exists() {
+        let _ = run_git(&repo_path, &["worktree", "prune"]);
+        let session_file = sessions_dir(&project_name).join(format!("{}.json", session_id));
+        if session_file.exists() {
+            let _ = std::fs::remove_file(&session_file);
+        }
+        let session_data = sessions_dir(&project_name).join(&session_id);
+        if session_data.exists() {
+            let _ = std::fs::remove_dir_all(&session_data);
+        }
+        return Ok(());
+    }
+
     // Safety check: warn if there are uncommitted changes or unpushed commits
     if !force {
         // Check for uncommitted changes
@@ -315,8 +330,28 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
     // Merge permission rules from worktree back to main repo before removal
     merge_permission_rules(&worktree_path, &repo_path);
 
-    // Remove worktree
-    run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"])?;
+    // Remove worktree — try git first, fall back to manual deletion on Windows lock errors
+    let remove_result = run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"]);
+    if let Err(ref e) = remove_result {
+        if e.contains("Permission denied") || e.contains("being used by another process") {
+            // Windows file lock — try to remove the directory manually after a short delay
+            // This handles cases where a Claude process or editor just released the lock
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let wt = Path::new(&worktree_path);
+            if wt.exists() {
+                let _ = std::fs::remove_dir_all(wt);
+            }
+            // Force git to forget about the worktree even if dir removal partially failed
+            let _ = run_git(&repo_path, &["worktree", "prune"]);
+        } else {
+            // Non-lock error — still clean up the session file so it doesn't become a zombie
+            let session_file = sessions_dir(&project_name).join(format!("{}.json", session_id));
+            if session_file.exists() {
+                let _ = std::fs::remove_file(&session_file);
+            }
+            return Err(e.clone());
+        }
+    }
 
     // Prune
     let _ = run_git(&repo_path, &["worktree", "prune"]);
