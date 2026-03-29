@@ -23,28 +23,104 @@ jobs:
           VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-  build:
+  build-windows:
     needs: read-version
+    runs-on: windows-latest
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            args: ""
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-          - platform: ubuntu-latest
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies (Linux only)
-        if: matrix.platform == 'ubuntu-latest'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: windows-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: windows-cargo-
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ needs.read-version.outputs.version }}
+          releaseName: "Buildor v${{ needs.read-version.outputs.version }}"
+          releaseBody: "See the assets below to download and install Buildor v${{ needs.read-version.outputs.version }}."
+          releaseDraft: false
+          prerelease: false
+
+  build-macos:
+    needs: read-version
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: macos-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: macos-cargo-
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ needs.read-version.outputs.version }}
+          releaseName: "Buildor v${{ needs.read-version.outputs.version }}"
+          releaseBody: "See the assets below to download and install Buildor v${{ needs.read-version.outputs.version }}."
+          releaseDraft: false
+          prerelease: false
+          args: "--target aarch64-apple-darwin"
+
+  build-linux:
+    needs: read-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -65,10 +141,8 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
-      - name: Cache Cargo registry and build
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -77,14 +151,13 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             src-tauri/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          key: linux-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: linux-cargo-
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build and release with tauri-action
+      - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -94,4 +167,3 @@ jobs:
           releaseBody: "See the assets below to download and install Buildor v${{ needs.read-version.outputs.version }}."
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
