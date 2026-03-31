@@ -4,6 +4,7 @@ import {
   endChatSession,
   saveChatMessage,
   generateChatTitle,
+  deleteChatSession,
 } from '@/utils/commands/chatHistory';
 import type { ParsedMessage } from './ChatMessage';
 
@@ -37,10 +38,15 @@ export function useChatHistory({ projectName, repoPath, branchName, worktreeSess
   const endSession = useCallback(async () => {
     const id = chatSessionIdRef.current;
     if (!id) return;
-    endChatSession(id).catch(() => {});
-    // Generate title if we haven't yet and have enough messages
-    if (!titleGeneratedRef.current && userMessageCountRef.current >= 1) {
-      generateChatTitle(id).catch(() => {});
+    if (userMessageCountRef.current === 0) {
+      // No user prompts — auto-delete empty session
+      deleteChatSession(id).catch(() => {});
+    } else {
+      endChatSession(id).catch(() => {});
+      // Generate title if we haven't yet
+      if (!titleGeneratedRef.current) {
+        generateChatTitle(id).catch(() => {});
+      }
     }
     chatSessionIdRef.current = null;
   }, []);
