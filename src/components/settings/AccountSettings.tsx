@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUsageStore } from '@/stores';
-import { openLoginWindow, hasClaudeSession, clearClaudeSession, fetchClaudeUsage, startUsagePolling } from '@/utils/commands/account';
+import { openLoginWindow, hasClaudeSession, clearClaudeSession, fetchClaudeUsage, startUsagePolling, stopUsagePolling } from '@/utils/commands/account';
 import { logEvent } from '@/utils/commands/logging';
 import { listen } from '@tauri-apps/api/event';
 
@@ -161,12 +161,20 @@ export function AccountSettings() {
 
   const handleLogout = async () => {
     try {
+      await stopUsagePolling().catch(() => {});
       await clearClaudeSession();
       setLoggedIn(false);
       setUsageData(null);
+      setStatus({
+        ...status,
+        tokenUsedPercent: 0,
+        weeklyUsedPercent: 0,
+        tokenResetAt: null,
+        weeklyResetAt: null,
+      });
       logEvent({
         functionArea: 'system', level: 'info',
-        operation: 'logout', message: 'Session cleared',
+        operation: 'logout', message: 'Session and browser data cleared',
       }).catch(() => {});
     } catch { /* ignore */ }
   };

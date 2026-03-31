@@ -286,9 +286,29 @@ pub async fn has_claude_session() -> Result<bool, String> {
     Ok(session_path.exists())
 }
 
-/// Clear stored session (logout)
+/// Clear stored session (logout) — also purges webview cookies so next login is fresh
 #[tauri::command]
-pub async fn clear_claude_session() -> Result<(), String> {
+pub async fn clear_claude_session(app: AppHandle) -> Result<(), String> {
+    // 1. Stop the usage poller (it holds claude.ai session cookies)
+    if let Some(win) = app.get_webview_window("claude-usage-poller") {
+        let _ = win.close();
+    }
+
+    // 2. Clear webview browsing data (cookies, localStorage, sessionStorage)
+    //    All Tauri webviews share one profile, so clearing from a temp webview purges all.
+    let label = "buildor-logout-cleanup";
+    let url = WebviewUrl::External("about:blank".parse().unwrap());
+    if let Ok(tmp_win) = WebviewWindowBuilder::new(&app, label, url)
+        .visible(false)
+        .skip_taskbar(true)
+        .inner_size(1.0, 1.0)
+        .build()
+    {
+        let _ = tmp_win.clear_all_browsing_data();
+        let _ = tmp_win.close();
+    }
+
+    // 3. Delete stored session file
     let config_dir = dirs_next::data_dir()
         .or_else(dirs_next::home_dir)
         .ok_or_else(|| "Cannot find config directory".to_string())?
