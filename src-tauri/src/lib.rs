@@ -101,6 +101,7 @@ pub fn run() {
             commands::chat_history::update_chat_session_summary,
             commands::chat_history::generate_chat_title,
             commands::chat_history::generate_chat_summary,
+            commands::chat_history::delete_chat_session,
             commands::chat_history::delete_chat_history_for_worktree,
             commands::chat_history::delete_chat_history_for_project,
             commands::account::open_login_window,

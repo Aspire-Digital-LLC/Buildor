@@ -413,6 +413,15 @@ impl LogDb {
         Ok(())
     }
 
+    pub fn delete_chat_session(&self, id: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        conn.execute(
+            "DELETE FROM chat_sessions WHERE id = ?1",
+            params![id],
+        ).map_err(|e| format!("Failed to delete chat session: {}", e))?;
+        Ok(())
+    }
+
     pub fn delete_sessions_by_worktree(&self, worktree_session_id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
         // CASCADE deletes messages automatically

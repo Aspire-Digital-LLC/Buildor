@@ -106,6 +106,10 @@ export async function generateChatSummary(sessionId: string): Promise<string> {
   return invoke('generate_chat_summary', { sessionId });
 }
 
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  return invoke('delete_chat_session', { sessionId });
+}
+
 export async function deleteChatHistoryForWorktree(worktreeSessionId: string): Promise<void> {
   return invoke('delete_chat_history_for_worktree', { worktreeSessionId });
 }

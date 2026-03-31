@@ -182,6 +182,12 @@ pub async fn generate_chat_summary(session_id: String) -> Result<String, String>
 }
 
 #[tauri::command]
+pub async fn delete_chat_session(session_id: String) -> Result<(), String> {
+    let db = get_log_db()?;
+    db.delete_chat_session(&session_id)
+}
+
+#[tauri::command]
 pub async fn delete_chat_history_for_worktree(worktree_session_id: String) -> Result<(), String> {
     let db = get_log_db()?;
     db.delete_sessions_by_worktree(&worktree_session_id)

@@ -41,6 +41,7 @@ export function ClaudeChat() {
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
+  const startingRef = useRef(false);
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
@@ -121,6 +122,8 @@ export function ClaudeChat() {
   }, [sessionId, model]);
 
   const startClaude = async (dir: string, modelOverride?: string) => {
+    if (startingRef.current) return;
+    startingRef.current = true;
     setIsStarting(true);
     try {
       const systemPrompt = buildSystemPrompt();
@@ -140,6 +143,7 @@ export function ClaudeChat() {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
     }
     setIsStarting(false);
+    startingRef.current = false;
   };
 
   // Auto-start when component mounts with a valid path

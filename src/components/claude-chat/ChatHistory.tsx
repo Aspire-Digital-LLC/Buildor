@@ -3,6 +3,8 @@ import {
   listChatSessions,
   getChatMessages,
   generateChatTitle,
+  updateChatSessionTitle,
+  deleteChatSession,
   type ChatSession,
   type ChatMessageRecord,
 } from '@/utils/commands/chatHistory';
@@ -31,6 +33,8 @@ export function ChatHistory({
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [viewMessages, setViewMessages] = useState<ChatMessageRecord[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState('');
 
   // Load session list
   const loadSessions = useCallback(async () => {
@@ -61,6 +65,28 @@ export function ChatHistory({
   useEffect(() => {
     if (isOpen && currentSessionId) loadSessions();
   }, [currentSessionId, isOpen, loadSessions]);
+
+  const handleDeleteSession = async (sessionId: string) => {
+    await deleteChatSession(sessionId).catch(() => {});
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+  };
+
+  const handleStartRename = (session: ChatSession) => {
+    setEditingTitleId(session.id);
+    setEditTitleValue(session.title || '');
+  };
+
+  const handleSaveRename = async (sessionId: string) => {
+    const trimmed = editTitleValue.trim();
+    if (trimmed) {
+      await updateChatSessionTitle(sessionId, trimmed).catch(() => {});
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title: trimmed } : s))
+      );
+    }
+    setEditingTitleId(null);
+    setEditTitleValue('');
+  };
 
   const handleViewSession = async (sessionId: string) => {
     if (viewingSessionId === sessionId) {
@@ -281,8 +307,8 @@ export function ChatHistory({
 
                 {/* Session info — clickable to view */}
                 <div
-                  onClick={() => handleViewSession(s.id)}
-                  style={{ flex: 1, cursor: 'pointer', minWidth: 0 }}
+                  onClick={() => editingTitleId !== s.id && handleViewSession(s.id)}
+                  style={{ flex: 1, cursor: editingTitleId === s.id ? 'default' : 'pointer', minWidth: 0 }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     {s.id === currentSessionId && (
@@ -296,19 +322,45 @@ export function ChatHistory({
                         }}
                       />
                     )}
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        fontStyle: s.title ? 'normal' : 'italic',
-                      }}
-                    >
-                      {s.title || 'Untitled...'}
-                    </span>
+                    {editingTitleId === s.id ? (
+                      <input
+                        autoFocus
+                        value={editTitleValue}
+                        onChange={(e) => setEditTitleValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename(s.id);
+                          if (e.key === 'Escape') { setEditingTitleId(null); setEditTitleValue(''); }
+                        }}
+                        onBlur={() => handleSaveRename(s.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--accent-primary)',
+                          borderRadius: 3,
+                          padding: '1px 4px',
+                          outline: 'none',
+                          width: '100%',
+                          fontFamily: 'inherit',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontStyle: s.title ? 'normal' : 'italic',
+                        }}
+                      >
+                        {s.title || 'Untitled...'}
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{
@@ -329,6 +381,49 @@ export function ChatHistory({
                   >
                     {formatDate(s.startedAt)} · {s.messageCount} msg{s.messageCount !== 1 ? 's' : ''}
                   </div>
+                </div>
+
+                {/* Action buttons — pencil + trash */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0, marginTop: 1 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleStartRename(s); }}
+                    title="Rename session"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '2px',
+                      color: 'var(--text-tertiary)',
+                      opacity: 0.5,
+                      transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
+                    title="Delete session"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '2px',
+                      color: 'var(--text-tertiary)',
+                      opacity: 0.5,
+                      transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#f85149'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             ))

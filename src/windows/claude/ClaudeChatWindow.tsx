@@ -43,6 +43,7 @@ export function ClaudeChatWindow() {
   const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const startingRef = useRef(false);
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
@@ -165,6 +166,8 @@ export function ClaudeChatWindow() {
   }, [sessionId, model]);
 
   const startClaude = async (dir: string, modelOverride?: string) => {
+    if (startingRef.current) return;
+    startingRef.current = true;
     setIsStarting(true);
     try {
       const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, buildSystemPrompt());
@@ -184,6 +187,7 @@ export function ClaudeChatWindow() {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
     }
     setIsStarting(false);
+    startingRef.current = false;
   };
 
   // Handle slash commands
