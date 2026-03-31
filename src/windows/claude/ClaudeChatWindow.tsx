@@ -17,6 +17,9 @@ import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, t
 import { ThinkingIndicator } from '@/components/claude-chat/ThinkingIndicator';
 import { TaskTracker } from '@/components/claude-chat/TaskTracker';
 import { useChatGlow, getGlowStyle } from '@/components/claude-chat/useChatGlow';
+import { useChatHistory } from '@/components/claude-chat/useChatHistory';
+import { ChatHistory } from '@/components/claude-chat/ChatHistory';
+import { buildAwareContext } from '@/utils/buildAwareContext';
 import { StatusBar } from '@/components/layout/StatusBar';
 import '@/utils/sounds'; // Initialize sound event listeners
 
@@ -41,8 +44,19 @@ export function ClaudeChatWindow() {
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
+  const [projectName, setProjectName] = useState<string>('');
+  const [branchName, setBranchName] = useState<string>('');
+  const [repoPath, setRepoPath] = useState<string>('');
   const chatState = useChatGlow(sessionId, isSending);
   const glowStyle = getGlowStyle(chatState);
+  const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage } = useChatHistory({
+    projectName,
+    repoPath,
+    branchName,
+    worktreeSessionId,
+  });
 
   // Apply theme to this window (breakout windows have their own document)
   const themeId = useThemeStore((s) => s.themeId);
@@ -73,6 +87,9 @@ export function ClaudeChatWindow() {
         if (session) {
           setWorkingDir(session.worktreePath);
           setWorktreeSessionId(session.sessionId);
+          setProjectName(session.projectName);
+          setBranchName(session.branchName);
+          setRepoPath(session.repoPath);
           setMessages([{
             role: 'system',
             content: [{ type: 'text', text: `Session: ${session.branchName}\nWorktree: ${session.worktreePath}` }],
@@ -119,11 +136,13 @@ export function ClaudeChatWindow() {
           setPermissionQueue((q) => [...q, permBlock.requestId!]);
         }
         setMessages((prev) => [...prev, parsed]);
+        saveMessage(parsed);
       }
     });
 
     const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
+      endChatSession();
       setSessionId(null);
       setIsSending(false);
     });
@@ -150,6 +169,7 @@ export function ClaudeChatWindow() {
     try {
       const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, buildSystemPrompt());
       setSessionId(sid);
+      startChatSession(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Claude ready.` }] }]);
       logEvent({
         sessionId: worktreeSessionId || undefined,
@@ -199,6 +219,7 @@ export function ClaudeChatWindow() {
     }
 
     if (command === '/clear') {
+      endChatSession();
       if (sessionId) {
         await stopSession(sessionId);
       }
@@ -279,6 +300,7 @@ export function ClaudeChatWindow() {
     }]);
 
     // Stop current session and restart with new model
+    endChatSession();
     if (sessionId) {
       await stopSession(sessionId);
       setSessionId(null);
@@ -347,20 +369,32 @@ export function ClaudeChatWindow() {
     }
     if (msg) userContent.push({ type: 'text', text: msg });
     setMessages((prev) => [...prev, { role: 'user', content: userContent }]);
+    saveUserMessage(userContent);
     try {
+      // Build aware context prefix if any sessions are selected
+      let messageToSend = msg;
+      if (awareSessions.size > 0 && !hasImages) {
+        const awareCtx = await buildAwareContext(
+          Array.from(awareSessions),
+          projectName,
+          worktreeSessionId,
+        ).catch(() => '');
+        if (awareCtx) messageToSend = awareCtx + msg;
+      }
+
       if (hasImages) {
         const attachments = getAttachments();
         clearImages();
         await sendClaudeMessageWithImages(sessionId, msg, attachments);
       } else {
-        await sendClaudeMessage(sessionId, msg);
+        await sendClaudeMessage(sessionId, messageToSend);
       }
     } catch (e) {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
       setIsSending(false);
     }
     inputRef.current?.focus();
-  }, [sessionId, input, isSending, hasImages, images, getAttachments, clearImages, handleSlashCommand]);
+  }, [sessionId, input, isSending, hasImages, images, getAttachments, clearImages, handleSlashCommand, awareSessions, projectName, worktreeSessionId]);
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
@@ -372,6 +406,7 @@ export function ClaudeChatWindow() {
         return `${role}: ${text}`;
       }).join('\n\n');
 
+    endChatSession();
     await stopSession(sessionId);
     setSessionId(null);
     setIsSending(false);
@@ -381,6 +416,7 @@ export function ClaudeChatWindow() {
       try {
         const { sessionId: sid } = await startClaudeSession(workingDir, selectedModel, buildSystemPrompt());
         setSessionId(sid);
+        startChatSession(sid);
         if (history.trim()) {
           await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
         }
@@ -720,6 +756,24 @@ export function ClaudeChatWindow() {
           Skills & Flows
         </div>
       )}
+
+      {/* History sidebar */}
+      <ChatHistory
+        projectName={projectName}
+        worktreeSessionId={worktreeSessionId}
+        currentSessionId={sessionId}
+        awareSessions={awareSessions}
+        onToggleAware={(id) =>
+          setAwareSessions((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })
+        }
+        isOpen={historyOpen}
+        onToggleOpen={() => setHistoryOpen(!historyOpen)}
+      />
       </div>
       <StatusBar sessionId={sessionId} />
     </div>

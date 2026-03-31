@@ -76,3 +76,21 @@ Established code patterns, conventions, and reusable approaches in this project.
 **Implementation**: `StatusBar` component in `src/components/layout/StatusBar.tsx`, placed below the Sidebar+Content flex container in `MainLayout.tsx`. Uses `useUsageStore` + `useProjectStore` for data. Polls `claude status` CLI every 5 minutes for plan/quota info.
 **Example**: Left side: git branch, project, model, cost. Right side: plan badge, context window %, session tokens, weekly usage %, reset time.
 **Why**: Spans full window width (24px tall), always visible regardless of active panel. Matches VS Code's status bar UX.
+
+---
+
+### Chat History Persistence Hook
+
+**When to use**: Any chat component (main or breakout) that needs to persist messages to SQLite
+**Implementation**: Import `useChatHistory()` with `{ projectName, repoPath, branchName, worktreeSessionId? }`. Returns `{ startSession, endSession, saveMessage, saveUserMessage }`. Call `startSession(sid)` after Claude starts, `saveMessage(parsed)` on each stream event, `saveUserMessage(content)` on user sends, `endSession()` on stop/clear/exit.
+**Example**: `src/components/claude-chat/ClaudeChat.tsx` and `src/windows/claude/ClaudeChatWindow.tsx`
+**Why**: All message saves are fire-and-forget (`.catch(() => {})`) — logging must never break the chat flow. The hook tracks seq counter and user message count internally for title generation triggers.
+
+---
+
+### Shared DB Accessor Pattern
+
+**When to use**: Any Rust module that needs the logging/chat history SQLite database
+**Implementation**: Call `crate::logging::get_log_db()` which returns `Result<&'static LogDb, String>`. The `LogDb` is initialized once via `OnceLock` and shared across all commands.
+**Example**: `src-tauri/src/commands/chat_history.rs`, `src-tauri/src/commands/logging.rs`, `src-tauri/src/commands/worktree.rs` (cleanup)
+**Why**: Replaces the per-module `OnceLock` pattern that was duplicated in `commands/logging.rs`. Single source of truth for the database connection.

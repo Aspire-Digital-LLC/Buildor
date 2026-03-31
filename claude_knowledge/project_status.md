@@ -41,6 +41,8 @@
 - [x] **Personality system**: 6 built-in personalities (Default, Mentor, Senior Engineer, Pair Programmer, Architect, Move Fast) + custom personality CRUD, injected via `--append-system-prompt` at session start, invisible to users, Settings > Personality panel with card picker and create/edit form
 - [x] **Worktree dependency config**: Settings > Worktrees panel with 4 strategies (None, Symlink, pnpm, npm), auto-detects `package.json` in new worktrees, runs configured strategy after session creation, platform-aware (junction on Windows, symlink on Unix)
 
+- [x] **Chat History system**: SQLite-backed persistent chat history with real-time message saving, session lifecycle tracking, haiku title generation, read-only transcript viewer, "Aware" multi-select injection (full/partial with summary caching), History panel (right sidebar, independently collapsible), cleanup hooks on worktree close and project removal
+
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
 2. [ ] **Skills & Flows palette content** — palette UI exists but shows placeholder; needs skill browser, auto-generated parameter forms

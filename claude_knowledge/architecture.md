@@ -161,3 +161,33 @@ When Buildor starts a Claude Code session, it injects context at the top so Clau
 3. **Project-scoped context** — stage prompts, skills, flow context files from `~/.buildor/` as needed.
 
 The identity and personality layers are separate so personality is user-configurable without editing the core identity file.
+
+## Chat History & Aware System
+
+```
+Message flow (real-time persistence):
+  User sends message → saved to SQLite immediately
+  Claude output event → parsed → saved to SQLite immediately
+  Session end (stop/clear/exit/crash) → session.ended_at set
+
+History browsing:
+  History panel (right sidebar) → lists past sessions for project/worktree
+  Click session → read-only transcript viewer
+  Eyeball checkbox → multi-select for "Aware" injection
+
+Aware injection:
+  User checks eyeball on past sessions → sends message
+  → buildAwareContext() runs:
+    Small session (<=30 msgs) → full transcript injected
+    Large session (>30 msgs) → cached summary + last 10% verbatim
+  → Context prepended to message (invisible to user)
+  → Claude told injection mode so it can say "check History panel" if info missing
+```
+
+**Storage**: `chat_sessions` and `chat_messages` tables in existing `logs.db` SQLite database. Messages use `ON DELETE CASCADE` — deleting a session removes all its messages.
+
+**Lifecycle**:
+- Main chat history: scoped to project, deleted when project removed from Buildor
+- Worktree history: scoped to worktree session ID, deleted when worktree closed
+
+**Title generation**: Haiku generates <8 word title after 3rd user message, refreshes every 15th. Untitled sessions get retroactive titles on history panel load.

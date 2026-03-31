@@ -1,12 +1,5 @@
-use crate::logging::db::{LogDb, LogEntry};
-use std::sync::OnceLock;
-
-static LOG_DB: OnceLock<LogDb> = OnceLock::new();
-
-fn get_db() -> Result<&'static LogDb, String> {
-    LOG_DB.get_or_init(|| LogDb::new().expect("Failed to initialize log database"));
-    LOG_DB.get().ok_or_else(|| "Log database not initialized".to_string())
-}
+use crate::logging::db::LogEntry;
+use crate::logging::get_log_db;
 
 #[tauri::command]
 pub async fn log_event(
@@ -21,7 +14,7 @@ pub async fn log_event(
     end_time: Option<String>,
     duration_ms: Option<i64>,
 ) -> Result<i64, String> {
-    let db = get_db()?;
+    let db = get_log_db()?;
     let timestamp = end_time.clone().unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
     let entry = LogEntry {
         id: None,
@@ -48,7 +41,7 @@ pub async fn get_logs(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<LogEntry>, String> {
-    let db = get_db()?;
+    let db = get_log_db()?;
     db.query(
         repo.as_deref(),
         function_area.as_deref(),
@@ -61,6 +54,6 @@ pub async fn get_logs(
 
 #[tauri::command]
 pub async fn clear_logs() -> Result<(), String> {
-    let db = get_db()?;
+    let db = get_log_db()?;
     db.clear()
 }

@@ -16,7 +16,7 @@
     {
       "file": "architecture.md",
       "description": "System architecture, data flow, component relationships, and design patterns",
-      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window"]
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session"]
     },
     {
       "file": "decisions.md",

@@ -31,6 +31,8 @@ Buildor/
 │   ├── src/
 │   │   ├── main.rs              # App entry point
 │   │   ├── commands/            # Tauri command handlers (IPC)
+│   │   │   └── chat_history.rs  # Chat history CRUD + title/summary generation
+│   │   ├── logging/             # SQLite DB (logs + chat_sessions + chat_messages tables)
 │   │   ├── git/                 # Git CLI wrapper
 │   │   ├── orchestrator/        # Flow execution engine
 │   │   ├── claude/              # Claude Code process management

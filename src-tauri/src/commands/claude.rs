@@ -55,7 +55,7 @@ fn clean_response(raw: &str) -> String {
         .to_string()
 }
 
-fn call_haiku(prompt: &str) -> Result<String, String> {
+pub fn call_haiku(prompt: &str) -> Result<String, String> {
     let output = crate::no_window_command("claude")
         .args(["--print", "--model", "haiku", prompt])
         .output()

@@ -139,6 +139,24 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
+## Chat History in Same SQLite DB over Separate Storage
+
+**Choice**: Store chat sessions and messages in the existing `logs.db` alongside the `logs` table
+**Rejected**: Separate JSON files per session, separate SQLite database
+
+**Why**: The logging DB infrastructure (OnceLock singleton, Mutex connection, Tauri command pattern) was already built. Adding tables to the same DB avoids a second connection lifecycle. SQLite handles concurrent reads well with WAL mode. CASCADE deletes make cleanup trivial — delete a session row and all messages vanish.
+
+---
+
+## Aware Injection (Smart Context) over Raw Transcript Injection
+
+**Choice**: Smart injection — small sessions get full transcript, large sessions get summary + last 10% verbatim
+**Rejected**: Always inject full transcript, or always inject summary only
+
+**Why**: Full transcripts of large sessions would blow out the context window. Summary-only loses specific details the user might reference. The hybrid approach preserves recent context (where the user's mental model is freshest) while compressing older content. Telling Claude which mode was used lets it respond honestly when it can't find something.
+
+---
+
 ## Collapsible Palette as Vertical Bar over Toggle Button
 
 **Choice**: Skills & Flows palette collapses to a thin vertical bar with sideways text on the right edge

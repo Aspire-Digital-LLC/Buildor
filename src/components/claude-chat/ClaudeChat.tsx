@@ -14,6 +14,9 @@ import { ChatMessage, type ParsedMessage, type ChatContent } from './ChatMessage
 import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from './SlashCommandMenu';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { TaskTracker } from './TaskTracker';
+import { useChatHistory } from './useChatHistory';
+import { ChatHistory } from './ChatHistory';
+import { buildAwareContext } from '@/utils/buildAwareContext';
 
 export function ClaudeChat() {
   const { projectName, browsePath, browseBranch } = useTabContext();
@@ -39,6 +42,14 @@ export function ClaudeChat() {
   const inputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
+  const branchLabel = browseBranch || activeProject?.currentBranch || 'main';
+  const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage } = useChatHistory({
+    projectName: projectName || '',
+    repoPath: repoPath || '',
+    branchName: branchLabel,
+  });
   // Glow is only for breakout windows — not used here
 
   // Auto-scroll
@@ -80,11 +91,13 @@ export function ClaudeChat() {
           setPermissionQueue((q) => [...q, permBlock.requestId!]);
         }
         setMessages((prev) => [...prev, parsed]);
+        saveMessage(parsed);
       }
     });
 
     const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
+      endChatSession();
       setSessionId(null);
       setIsSending(false);
     });
@@ -113,6 +126,7 @@ export function ClaudeChat() {
       const systemPrompt = buildSystemPrompt();
       const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, systemPrompt);
       setSessionId(sid);
+      startChatSession(sid);
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
       logEvent({
         repo: dir,
@@ -161,6 +175,7 @@ export function ClaudeChat() {
       return;
     }
     if (command === '/clear') {
+      endChatSession();
       if (sessionId) await stopSession(sessionId);
       setMessages([]);
       setSessionId(null);
@@ -222,6 +237,7 @@ export function ClaudeChat() {
 
     const modelLabel = modelId.replace('claude-', '').replace(/-/g, ' ');
     setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Switching to ${modelLabel}...` }] }]);
+    endChatSession();
     if (sessionId) { await stopSession(sessionId); setSessionId(null); }
     setModel(null);
     if (repoPath) {
@@ -229,6 +245,7 @@ export function ClaudeChat() {
       try {
         const { sessionId: sid } = await startClaudeSession(repoPath, modelId, buildSystemPrompt());
         setSessionId(sid);
+        startChatSession(sid);
         setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
         if (conversationHistory.trim()) {
           await sendClaudeMessage(sid, `[Context from previous session]\n\n${conversationHistory}\n\n[Continue naturally on ${modelId}.]`);
@@ -276,20 +293,31 @@ export function ClaudeChat() {
     }
     userContent.push({ type: 'text', text: msg });
     setMessages((prev) => [...prev, { role: 'user', content: userContent }]);
+    saveUserMessage(userContent);
     try {
+      // Build aware context prefix if any sessions are selected
+      let messageToSend = msg;
+      if (awareSessions.size > 0 && !hasImages) {
+        const awareCtx = await buildAwareContext(
+          Array.from(awareSessions),
+          projectName || '',
+        ).catch(() => '');
+        if (awareCtx) messageToSend = awareCtx + msg;
+      }
+
       if (hasImages) {
         const attachments = getAttachments();
         clearImages();
         await sendClaudeMessageWithImages(sessionId, msg, attachments);
       } else {
-        await sendClaudeMessage(sessionId, msg);
+        await sendClaudeMessage(sessionId, messageToSend);
       }
     } catch (e) {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Error: ${String(e)}` }] }]);
       setIsSending(false);
     }
     inputRef.current?.focus();
-  }, [sessionId, input, isSending, hasImages, images, getAttachments, clearImages, handleSlashCommand]);
+  }, [sessionId, input, isSending, hasImages, images, getAttachments, clearImages, handleSlashCommand, awareSessions, projectName]);
 
   const handleStop = useCallback(async () => {
     if (!sessionId || !repoPath) return;
@@ -302,6 +330,7 @@ export function ClaudeChat() {
         return `${role}: ${text}`;
       }).join('\n\n');
 
+    endChatSession();
     await stopSession(sessionId);
     setSessionId(null);
     setIsSending(false);
@@ -361,8 +390,6 @@ export function ClaudeChat() {
       </div>
     );
   }
-
-  const branchLabel = browseBranch || activeProject.currentBranch || 'main';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -572,6 +599,23 @@ export function ClaudeChat() {
           Skills & Flows
         </div>
       )}
+
+      {/* History sidebar */}
+      <ChatHistory
+        projectName={projectName || ''}
+        currentSessionId={sessionId}
+        awareSessions={awareSessions}
+        onToggleAware={(id) =>
+          setAwareSessions((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })
+        }
+        isOpen={historyOpen}
+        onToggleOpen={() => setHistoryOpen(!historyOpen)}
+      />
       </div>{/* close glow wrapper */}
     </div>
   );

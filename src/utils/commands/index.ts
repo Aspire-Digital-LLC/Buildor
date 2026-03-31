@@ -7,3 +7,4 @@ export * from './worktree';
 export * from './window';
 export * from './filesystem';
 export * from './logging';
+export * from './chatHistory';

@@ -43,6 +43,11 @@ pub async fn remove_project(name: String) -> Result<(), String> {
         return Err(format!("No project named '{}' found", name));
     }
 
+    // Delete chat history associated with this project
+    if let Ok(db) = crate::logging::get_log_db() {
+        let _ = db.delete_sessions_by_project(&name);
+    }
+
     // Clear active project if it was the one removed
     if config.active_project_name.as_deref() == Some(&name) {
         config.active_project_name = None;
