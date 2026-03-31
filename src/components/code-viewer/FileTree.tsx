@@ -1,14 +1,16 @@
 import type { FileEntry } from '@/types';
-import { useFileTreeStore } from '@/stores';
+import { useFileTreeStore, useFileTreeRepoState } from '@/stores/fileTreeStore';
 import { FileTreeItem } from './FileTreeItem';
 
 interface FileTreeProps {
   entries: FileEntry[];
+  rootPath: string;
   depth?: number;
 }
 
-export function FileTree({ entries, depth = 0 }: FileTreeProps) {
-  const { expandedDirs, selectedFilePath, toggleDirectory, selectFile } = useFileTreeStore();
+export function FileTree({ entries, rootPath, depth = 0 }: FileTreeProps) {
+  const { expandedDirs, selectedFilePath } = useFileTreeRepoState(rootPath);
+  const { toggleDirectory, selectFile } = useFileTreeStore();
 
   return (
     <>
@@ -23,11 +25,11 @@ export function FileTree({ entries, depth = 0 }: FileTreeProps) {
               depth={depth}
               isExpanded={isExpanded}
               isSelected={isSelected}
-              onToggleDir={toggleDirectory}
-              onSelectFile={selectFile}
+              onToggleDir={(path) => toggleDirectory(rootPath, path)}
+              onSelectFile={(path) => selectFile(rootPath, path)}
             />
             {entry.isDirectory && isExpanded && entry.children && (
-              <FileTree entries={entry.children} depth={depth + 1} />
+              <FileTree entries={entry.children} rootPath={rootPath} depth={depth + 1} />
             )}
           </div>
         );

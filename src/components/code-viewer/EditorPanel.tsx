@@ -1,17 +1,19 @@
 import { useState, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
-import { useFileTreeStore } from '@/stores';
 import { useProjectStore } from '@/stores';
+import { useFileTreeStore, useFileTreeRepoState } from '@/stores/fileTreeStore';
 import { useTabContext } from '@/contexts/TabContext';
 import { writeFileContent } from '@/utils/commands/filesystem';
 import { logEvent } from '@/utils/commands/logging';
 
 export function EditorPanel() {
-  const { selectedFilePath, fileContent, fileLanguage, isLoadingFile, selectFile } = useFileTreeStore();
-  const { projectName } = useTabContext();
+  const { projectName, browsePath } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
+  const rootPath = browsePath || activeProject?.repoPath;
+  const { selectedFilePath, fileContent, fileLanguage, isLoadingFile } = useFileTreeRepoState(rootPath);
+  const { selectFile } = useFileTreeStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -31,7 +33,7 @@ export function EditorPanel() {
         message: `Saved: ${selectedFilePath}`,
       }).catch(() => {});
       // Reload the file to sync store state
-      await selectFile(selectedFilePath);
+      if (rootPath) await selectFile(rootPath, selectedFilePath);
       setIsEditing(false);
     } catch (e) {
       logEvent({

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useProjectStore, useFileTreeStore, useTabStore } from '@/stores';
+import { useProjectStore, useTabStore } from '@/stores';
+import { useFileTreeStore, useFileTreeRepoState } from '@/stores/fileTreeStore';
 import { useTabContext } from '@/contexts/TabContext';
 import { FileTree } from './FileTree';
 import { EditorPanel } from './EditorPanel';
@@ -12,17 +13,17 @@ export function CodeViewer() {
   const { projectName, browsePath, browseBranch, browseIsWorktree } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
-  const { tree, isLoadingTree, loadTree, clearSelection } = useFileTreeStore();
+  const rootPath = browsePath || activeProject?.repoPath;
+  const { tree, isLoadingTree } = useFileTreeRepoState(rootPath);
+  const { loadTree, clearSelection } = useFileTreeStore();
   const updateCheckedOutBranch = useTabStore((s) => s.updateCheckedOutBranch);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(260);
 
-  const rootPath = browsePath || activeProject?.repoPath;
-
   useEffect(() => {
     if (rootPath) {
       loadTree(rootPath);
-      clearSelection();
+      clearSelection(rootPath);
     }
   }, [rootPath]);
 
@@ -34,7 +35,7 @@ export function CodeViewer() {
       useProjectStore.getState().refreshCurrentBranch(activeProject.name);
       // Reload the file tree for the new branch
       loadTree(rootPath);
-      clearSelection();
+      clearSelection(rootPath);
       // Signal sidebar to refresh change counts immediately
       buildorEvents.emit('branch-switched', { projectName: activeProject.name, branch: newBranch });
       logEvent({
@@ -96,7 +97,7 @@ export function CodeViewer() {
               Loading file tree...
             </div>
           ) : (
-            <FileTree entries={tree} />
+            <FileTree entries={tree} rootPath={rootPath!} />
           )}
         </div>
 

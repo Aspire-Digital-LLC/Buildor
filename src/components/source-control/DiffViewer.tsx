@@ -1,15 +1,18 @@
 import { DiffEditor } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
-import { useGitStore, useProjectStore } from '@/stores';
+import { useProjectStore } from '@/stores';
+import { useGitStore, useGitRepoState } from '@/stores/gitStore';
 import { useTabContext } from '@/contexts/TabContext';
 import { gitStage, gitUnstage, gitDiscardFile, gitDeleteUntrackedFile } from '@/utils/commands/git';
 
 export function DiffViewer() {
-  const { diff, closeDiff, refreshStatus } = useGitStore();
   const { projectName, browsePath } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
   const repoPath = browsePath || activeProject?.repoPath;
+
+  const { diff } = useGitRepoState(repoPath);
+  const { closeDiff, refreshStatus } = useGitStore();
 
   if (!diff) return null;
 
@@ -23,7 +26,7 @@ export function DiffViewer() {
       await gitStage(repoPath, [diff.filePath]);
     }
     await refreshStatus(repoPath);
-    closeDiff();
+    closeDiff(repoPath);
   };
 
   const handleDiscard = async () => {
@@ -34,7 +37,7 @@ export function DiffViewer() {
       await gitDiscardFile(repoPath, diff.filePath);
     }
     await refreshStatus(repoPath);
-    closeDiff();
+    closeDiff(repoPath);
   };
 
   return (
@@ -103,7 +106,7 @@ export function DiffViewer() {
           )}
           {/* Close button */}
           <button
-            onClick={closeDiff}
+            onClick={() => repoPath && closeDiff(repoPath)}
             style={{
               background: 'var(--border-primary)',
               border: '1px solid var(--border-secondary)',
@@ -131,7 +134,6 @@ export function DiffViewer() {
         language={diff.language}
         theme="vs-dark"
         onMount={(_editor: editor.IStandaloneDiffEditor) => {
-          // Add tooltips to revert icons after Monaco renders
           const container = _editor.getContainerDomNode();
           const observer = new MutationObserver(() => {
             container.querySelectorAll('.codicon-arrow-right, .revert-button').forEach((el) => {
@@ -146,12 +148,9 @@ export function DiffViewer() {
           readOnly: false,
           renderSideBySide: true,
           enableSplitViewResizing: true,
-          // Character-level inline diff highlighting
           renderIndicators: true,
           renderMarginRevertIcon: true,
-          // Minimap with change indicators
           minimap: { enabled: true },
-          // Editor options
           scrollBeyondLastLine: false,
           fontSize: 13,
           automaticLayout: true,
@@ -159,7 +158,6 @@ export function DiffViewer() {
           folding: true,
           lineNumbers: 'on',
           renderLineHighlight: 'all',
-          // Overview ruler (right scrollbar) shows colored markers for changes
           overviewRulerBorder: false,
         }}
       />

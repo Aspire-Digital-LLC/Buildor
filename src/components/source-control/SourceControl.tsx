@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useProjectStore, useGitStore } from '@/stores';
+import { useProjectStore } from '@/stores';
+import { useGitStore, useGitRepoState } from '@/stores/gitStore';
 import { useTabContext } from '@/contexts/TabContext';
 import { ChangeList } from './ChangeList';
 import { UntrackedList } from './UntrackedList';
@@ -11,12 +12,10 @@ export function SourceControl() {
   const { projectName, browsePath } = useTabContext();
   const { projects } = useProjectStore();
   const activeProject = projects.find((p) => p.name === projectName) || null;
+  const repoPath = browsePath || activeProject?.repoPath;
+
+  const { status, diff, isLoading, error, commitMessage } = useGitRepoState(repoPath);
   const {
-    status,
-    diff,
-    isLoading,
-    error,
-    commitMessage,
     refreshStatus,
     stageFiles,
     unstageFiles,
@@ -31,8 +30,6 @@ export function SourceControl() {
     setCommitMessage,
   } = useGitStore();
   const [fileListWidth, setFileListWidth] = useState(280);
-
-  const repoPath = browsePath || activeProject?.repoPath;
 
   useEffect(() => {
     if (repoPath) {
@@ -184,7 +181,7 @@ export function SourceControl() {
             type="text"
             placeholder="Commit message..."
             value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
+            onChange={(e) => repoPath && setCommitMessage(repoPath, e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();

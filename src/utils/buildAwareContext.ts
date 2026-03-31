@@ -9,23 +9,33 @@ import {
 const MAX_TOTAL_CHARS = 50000;
 const SMALL_SESSION_THRESHOLD = 30; // messages
 
-function formatMessageForContext(msg: ChatMessageRecord): string {
+function formatMessageForContext(msg: ChatMessageRecord): string | null {
+  // Skip system messages (Buildor UI chrome) and tool-use/thinking/permission blocks
+  if (msg.role === 'system') return null;
+
   const role = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : msg.role;
-  let text = '';
+  const parts: string[] = [];
   try {
     const content = JSON.parse(msg.contentJson);
     if (Array.isArray(content)) {
-      text = content
-        .filter((block: { type: string }) => block.type === 'text')
-        .map((block: { text?: string }) => block.text || '')
-        .join('\n');
+      for (const block of content) {
+        if (block.type === 'text' && block.text) {
+          parts.push(block.text);
+        } else if (block.type === 'tool_result' && block.content) {
+          // Truncate large tool results to keep injection lean
+          const result = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
+          parts.push(`[Tool result]: ${result.length > 2000 ? result.slice(0, 2000) + '...(truncated)' : result}`);
+        }
+        // Skip: tool_use, thinking, permission_request
+      }
     } else {
-      text = msg.contentJson;
+      parts.push(msg.contentJson);
     }
   } catch {
-    text = msg.contentJson;
+    parts.push(msg.contentJson);
   }
-  return `${role}: ${text}`;
+  if (parts.length === 0) return null;
+  return `${role}: ${parts.join('\n')}`;
 }
 
 function formatDate(iso: string): string {
@@ -42,7 +52,7 @@ async function buildSessionContext(session: ChatSession): Promise<string> {
   if (session.messageCount <= SMALL_SESSION_THRESHOLD) {
     // Small session: inject full transcript
     const messages = await getChatMessages(session.id);
-    const transcript = messages.map(formatMessageForContext).join('\n\n');
+    const transcript = messages.map(formatMessageForContext).filter(Boolean).join('\n\n');
     return `${header}\n[INJECTION MODE: FULL — complete transcript included]\n\n${transcript}`;
   }
 
@@ -58,7 +68,7 @@ async function buildSessionContext(session: ChatSession): Promise<string> {
   const last10Pct = Math.max(3, Math.ceil(session.messageCount * 0.1));
   const offset = Math.max(0, session.messageCount - last10Pct);
   const recentMessages = await getChatMessages(session.id, last10Pct, offset);
-  const recentTranscript = recentMessages.map(formatMessageForContext).join('\n\n');
+  const recentTranscript = recentMessages.map(formatMessageForContext).filter(Boolean).join('\n\n');
 
   return `${header}\n[INJECTION MODE: PARTIAL — summary of full conversation + verbatim last ~10%. If the user references something you cannot find in this context, it may be in the compressed portion. Let them know and suggest they check the full transcript in the History panel.]\n\n[SUMMARY]\n${summary}\n\n[RECENT MESSAGES (last ${last10Pct} of ${session.messageCount})]\n${recentTranscript}`;
 }

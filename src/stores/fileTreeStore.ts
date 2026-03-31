@@ -79,7 +79,7 @@ function detectLanguage(filePath: string): string {
   return 'plaintext';
 }
 
-interface FileTreeState {
+interface RepoFileTreeState {
   tree: FileEntry[];
   selectedFilePath: string | null;
   expandedDirs: Set<string>;
@@ -88,13 +88,9 @@ interface FileTreeState {
   isLoadingTree: boolean;
   isLoadingFile: boolean;
   error: string | null;
-  loadTree: (rootPath: string) => Promise<void>;
-  toggleDirectory: (path: string) => void;
-  selectFile: (path: string) => Promise<void>;
-  clearSelection: () => void;
 }
 
-export const useFileTreeStore = create<FileTreeState>((set, get) => ({
+const DEFAULT_REPO_STATE: RepoFileTreeState = {
   tree: [],
   selectedFilePath: null,
   expandedDirs: new Set<string>(),
@@ -103,44 +99,73 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
   isLoadingTree: false,
   isLoadingFile: false,
   error: null,
+};
+
+interface FileTreeState {
+  repos: Record<string, RepoFileTreeState>;
+  getRepo: (rootPath: string) => RepoFileTreeState;
+  loadTree: (rootPath: string) => Promise<void>;
+  toggleDirectory: (rootPath: string, path: string) => void;
+  selectFile: (rootPath: string, path: string) => Promise<void>;
+  clearSelection: (rootPath: string) => void;
+}
+
+function updateRepo(set: (fn: (state: FileTreeState) => Partial<FileTreeState>) => void, rootPath: string, updates: Partial<RepoFileTreeState>) {
+  set((state) => ({
+    repos: {
+      ...state.repos,
+      [rootPath]: { ...(state.repos[rootPath] || { ...DEFAULT_REPO_STATE, expandedDirs: new Set<string>() }), ...updates },
+    },
+  }));
+}
+
+export const useFileTreeStore = create<FileTreeState>((set, get) => ({
+  repos: {},
+
+  getRepo: (rootPath) => get().repos[rootPath] || DEFAULT_REPO_STATE,
 
   loadTree: async (rootPath) => {
-    set({ isLoadingTree: true, error: null });
+    updateRepo(set, rootPath, { isLoadingTree: true, error: null });
     try {
       const tree = await listDirectoryRecursive(rootPath, true);
-      set({ tree, isLoadingTree: false, expandedDirs: new Set<string>() });
+      updateRepo(set, rootPath, { tree, isLoadingTree: false, expandedDirs: new Set<string>() });
     } catch (e) {
-      set({ error: String(e), isLoadingTree: false });
+      updateRepo(set, rootPath, { error: String(e), isLoadingTree: false });
     }
   },
 
-  toggleDirectory: (path) => {
-    const { expandedDirs } = get();
-    const next = new Set(expandedDirs);
+  toggleDirectory: (rootPath, path) => {
+    const repo = get().repos[rootPath] || { ...DEFAULT_REPO_STATE, expandedDirs: new Set<string>() };
+    const next = new Set(repo.expandedDirs);
     if (next.has(path)) {
       next.delete(path);
     } else {
       next.add(path);
     }
-    set({ expandedDirs: next });
+    updateRepo(set, rootPath, { expandedDirs: next });
   },
 
-  selectFile: async (path) => {
-    set({ selectedFilePath: path, isLoadingFile: true, error: null });
+  selectFile: async (rootPath, path) => {
+    updateRepo(set, rootPath, { selectedFilePath: path, isLoadingFile: true, error: null });
     try {
       const content = await readFileContent(path);
       const language = detectLanguage(path);
-      set({ fileContent: content, fileLanguage: language, isLoadingFile: false });
+      updateRepo(set, rootPath, { fileContent: content, fileLanguage: language, isLoadingFile: false });
     } catch (e) {
-      set({ fileContent: null, fileLanguage: 'plaintext', error: String(e), isLoadingFile: false });
+      updateRepo(set, rootPath, { fileContent: null, fileLanguage: 'plaintext', error: String(e), isLoadingFile: false });
     }
   },
 
-  clearSelection: () => {
-    set({
+  clearSelection: (rootPath) => {
+    updateRepo(set, rootPath, {
       selectedFilePath: null,
       fileContent: null,
       fileLanguage: 'plaintext',
     });
   },
 }));
+
+/** Selector hook: returns the file tree state for a specific root path */
+export function useFileTreeRepoState(rootPath: string | undefined) {
+  return useFileTreeStore((s) => (rootPath ? s.repos[rootPath] : undefined) || DEFAULT_REPO_STATE);
+}

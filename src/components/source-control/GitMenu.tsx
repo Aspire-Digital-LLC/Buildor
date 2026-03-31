@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { logEvent } from '@/utils/commands/logging';
-import { useProjectStore, useGitStore } from '@/stores';
+import { useProjectStore } from '@/stores';
+import { useGitStore } from '@/stores/gitStore';
 import { useTabContext } from '@/contexts/TabContext';
 import {
   gitMerge,
