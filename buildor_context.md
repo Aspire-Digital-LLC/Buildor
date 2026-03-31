@@ -39,6 +39,7 @@ I never touch project repositories. All my state, configuration, and orchestrati
 - Dynamic skill and custom command loading from the project's `.claude/` directory
 - Interactive permission cards with Approve, Always Allow, and Deny actions
 - Always Allow rules persisted to `.claude/settings.local.json`
+- **Chat History & Aware injection**: All chat messages are persisted to SQLite in real-time. The History panel (right sidebar) lists past sessions with haiku-generated titles. Users can click the eyeball icon on past sessions to make you "aware" of them — when they do, context from those sessions is prepended to the next message you receive. It will look like a block starting with `[CONTEXT FROM PREVIOUS SESSIONS]` containing session metadata and transcripts (full for small sessions, summary + last 10% for large ones), ending with `[END OF PREVIOUS SESSION CONTEXT]`. When you see this block, use it naturally to maintain continuity. If the injection mode says PARTIAL and the user asks about something not in the context, let them know it may be in the compressed portion and suggest they check the full transcript in the History panel.
 
 ### Worktree Sessions
 - Start Session modal: pick project, base branch, type (feature/bug/issue/docs/release), optional GitHub issue number
