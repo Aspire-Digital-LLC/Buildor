@@ -4,7 +4,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
 import { useThemeStore } from '@/stores/themeStore';
 import { applyTheme } from '@/themes/themes';
-import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, runClaudeCli } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, interruptSession, setSessionModel, runClaudeCli } from '@/utils/commands/claude';
 import { useImageAttachments } from '@/components/claude-chat/useImageAttachments';
 import { ImagePreviewStrip } from '@/components/claude-chat/ImagePreviewStrip';
 import type { ChatContent } from '@/components/claude-chat/ChatMessage';
@@ -288,57 +288,25 @@ export function ClaudeChatWindow() {
     setSelectedModel(modelId);
     const modelLabel = modelId.replace('claude-', '').replace(/-/g, ' ');
 
-    // Collect conversation history to replay into new session
-    const conversationHistory = messages
-      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.some((c) => c.type === 'text' && c.text)))
-      .map((m) => {
-        const role = m.role === 'user' ? 'User' : 'Assistant';
-        const text = m.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
-        return `${role}: ${text}`;
-      })
-      .join('\n\n');
-
-    setMessages((prev) => [...prev, {
-      role: 'system',
-      content: [{ type: 'text', text: `Switching model to ${modelLabel}. Restarting session...` }],
-    }]);
-
-    // Stop current session and restart with new model
-    endChatSession();
     if (sessionId) {
-      await stopSession(sessionId);
-      setSessionId(null);
-    }
-    setModel(null);
-    if (workingDir) {
-      setIsStarting(true);
+      // Use set_model control message — preserves session, context, and prompt cache
       try {
-        const { sessionId: sid } = await startClaudeSession(workingDir, modelId, buildSystemPrompt());
-        setSessionId(sid);
-        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: 'Claude ready.' }] }]);
-
-        // Replay conversation context if there was prior history
-        if (conversationHistory.trim()) {
-          const contextMsg = `[Context from previous model session - continue this conversation naturally]\n\n${conversationHistory}\n\n[You are now on model ${modelId}. Continue from where the conversation left off.]`;
-          await sendClaudeMessage(sid, contextMsg);
-          setIsSending(true);
-        }
-
+        await setSessionModel(sessionId, modelId);
+        setModel(modelId);
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Switched to ${modelLabel}` }] }]);
         logEvent({
           sessionId: worktreeSessionId || undefined,
-          repo: workingDir,
+          repo: workingDir || undefined,
           functionArea: 'claude-chat',
           level: 'info',
           operation: 'model-switch',
           message: `Switched to ${modelId}`,
         }).catch(() => {});
-        inputRef.current?.focus();
-      } catch (e) {
-        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed: ${String(e)}` }] }]);
+      } catch {
+        setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: `Failed to switch model. Use /clear to restart with ${modelLabel}.` }] }]);
       }
-      setIsStarting(false);
     }
-  }, [sessionId, workingDir, messages]);
+  }, [sessionId, workingDir, worktreeSessionId]);
 
   const handleSend = useCallback(async () => {
     if (!sessionId || (!input.trim() && !hasImages) || isSending) return;
@@ -402,32 +370,14 @@ export function ClaudeChatWindow() {
 
   const handleStop = useCallback(async () => {
     if (!sessionId) return;
-    const history = messages
-      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.some((c) => c.type === 'text' && c.text)))
-      .map((m) => {
-        const role = m.role === 'user' ? 'User' : 'Assistant';
-        const text = m.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
-        return `${role}: ${text}`;
-      }).join('\n\n');
-
-    endChatSession();
-    await stopSession(sessionId);
-    setSessionId(null);
-    setIsSending(false);
-
-    if (workingDir) {
-      setIsStarting(true);
-      try {
-        const { sessionId: sid } = await startClaudeSession(workingDir, selectedModel, buildSystemPrompt());
-        setSessionId(sid);
-        startChatSession(sid);
-        if (history.trim()) {
-          await sendClaudeMessage(sid, `[Context from interrupted session — continue naturally]\n\n${history}`);
-        }
-      } catch { /* silent */ }
-      setIsStarting(false);
+    // Send interrupt control message — session stays alive, context preserved
+    try {
+      await interruptSession(sessionId);
+    } catch {
+      // If interrupt fails, the session may have already exited
     }
-  }, [sessionId, workingDir, messages, selectedModel]);
+    setIsSending(false);
+  }, [sessionId]);
 
   // Show/hide slash command menu based on input
   const handleInputChange = (value: string) => {

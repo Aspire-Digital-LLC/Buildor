@@ -25,6 +25,14 @@ export async function getClaudeSessionStatus(sessionId: string): Promise<string>
   return invoke('get_session_status', { sessionId });
 }
 
+export async function interruptSession(sessionId: string): Promise<void> {
+  return invoke('interrupt_session', { sessionId });
+}
+
+export async function setSessionModel(sessionId: string, model: string): Promise<void> {
+  return invoke('set_session_model', { sessionId, model });
+}
+
 export async function stopSession(sessionId: string): Promise<void> {
   return invoke('stop_session', { sessionId });
 }

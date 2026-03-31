@@ -130,6 +130,15 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
+## Protocol-Level Interrupt over Kill+Restart+Replay
+
+**Choice**: Use `control_request` with `subtype: "interrupt"` and `subtype: "set_model"` to stop turns and switch models without killing the process
+**Rejected**: Kill process, capture conversation as text blob, restart, replay
+
+**Why**: Killing the process destroys the prompt cache (the stable prefix that Anthropic's API caches server-side). Replaying as a text blob is lossy (tool calls, thinking blocks, and context structure are lost) and wastes tokens re-processing the entire conversation. The stream-json protocol natively supports interrupt and model switching — using these preserves the warm cache, full structured context, and eliminates the replay code path entirely.
+
+---
+
 ## Slash Commands Handled at App Layer over Pass-Through
 
 **Choice**: Intercept /commands in the chat input and handle them in Buildor's app code

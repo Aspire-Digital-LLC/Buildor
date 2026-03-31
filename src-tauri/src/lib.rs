@@ -60,6 +60,8 @@ pub fn run() {
             commands::claude::send_message_with_images,
             commands::claude::read_file_base64,
             commands::claude::get_session_status,
+            commands::claude::interrupt_session,
+            commands::claude::set_session_model,
             commands::claude::stop_session,
             commands::claude::list_claude_sessions,
             commands::claude::respond_to_permission,

@@ -80,6 +80,11 @@ All windows share one Rust backend process
 - Context passes exclusively via files in `~/.buildor/`
 - Each worktree gets its own Claude session scoped to its directory
 
+### Session Continuity (stream-json protocol)
+- **Interrupt**: `control_request` with `subtype: "interrupt"` stops the current turn without killing the process. Session stays alive with full context and prompt cache preserved.
+- **Model switch**: `control_request` with `subtype: "set_model"` changes the model live without restarting. No context loss.
+- **Only `/clear` and process exit** actually end a session. Stop/Escape and model switching keep the session alive.
+
 ### Separation
 - Orchestration logic lives in Rust/JS application code, not in prompts
 - UI rendering is decoupled from backend operations via Tauri IPC

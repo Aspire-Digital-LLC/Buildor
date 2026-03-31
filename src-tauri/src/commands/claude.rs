@@ -388,6 +388,77 @@ pub async fn respond_to_permission(
     Ok(())
 }
 
+/// Send an interrupt control_request to stop the current turn without killing the process.
+/// The session stays alive with full context preserved and prompt cache warm.
+#[tauri::command]
+pub async fn interrupt_session(session_id: String) -> Result<(), String> {
+    use std::io::Write;
+
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    let session = map.get_mut(&session_id)
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let stdin = session.stdin.as_mut()
+        .ok_or_else(|| "Session stdin not available".to_string())?;
+
+    let request_id = format!("req_interrupt_{}", uuid::Uuid::new_v4());
+    let msg = serde_json::json!({
+        "type": "control_request",
+        "request_id": request_id,
+        "request": {
+            "subtype": "interrupt"
+        }
+    });
+
+    let json_str = serde_json::to_string(&msg)
+        .map_err(|e| format!("Failed to serialize: {}", e))?;
+
+    writeln!(stdin, "{}", json_str)
+        .map_err(|e| format!("Failed to write interrupt: {}", e))?;
+    stdin.flush()
+        .map_err(|e| format!("Failed to flush: {}", e))?;
+
+    Ok(())
+}
+
+/// Send a set_model control_request to change the model without restarting the process.
+/// Preserves full context and prompt cache.
+#[tauri::command]
+pub async fn set_session_model(session_id: String, model: String) -> Result<(), String> {
+    use std::io::Write;
+
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    let session = map.get_mut(&session_id)
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    let stdin = session.stdin.as_mut()
+        .ok_or_else(|| "Session stdin not available".to_string())?;
+
+    let request_id = format!("req_model_{}", uuid::Uuid::new_v4());
+    let msg = serde_json::json!({
+        "type": "control_request",
+        "request_id": request_id,
+        "request": {
+            "subtype": "set_model",
+            "model": model
+        }
+    });
+
+    let json_str = serde_json::to_string(&msg)
+        .map_err(|e| format!("Failed to serialize: {}", e))?;
+
+    writeln!(stdin, "{}", json_str)
+        .map_err(|e| format!("Failed to write: {}", e))?;
+    stdin.flush()
+        .map_err(|e| format!("Failed to flush: {}", e))?;
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn stop_session(session_id: String) -> Result<(), String> {
     let sessions = get_sessions();
