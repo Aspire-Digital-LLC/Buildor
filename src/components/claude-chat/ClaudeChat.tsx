@@ -248,6 +248,31 @@ export function ClaudeChat() {
     };
   }, [sessionId, repoPath]);
 
+  // Agent health monitoring: show notification when a top-level agent becomes distressed
+  useEffect(() => {
+    const onHealthChanged = (event: BuildorEvent) => {
+      const data = event.data as {
+        agentSessionId?: string;
+        agentName?: string;
+        previousState?: string;
+        newState?: string;
+        parentSessionId?: string | null;
+        details?: string;
+      };
+      // Only surface distressed top-level agents (no parent) as chat notifications
+      if (data.newState === 'distressed' && !data.parentSessionId) {
+        setMessages((prev) => [...prev, {
+          role: 'system',
+          content: [{ type: 'text', text: `⚠ Agent "${data.agentName}" is distressed: ${data.details || 'health check failed'}. Check the Agents panel.` }],
+        }]);
+      }
+    };
+    buildorEvents.on('agent-health-changed', onHealthChanged);
+    return () => {
+      buildorEvents.off('agent-health-changed', onHealthChanged);
+    };
+  }, []);
+
   const startClaude = async (dir: string, modelOverride?: string, activeSkills?: ActiveSkillDescription[]) => {
     if (startingRef.current) return;
     startingRef.current = true;

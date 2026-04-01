@@ -16,7 +16,7 @@ Skill authoring guide: `claude_knowledge/buildor_skills_guide.md` (schema, synta
 | 3 | Skill Execution Pipeline (Action Mode) | complete | skillProcessor, nativeSkillTranslator, shell.rs, auto-accept, system events |
 | 4 | Eyeball Mode (Silent Restart) | complete | buildSystemPrompt skills injection, useSkills activeSkillDescriptions, silent restart + replay, system events, persisted eyeballs on session start |
 | 5 | Agent Pool Foundation | complete | Agent pool, marker parsing, spawn/kill/inject, --disallowedTools Agent |
-| 6 | Agent Health Monitoring & Escalation | pending | |
+| 6 | Agent Health Monitoring & Escalation | complete | AgentHealthMonitor singleton, extend_agent + takeover_agent Rust commands, escalation flow, health event integration |
 | 7 | Agent UI (Status Card, Panel, History) | pending | |
 | 8 | Shared Skills Repository Sync | pending | |
 

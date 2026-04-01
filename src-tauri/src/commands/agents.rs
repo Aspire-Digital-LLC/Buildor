@@ -152,13 +152,94 @@ pub async fn kill_agent(
     Ok(())
 }
 
+/// Reset health timers for a running agent (extends its grace period).
+/// The actual timer reset happens on the frontend AgentHealthMonitor —
+/// this command updates the pool entry's health_state back to "healthy"
+/// and emits an event so the frontend monitor can reset its timers.
 #[tauri::command]
 pub async fn extend_agent(
-    _session_id: String,
+    app: AppHandle,
+    session_id: String,
     _seconds: Option<u32>,
 ) -> Result<(), String> {
-    // Phase 6: will reset health monitor timers
-    Err("Agent health extension not implemented yet (Phase 6)".to_string())
+    let pool = get_pool();
+    let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
+    let entry = map.get_mut(&session_id)
+        .ok_or_else(|| format!("Agent not found: {}", session_id))?;
+
+    if entry.status != "running" {
+        return Err(format!("Agent {} is not running (status: {})", session_id, entry.status));
+    }
+
+    let previous_state = entry.health_state.clone();
+    entry.health_state = "healthy".to_string();
+
+    let _ = app.emit("buildor-event", serde_json::json!({
+        "type": "agent-health-changed",
+        "data": {
+            "agentSessionId": &session_id,
+            "previousState": &previous_state,
+            "newState": "healthy",
+            "details": "Extended by parent/user",
+        }
+    }));
+
+    Ok(())
+}
+
+/// Kill an agent and generate a summary of its work so far.
+/// The summary is injected into the parent session (if any).
+#[tauri::command]
+pub async fn takeover_agent(
+    app: AppHandle,
+    session_id: String,
+) -> Result<Option<AgentPoolEntryData>, String> {
+    // Capture agent info before killing
+    let agent_info = {
+        let pool = get_pool();
+        let map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
+        map.get(&session_id).cloned()
+    };
+
+    let agent = agent_info.ok_or_else(|| format!("Agent not found: {}", session_id))?;
+
+    // Update pool status
+    {
+        let pool = get_pool();
+        let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
+        if let Some(entry) = map.get_mut(&session_id) {
+            entry.status = "failed".to_string();
+            entry.health_state = "distressed".to_string();
+            entry.ended_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+    }
+
+    // Stop the Claude session
+    let _ = super::claude::stop_session(session_id.clone()).await;
+
+    // Emit agent-failed event
+    let _ = app.emit("buildor-event", serde_json::json!({
+        "type": "agent-failed",
+        "data": {
+            "agentSessionId": &session_id,
+            "reason": "takeover",
+        }
+    }));
+
+    // If there's a parent, inject a takeover summary
+    if let Some(ref parent_id) = agent.return_to {
+        let summary = format!(
+            "[BUILDOR: Agent \"{}\" was taken over]\n\
+            Original task: {}\n\
+            The agent was terminated due to health issues. \
+            You may need to complete or redo its work.",
+            agent.name,
+            agent.prompt.as_deref().unwrap_or("(unknown)"),
+        );
+        let _ = super::claude::send_message(parent_id.clone(), summary).await;
+    }
+
+    Ok(Some(agent))
 }
 
 #[tauri::command]

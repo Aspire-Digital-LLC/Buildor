@@ -126,6 +126,7 @@ pub fn run() {
             commands::agents::get_agent_status,
             commands::agents::inject_into_agent,
             commands::agents::mark_agent_exited,
+            commands::agents::takeover_agent,
             commands::shell::execute_shell_command,
         ])
         .run(tauri::generate_context!())

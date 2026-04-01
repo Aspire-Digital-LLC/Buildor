@@ -60,6 +60,12 @@ export async function injectIntoAgent(
   return invoke('inject_into_agent', { sessionId, message });
 }
 
+export async function takeoverAgent(
+  sessionId: string,
+): Promise<AgentPoolEntry | null> {
+  return invoke('takeover_agent', { sessionId });
+}
+
 export async function markAgentExited(
   sessionId: string,
   exitSuccess: boolean,

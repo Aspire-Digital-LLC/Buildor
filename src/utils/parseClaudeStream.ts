@@ -1,7 +1,8 @@
 import type { ParsedMessage, ChatContent } from '@/components/claude-chat/ChatMessage';
 import { buildorEvents } from './buildorEvents';
 import { hasAgentMarkers, parseAgentMarkers } from './agentMarker';
-import { spawnAgent, killAgent, extendAgent } from './commands/agents';
+import { spawnAgent, killAgent, extendAgent, takeoverAgent } from './commands/agents';
+import { agentHealthMonitor } from './agentHealthMonitor';
 
 export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMessage | null {
   try {
@@ -263,7 +264,14 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
         null,
         marker.returnMode ?? 'summary',
         marker.outputPath ?? null,
-      ).catch((err) => {
+      ).then((agentSessionId) => {
+        // Register with health monitor
+        agentHealthMonitor.track(
+          agentSessionId,
+          marker.name!,
+          parentSessionId ?? null,
+        );
+      }).catch((err) => {
         buildorEvents.emit('error-occurred', {
           message: `Failed to spawn agent "${marker.name}": ${err}`,
         }, parentSessionId);
@@ -273,6 +281,7 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
     case 'kill_agent': {
       if (!marker.agentId) break;
       const markCompleted = marker.mark === 'completed';
+      agentHealthMonitor.untrack(marker.agentId);
       killAgent(marker.agentId, markCompleted).catch((err) => {
         buildorEvents.emit('error-occurred', {
           message: `Failed to kill agent: ${err}`,
@@ -282,6 +291,9 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
     }
     case 'extend_agent': {
       if (!marker.agentId) break;
+      // Reset frontend health monitor timers
+      agentHealthMonitor.extend(marker.agentId);
+      // Reset backend pool health_state
       extendAgent(marker.agentId, marker.seconds).catch((err) => {
         buildorEvents.emit('error-occurred', {
           message: `Failed to extend agent: ${err}`,
@@ -290,9 +302,10 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
       break;
     }
     case 'takeover_agent': {
-      // Phase 6: kill agent and inject its work summary into parent
       if (!marker.agentId) break;
-      killAgent(marker.agentId, false).catch((err) => {
+      // Untrack from health monitor, then kill and inject summary into parent
+      agentHealthMonitor.untrack(marker.agentId);
+      takeoverAgent(marker.agentId).catch((err) => {
         buildorEvents.emit('error-occurred', {
           message: `Failed to takeover agent: ${err}`,
         }, parentSessionId);
