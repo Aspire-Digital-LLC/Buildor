@@ -167,6 +167,31 @@ When Buildor starts a Claude Code session, it injects context at the top so Clau
 
 The identity and personality layers are separate so personality is user-configurable without editing the core identity file.
 
+4. **Active skill descriptions (Eyeball Mode)** — when skills are eyeball-activated in the palette, their names/descriptions are appended via `buildSystemPrompt({ activeSkills })`. This tells Claude what skills exist and where to read full content (`~/.buildor/skills/<name>/prompt.md`).
+
+### Eyeball Mode — Silent Restart Flow
+
+Toggling a skill eyeball triggers a silent session restart that bakes skill descriptions into the system prompt:
+
+```
+User clicks eyeball → handleToggleEyeball(name)
+  → Save skill-activated/deactivated system-event marker
+  → Emit skill-activated/deactivated event
+  → Collect all user messages from current session
+  → Interrupt + stop current Claude session
+  → Build new system prompt with updated skill descriptions
+  → Start new Claude session (new process, same chat history session ID)
+  → Replay all user messages silently (replayingRef suppresses output)
+  → Wait for each turn-completed event between replays
+  → Resume normal output display
+```
+
+Key design choices:
+- `replayingRef` flag in ClaudeChat suppresses all parsed output during replay — messages don't appear in UI or get saved to history
+- Chat history session ID is maintained across restarts for continuity
+- Persisted eyeball state (localStorage per project) is loaded on initial session start via `startClaude(dir, model, activeSkills)`
+- Multiple skills compose naturally — all active descriptions are listed in system prompt
+
 ## Chat History & Aware System
 
 ```

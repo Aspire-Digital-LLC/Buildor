@@ -11,6 +11,12 @@ export interface ChatSession {
   endedAt: string | null;
   messageCount: number;
   cachedSummary: string | null;
+  // Agent/skill fields (Phase 1)
+  sessionType: string | null;         // 'chat' | 'agent' | 'worktree'
+  parentSessionId: string | null;
+  returnTo: string | null;
+  sourceSkill: string | null;
+  agentSource: string | null;         // 'buildor' | 'native'
 }
 
 export interface ChatMessageRecord {
@@ -32,6 +38,11 @@ export async function createChatSession(
   repoPath: string,
   worktreeSessionId: string | null,
   branchName: string,
+  sessionType?: string | null,
+  parentSessionId?: string | null,
+  returnTo?: string | null,
+  sourceSkill?: string | null,
+  agentSource?: string | null,
 ): Promise<ChatSession> {
   return invoke('create_chat_session', {
     id,
@@ -39,6 +50,11 @@ export async function createChatSession(
     repoPath,
     worktreeSessionId,
     branchName,
+    sessionType: sessionType || null,
+    parentSessionId: parentSessionId || null,
+    returnTo: returnTo || null,
+    sourceSkill: sourceSkill || null,
+    agentSource: agentSource || null,
   });
 }
 

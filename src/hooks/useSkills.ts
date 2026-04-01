@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { listBuildorSkills } from '@/utils/commands/skills';
 import { listProjectSkills } from '@/utils/commands/skills';
 import type { BuildorSkill, ProjectSkill } from '@/types/skill';
+import type { ActiveSkillDescription } from '@/utils/buildSystemPrompt';
 
 interface UseSkillsOptions {
   repoPath?: string;
@@ -14,6 +15,7 @@ interface UseSkillsResult {
   filteredBuildorSkills: BuildorSkill[];
   filteredProjectSkills: ProjectSkill[];
   activeEyeballs: Set<string>;
+  activeSkillDescriptions: ActiveSkillDescription[];
   toggleEyeball: (name: string) => void;
   search: (query: string) => void;
   searchQuery: string;
@@ -103,12 +105,21 @@ export function useSkills({ repoPath, projectName }: UseSkillsOptions): UseSkill
     );
   }, [projectSkills, searchQuery]);
 
+  // Resolve active eyeball skills to their descriptions for system prompt injection
+  const activeSkillDescriptions = useMemo((): ActiveSkillDescription[] => {
+    if (activeEyeballs.size === 0) return [];
+    return buildorSkills
+      .filter((s) => activeEyeballs.has(s.name))
+      .map((s) => ({ name: s.name, description: s.description, skillDir: s.skillDir }));
+  }, [buildorSkills, activeEyeballs]);
+
   return {
     buildorSkills,
     projectSkills,
     filteredBuildorSkills,
     filteredProjectSkills,
     activeEyeballs,
+    activeSkillDescriptions,
     toggleEyeball,
     search,
     searchQuery,

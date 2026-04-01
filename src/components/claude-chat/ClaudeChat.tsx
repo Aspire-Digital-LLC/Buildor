@@ -8,7 +8,7 @@ import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, sto
 import { useImageAttachments } from './useImageAttachments';
 import { ImagePreviewStrip } from './ImagePreviewStrip';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
-import { buildSystemPrompt } from '@/utils/buildSystemPrompt';
+import { buildSystemPrompt, type ActiveSkillDescription } from '@/utils/buildSystemPrompt';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage, type ChatContent } from './ChatMessage';
@@ -78,6 +78,7 @@ export function ClaudeChat() {
   const inputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const startingRef = useRef(false);
+  const replayingRef = useRef(false);
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
   const skills = useSkills({ repoPath, projectName: projectName || undefined });
@@ -118,6 +119,16 @@ export function ClaudeChat() {
       const parsed = parseStreamEvent(event.payload, sessionId);
       if (parsed) {
         if (parsed.model && !model) setModel(parsed.model);
+
+        // During replay, suppress all output — don't show replayed responses in UI
+        if (replayingRef.current) {
+          // Still track result events to know when each replay turn finishes
+          if (parsed.isResult) {
+            // Replay turn completed — the replay loop handles sequencing
+          }
+          return;
+        }
+
         if (parsed.isResult) {
           setIsSending(false);
           setAutoAcceptTools([]); // Clear auto-accept after turn completes
@@ -237,14 +248,16 @@ export function ClaudeChat() {
     };
   }, [sessionId, repoPath]);
 
-  const startClaude = async (dir: string, modelOverride?: string) => {
+  const startClaude = async (dir: string, modelOverride?: string, activeSkills?: ActiveSkillDescription[]) => {
     if (startingRef.current) return;
     startingRef.current = true;
     setIsStarting(true);
     try {
       const systemPrompt = isBuildorChat
         ? buildSystemPrompt(BUILDOR_CHAT_SYSTEM_PROMPT)
-        : buildSystemPrompt();
+        : activeSkills && activeSkills.length > 0
+          ? buildSystemPrompt({ activeSkills })
+          : buildSystemPrompt();
       const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, systemPrompt);
       setSessionId(sid);
       startChatSession(sid);
@@ -264,10 +277,10 @@ export function ClaudeChat() {
     startingRef.current = false;
   };
 
-  // Auto-start when component mounts with a valid path
+  // Auto-start when component mounts with a valid path (include persisted eyeball skills)
   useEffect(() => {
     if (effectiveDir && !sessionId && !isStarting) {
-      startClaude(effectiveDir);
+      startClaude(effectiveDir, undefined, skills.activeSkillDescriptions.length > 0 ? skills.activeSkillDescriptions : undefined);
     }
   }, [effectiveDir]);
 
@@ -541,6 +554,131 @@ export function ClaudeChat() {
     }
   }, [sessionId, model, saveUserMessage, saveSystemEvent]);
 
+  const handleToggleEyeball = useCallback(async (skillName: string) => {
+    if (!effectiveDir) return;
+
+    // 1. Toggle the eyeball state in the hook
+    const wasActive = skills.activeEyeballs.has(skillName);
+    skills.toggleEyeball(skillName);
+
+    // Compute what the new active set will be after toggle
+    const newEyeballs = new Set(skills.activeEyeballs);
+    if (wasActive) newEyeballs.delete(skillName);
+    else newEyeballs.add(skillName);
+
+    // Resolve descriptions for all active skills
+    const newActiveSkills: ActiveSkillDescription[] = skills.buildorSkills
+      .filter((s) => newEyeballs.has(s.name))
+      .map((s) => ({ name: s.name, description: s.description, skillDir: s.skillDir }));
+
+    // 2. Save system event marker
+    const eventType = wasActive ? 'skill-deactivated' : 'skill-activated';
+    const matchedSkill = skills.buildorSkills.find((s) => s.name === skillName);
+    saveSystemEvent(eventType, {
+      skillName,
+      skillDescription: matchedSkill?.description || '',
+      skillSource: 'buildor',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Emit event
+    buildorEvents.emit(
+      wasActive ? 'skill-deactivated' : 'skill-activated',
+      {
+        skillName,
+        skillDescription: matchedSkill?.description || '',
+        skillSource: 'buildor',
+      },
+      sessionId || undefined,
+    );
+
+    // 3. Collect current user messages before restarting
+    const userMessages = messages
+      .filter((m) => m.role === 'user')
+      .map((m) => {
+        const textBlock = m.content.find((c) => c.type === 'text');
+        return textBlock?.text || '';
+      })
+      .filter((t) => t.length > 0);
+
+    // 4. Show restart indicator
+    setMessages((prev) => [...prev, {
+      role: 'system',
+      content: [{ type: 'text', text: wasActive
+        ? `Skill deactivated: ${skillName}. Restarting session...`
+        : `Skill activated: ${skillName}. Restarting session...`
+      }],
+    }]);
+
+    // 5. Interrupt and stop current session
+    if (sessionId) {
+      try { await interruptSession(sessionId); } catch { /* may have already exited */ }
+      try { await stopSession(sessionId); } catch { /* may have already exited */ }
+    }
+
+    // Don't end chat session — we want to keep the same session ID in history
+    setSessionId(null);
+    setIsSending(false);
+
+    // 6. Start new session with updated system prompt
+    startingRef.current = false; // Reset so startClaude can proceed
+    setIsStarting(false);
+
+    // Start fresh with skill descriptions in system prompt
+    try {
+      const systemPrompt = isBuildorChat
+        ? buildSystemPrompt(BUILDOR_CHAT_SYSTEM_PROMPT)
+        : newActiveSkills.length > 0
+          ? buildSystemPrompt({ activeSkills: newActiveSkills })
+          : buildSystemPrompt();
+      const { sessionId: newSid } = await startClaudeSession(effectiveDir, selectedModel, systemPrompt);
+      setSessionId(newSid);
+
+      // Map the new session to the existing chat history session (keep continuity)
+      startChatSession(newSid);
+
+      logEvent({
+        repo: effectiveDir,
+        functionArea: 'claude-chat',
+        level: 'info',
+        operation: 'eyeball-restart',
+        message: `Silent restart for skill ${wasActive ? 'deactivation' : 'activation'}: ${skillName}. Active skills: ${[...newEyeballs].join(', ') || 'none'}`,
+        sessionId: newSid,
+      }).catch(() => {});
+
+      // 7. Replay user messages silently
+      if (userMessages.length > 0) {
+        replayingRef.current = true;
+        setMessages((prev) => [...prev, {
+          role: 'system',
+          content: [{ type: 'text', text: `Replaying ${userMessages.length} message(s)...` }],
+        }]);
+
+        for (const msg of userMessages) {
+          // Send each message and wait for the turn to complete before sending the next
+          await sendClaudeMessage(newSid, msg);
+          // Wait for the result event that signals turn completion
+          await buildorEvents.once('turn-completed');
+        }
+
+        replayingRef.current = false;
+      }
+
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: 'Session restarted. Conversation continues.' }],
+      }]);
+      setIsSending(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } catch (e) {
+      replayingRef.current = false;
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: `Restart failed: ${String(e)}` }],
+      }]);
+    }
+  }, [effectiveDir, sessionId, messages, skills, isBuildorChat, selectedModel, saveSystemEvent, startChatSession]);
+
   const handleInputChange = (value: string) => {
     setInput(value);
     if (value.startsWith('/') && !value.includes(' ')) {
@@ -746,7 +884,7 @@ export function ClaudeChat() {
         activeEyeballs={skills.activeEyeballs}
         searchQuery={skills.searchQuery}
         onSearch={skills.search}
-        onToggleEyeball={skills.toggleEyeball}
+        onToggleEyeball={handleToggleEyeball}
         onPrefillInput={handlePrefillInput}
         onTranslateAndSpawn={handleTranslateAndSpawn}
         onInvokeSkill={handleInvokeSkill}

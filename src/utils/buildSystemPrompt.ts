@@ -17,12 +17,38 @@ export function contextOnStart(...sources: (string | null | undefined)[]): strin
     .join('\n\n---\n\n');
 }
 
+export interface ActiveSkillDescription {
+  name: string;
+  description: string;
+  skillDir: string;
+}
+
 /**
  * Build the default system prompt for a Claude session.
- * Combines Buildor self-identity + selected personality.
+ * Combines Buildor self-identity + selected personality + optional active skill descriptions.
  * Additional context strings can be appended.
  */
-export function buildSystemPrompt(...extra: (string | null | undefined)[]): string {
+export function buildSystemPrompt(
+  ...extra: (string | null | undefined)[]
+): string;
+export function buildSystemPrompt(
+  options: { activeSkills?: ActiveSkillDescription[] },
+  ...extra: (string | null | undefined)[]
+): string;
+export function buildSystemPrompt(
+  ...args: unknown[]
+): string {
+  let activeSkills: ActiveSkillDescription[] | undefined;
+  let extra: (string | null | undefined)[];
+
+  if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0]) && 'activeSkills' in (args[0] as Record<string, unknown>)) {
+    const opts = args[0] as { activeSkills?: ActiveSkillDescription[] };
+    activeSkills = opts.activeSkills;
+    extra = args.slice(1) as (string | null | undefined)[];
+  } else {
+    extra = args as (string | null | undefined)[];
+  }
+
   const { selectedId, customPersonalities } = usePersonalityStore.getState();
   const personality = getPersonalityById(selectedId, customPersonalities);
 
@@ -31,9 +57,19 @@ export function buildSystemPrompt(...extra: (string | null | undefined)[]): stri
     ? `## Communication Style (MUST follow)\nYour personality is set to "${personality.name}". This overrides your default tone for ALL responses:\n${personality.prompt}\nAlways respond in this style, even when describing yourself or Buildor features.`
     : null;
 
+  // Build skill descriptions block if any skills are activated (eyeball mode)
+  let skillsBlock: string | null = null;
+  if (activeSkills && activeSkills.length > 0) {
+    const skillLines = activeSkills.map(
+      (s) => `- **${s.name}**: ${s.description}\n  Full content: \`${s.skillDir}/prompt.md\` (read with Read tool when relevant)`
+    ).join('\n');
+    skillsBlock = `## Available Buildor Skills\nThe following skills are activated. Read the full skill content when relevant:\n${skillLines}`;
+  }
+
   return contextOnStart(
     buildorContext,
     personalityBlock,
+    skillsBlock,
     ...extra,
   );
 }
