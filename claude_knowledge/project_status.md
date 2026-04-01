@@ -44,10 +44,11 @@
 - [x] **Chat History system**: SQLite-backed persistent chat history with real-time message saving, session lifecycle tracking, haiku title generation, read-only transcript viewer, "Aware" multi-select injection (full/partial with summary caching), History panel (right sidebar, independently collapsible), cleanup hooks on worktree close and project removal
 
 - [x] **Skills & Agents system Phase 1-4**: Data model + types + backend foundations (Phase 1), Skill Palette UI with two sections + panel refactor (Phase 2), Skill execution pipeline with param substitution + shell commands + auto-accept (Phase 3), Eyeball Mode with silent session restart + description injection + message replay (Phase 4)
+- [x] **Skills & Agents system Phase 5**: Agent Pool Foundation — flat in-memory agent pool (Mutex<HashMap>), `start_agent_session_sync` in claude.rs, `spawn_agent`/`kill_agent`/`inject_into_agent`/`mark_agent_exited` fully implemented, `--disallowedTools Agent` on all sessions, agent marker parser (`-<*{...}*>-` format), marker interception in parseClaudeStream.ts with auto-dispatch to spawn/kill/extend commands, working dir inheritance from parent session
 
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
-2. [ ] **Skills & Agents Phase 5+** — Agent Pool Foundation, Health Monitoring, Agent UI, Shared Skills Repo
+2. [ ] **Skills & Agents Phase 6+** — Agent Health Monitoring, Agent UI, Shared Skills Repo
 
 ### Not Started
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)

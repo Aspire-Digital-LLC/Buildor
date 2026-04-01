@@ -124,6 +124,8 @@ pub fn run() {
             commands::agents::extend_agent,
             commands::agents::list_agents,
             commands::agents::get_agent_status,
+            commands::agents::inject_into_agent,
+            commands::agents::mark_agent_exited,
             commands::shell::execute_shell_command,
         ])
         .run(tauri::generate_context!())

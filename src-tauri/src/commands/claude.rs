@@ -26,6 +26,13 @@ pub struct SessionStartResult {
     pub pid: Option<u32>,
 }
 
+/// Get the working directory for an existing session (used by agent spawning).
+pub fn get_session_working_dir(session_id: &str) -> Option<String> {
+    let sessions = get_sessions();
+    let map = sessions.lock().ok()?;
+    map.get(session_id).map(|s| s.working_dir.clone())
+}
+
 fn is_valid_slug(s: &str) -> bool {
     if s.is_empty() || s.len() > 60 {
         return false;
@@ -140,6 +147,7 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
         "--verbose".to_string(),
         "--permission-mode".to_string(), "default".to_string(),
         "--permission-prompt-tool".to_string(), "stdio".to_string(),
+        "--disallowedTools".to_string(), "Agent".to_string(),
     ];
     if let Some(ref m) = model {
         args.push("--model".to_string());
@@ -457,6 +465,101 @@ pub async fn set_session_model(session_id: String, model: String) -> Result<(), 
         .map_err(|e| format!("Failed to flush: {}", e))?;
 
     Ok(())
+}
+
+/// Start a Claude session configured as a Buildor agent.
+/// Called internally by agents::spawn_agent — not a Tauri command.
+/// Returns (session_id, pid) on success.
+pub fn start_agent_session_sync(
+    app: &AppHandle,
+    working_dir: &str,
+    model: Option<&str>,
+    system_prompt: &str,
+) -> Result<SessionStartResult, String> {
+    let session_id = uuid::Uuid::new_v4().to_string();
+
+    let mut args = vec![
+        "--print".to_string(),
+        "--input-format".to_string(), "stream-json".to_string(),
+        "--output-format".to_string(), "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--permission-mode".to_string(), "default".to_string(),
+        "--permission-prompt-tool".to_string(), "stdio".to_string(),
+        "--disallowedTools".to_string(), "Agent".to_string(),
+        "--append-system-prompt".to_string(), system_prompt.to_string(),
+    ];
+    if let Some(m) = model {
+        args.push("--model".to_string());
+        args.push(m.to_string());
+    }
+
+    let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    let mut child = crate::no_window_command("claude")
+        .args(&args_refs)
+        .current_dir(working_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn agent claude: {}", e))?;
+
+    let pid = child.id();
+
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to capture agent stdout".to_string())?;
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to capture agent stderr".to_string())?;
+    let stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to capture agent stdin".to_string())?;
+
+    let sid = session_id.clone();
+
+    // Stream stdout (JSON lines) to frontend — same event pattern as main sessions
+    let app_handle = app.clone();
+    let sid_out = sid.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(text) => {
+                    if !text.trim().is_empty() {
+                        let _ = app_handle.emit(&format!("claude-output-{}", sid_out), &text);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = app_handle.emit(&format!("claude-exit-{}", sid_out), "exited");
+    });
+
+    // Stream stderr
+    let app_handle2 = app.clone();
+    let sid_err = sid.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(text) => {
+                    if !text.trim().is_empty() {
+                        let _ = app_handle2.emit(&format!("claude-stderr-{}", sid_err), &text);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let sessions = get_sessions();
+    let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
+    map.insert(session_id.clone(), ClaudeSession {
+        stdin: Some(stdin),
+        child: Some(child),
+        working_dir: working_dir.to_string(),
+        pid: Some(pid),
+    });
+
+    Ok(SessionStartResult { session_id, pid: Some(pid) })
 }
 
 #[tauri::command]

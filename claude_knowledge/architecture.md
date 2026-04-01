@@ -192,6 +192,29 @@ Key design choices:
 - Persisted eyeball state (localStorage per project) is loaded on initial session start via `startClaude(dir, model, activeSkills)`
 - Multiple skills compose naturally — all active descriptions are listed in system prompt
 
+## Agent Pool Architecture
+
+Buildor manages a flat agent pool — no hierarchy enforcement in the pool itself, just parent/child references.
+
+```
+Main Chat Session
+  → Claude outputs marker: -<*{ "action": "spawn_agent", "name": "explorer", "prompt": "..." }*>-
+  → parseClaudeStream detects marker, strips from display text
+  → Calls spawnAgent() → Rust creates new Claude subprocess
+  → Agent registered in static AGENT_POOL (Mutex<HashMap<String, AgentPoolEntryData>>)
+  → Agent gets own claude-output-{sid} / claude-exit-{sid} events
+  → On exit: mark_agent_exited() updates pool, emits agent-completed/failed
+  → Result summary injected back into parent session via send_message()
+```
+
+Key design choices:
+- **--disallowedTools Agent** on ALL sessions prevents Claude from using its native Agent tool — Buildor controls all agent spawning
+- **Marker format** (`-<*{...}*>-`): JSON payload in text output, parsed by `agentMarker.ts`, stripped before display
+- **Working dir inheritance**: agent inherits parent session's working directory if none specified
+- **Agent system prompt**: tells Claude it's an agent, what its task is, that it can't spawn sub-agents
+- **Session reuse**: agent sessions use the same `ClaudeSession` infrastructure as main sessions (shared stdin/stdout/stderr management)
+- **Pool is flat**: all agents in one HashMap regardless of nesting depth; parent_session_id tracks lineage
+
 ## Chat History & Aware System
 
 ```

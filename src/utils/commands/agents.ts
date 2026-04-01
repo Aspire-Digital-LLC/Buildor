@@ -52,3 +52,17 @@ export async function listAgents(): Promise<AgentPoolEntry[]> {
 export async function getAgentStatus(sessionId: string): Promise<AgentPoolEntry> {
   return invoke('get_agent_status', { sessionId });
 }
+
+export async function injectIntoAgent(
+  sessionId: string,
+  message: string,
+): Promise<void> {
+  return invoke('inject_into_agent', { sessionId, message });
+}
+
+export async function markAgentExited(
+  sessionId: string,
+  exitSuccess: boolean,
+): Promise<AgentPoolEntry | null> {
+  return invoke('mark_agent_exited', { sessionId, exitSuccess });
+}

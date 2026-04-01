@@ -1,5 +1,7 @@
 import type { ParsedMessage, ChatContent } from '@/components/claude-chat/ChatMessage';
 import { buildorEvents } from './buildorEvents';
+import { hasAgentMarkers, parseAgentMarkers } from './agentMarker';
+import { spawnAgent, killAgent, extendAgent } from './commands/agents';
 
 export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMessage | null {
   try {
@@ -34,8 +36,22 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
 
       const content: ChatContent[] = event.message.content.map((block: any) => {
         if (block.type === 'text') {
-          buildorEvents.emit('message-received', { text: block.text }, sessionId);
-          return { type: 'text' as const, text: block.text };
+          let displayText = block.text;
+
+          // Detect and process agent markers in text output
+          if (hasAgentMarkers(displayText)) {
+            const { cleanText, markers } = parseAgentMarkers(displayText);
+            displayText = cleanText;
+
+            for (const marker of markers) {
+              processAgentMarker(marker, sessionId);
+            }
+          }
+
+          if (displayText) {
+            buildorEvents.emit('message-received', { text: displayText }, sessionId);
+          }
+          return { type: 'text' as const, text: displayText };
         }
         if (block.type === 'tool_use') {
           buildorEvents.emit('tool-executing', {
@@ -217,5 +233,71 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
       };
     }
     return null;
+  }
+}
+
+/**
+ * Process a parsed agent marker by dispatching the appropriate command.
+ * Runs async — fire-and-forget from the stream parser.
+ */
+function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentSessionId?: string): void {
+  switch (marker.action) {
+    case 'spawn_agent': {
+      if (!marker.prompt || !marker.name) break;
+      // workingDir will be resolved by the caller or default to the session's dir.
+      // For now, we emit an event so ClaudeChat can supply the workingDir and call spawnAgent.
+      buildorEvents.emit('agent-spawned', {
+        marker,
+        parentSessionId,
+      }, parentSessionId);
+
+      // Also attempt to spawn directly if we have enough info.
+      // The frontend listener in ClaudeChat can override this if needed.
+      spawnAgent(
+        '', // workingDir — filled by Rust from parent session if empty; will need ClaudeChat to provide
+        marker.prompt,
+        marker.name,
+        parentSessionId ?? null,
+        parentSessionId ?? null, // return_to = parent session
+        null,
+        null,
+        marker.returnMode ?? 'summary',
+        marker.outputPath ?? null,
+      ).catch((err) => {
+        buildorEvents.emit('error-occurred', {
+          message: `Failed to spawn agent "${marker.name}": ${err}`,
+        }, parentSessionId);
+      });
+      break;
+    }
+    case 'kill_agent': {
+      if (!marker.agentId) break;
+      const markCompleted = marker.mark === 'completed';
+      killAgent(marker.agentId, markCompleted).catch((err) => {
+        buildorEvents.emit('error-occurred', {
+          message: `Failed to kill agent: ${err}`,
+        }, parentSessionId);
+      });
+      break;
+    }
+    case 'extend_agent': {
+      if (!marker.agentId) break;
+      extendAgent(marker.agentId, marker.seconds).catch((err) => {
+        buildorEvents.emit('error-occurred', {
+          message: `Failed to extend agent: ${err}`,
+        }, parentSessionId);
+      });
+      break;
+    }
+    case 'takeover_agent': {
+      // Phase 6: kill agent and inject its work summary into parent
+      if (!marker.agentId) break;
+      killAgent(marker.agentId, false).catch((err) => {
+        buildorEvents.emit('error-occurred', {
+          message: `Failed to takeover agent: ${err}`,
+        }, parentSessionId);
+      });
+      break;
+    }
   }
 }
