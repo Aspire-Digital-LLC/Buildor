@@ -385,8 +385,42 @@ export function Sidebar() {
           </div>
 
           {(dropdown.panelType === 'code-viewer' || dropdown.panelType === 'source-control' || dropdown.panelType === 'claude-chat') ? (
-            /* Grouped by project with checked-out branch + worktrees */
-            projects.map((project) => {
+            <>
+            {/* Chat with Buildor — top-level option before projects (claude-chat only) */}
+            {dropdown.panelType === 'claude-chat' && (
+              <>
+                <div
+                  onClick={() => {
+                    openTab('claude-chat', '__buildor__', {
+                      browsePath: undefined,
+                      browseBranch: undefined,
+                      browseIsWorktree: false,
+                    });
+                    setDropdown(null);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#d2a8ff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  Chat with Buildor
+                </div>
+                <div style={{ borderBottom: '1px solid var(--border-primary)', margin: '4px 0' }} />
+              </>
+            )}
+            {/* Grouped by project with checked-out branch + worktrees */}
+            {projects.map((project) => {
               const projectSessions = sessions.filter(
                 (s) => s.repoPath.replace(/\\/g, '/') === project.repoPath.replace(/\\/g, '/')
               );
@@ -512,7 +546,8 @@ export function Sidebar() {
                   <div style={{ borderBottom: '1px solid var(--border-primary)', margin: '4px 0' }} />
                 </div>
               );
-            })
+            })}
+            </>
           ) : (
             /* Default: flat project list for source-control etc. */
             projects.map((project) => {

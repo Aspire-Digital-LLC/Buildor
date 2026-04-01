@@ -132,23 +132,31 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     const model = data.model || prev.model;
     const contextLimit = DEFAULT_CONTEXT_LIMIT;
 
-    let newInput = prev.inputTokens;
+    // Output tokens are new each turn — accumulate them.
+    // Input tokens represent the full conversation re-sent each turn — use latest, don't sum.
     let newOutput = prev.outputTokens;
 
     if (data.isResultTotal) {
-      newInput = Math.max(newInput, data.inputTokens);
+      // Result event reports session totals — take max to avoid going backwards
       newOutput = Math.max(newOutput, data.outputTokens);
     } else {
-      newInput += data.inputTokens;
       newOutput += data.outputTokens;
     }
 
-    // Context = all input tokens (new + cache read + cache creation)
-    // input_tokens from API only counts non-cached; real context includes cached tokens
-    const totalInputThisTurn = (data.inputTokens || 0) + (data.cacheReadTokens || 0) + (data.cacheCreationTokens || 0);
-    // If we got real data, use it (may decrease after compression). If zero, hold previous.
-    const contextUsed = totalInputThisTurn > 0 ? totalInputThisTurn : prev.contextUsedTokens;
+    // Context window usage = input + cache_read + cache_creation from the LATEST turn.
+    // Each turn's input_tokens already includes the full conversation, so this directly
+    // represents how full the context window is. After auto-compress, this drops.
+    const turnContext = (data.inputTokens || 0) + (data.cacheReadTokens || 0) + (data.cacheCreationTokens || 0);
+
+    // Only update if we got real data (non-result events with zero tokens = no update).
+    // For result totals, skip context update — the per-turn assistant event already set it.
+    const contextUsed = (!data.isResultTotal && turnContext > 0) ? turnContext : prev.contextUsedTokens;
     const contextPct = Math.min(100, Math.round((contextUsed / contextLimit) * 100));
+
+    // Track latest turn's input breakdown (not accumulated)
+    const newInput = (!data.isResultTotal && turnContext > 0) ? data.inputTokens : prev.inputTokens;
+    const newCacheRead = (!data.isResultTotal && (data.cacheReadTokens || 0) > 0) ? (data.cacheReadTokens || 0) : prev.cacheReadTokens;
+    const newCacheCreation = (!data.isResultTotal && (data.cacheCreationTokens || 0) > 0) ? (data.cacheCreationTokens || 0) : prev.cacheCreationTokens;
 
     return {
       sessions: {
@@ -157,8 +165,8 @@ export const useUsageStore = create<UsageState>((set, get) => ({
           ...prev,
           inputTokens: newInput,
           outputTokens: newOutput,
-          cacheReadTokens: prev.cacheReadTokens + (data.cacheReadTokens || 0),
-          cacheCreationTokens: prev.cacheCreationTokens + (data.cacheCreationTokens || 0),
+          cacheReadTokens: newCacheRead,
+          cacheCreationTokens: newCacheCreation,
           model,
           contextUsedTokens: contextUsed,
           contextLimitTokens: contextLimit,

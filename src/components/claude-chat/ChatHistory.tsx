@@ -362,16 +362,18 @@ export function ChatHistory({
                       </span>
                     )}
                   </div>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: 'var(--accent-primary)',
-                      fontFamily: "'Cascadia Code', monospace",
-                      marginTop: 1,
-                    }}
-                  >
-                    {s.branchName}
-                  </div>
+                  {s.branchName && (
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--accent-primary)',
+                        fontFamily: "'Cascadia Code', monospace",
+                        marginTop: 1,
+                      }}
+                    >
+                      {s.branchName}
+                    </div>
+                  )}
                   <div
                     style={{
                       fontSize: 10,

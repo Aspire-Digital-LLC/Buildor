@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { homeDir } from '@tauri-apps/api/path';
 import { useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import { invoke } from '@tauri-apps/api/core';
@@ -16,13 +17,40 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { TaskTracker } from './TaskTracker';
 import { useChatHistory } from './useChatHistory';
 import { ChatHistory } from './ChatHistory';
+import { SkillsPalette } from './SkillsPalette';
+import { useSkills } from '@/hooks/useSkills';
 import { buildAwareContext } from '@/utils/buildAwareContext';
+import type { ProjectSkill } from '@/types/skill';
+
+type ActivePanel = 'skills' | 'agents' | 'history' | null;
+
+const BUILDOR_CHAT_SYSTEM_PROMPT = `You are chatting with the user through Buildor, a desktop companion for Claude Code. This is a general-purpose conversation — your areas of conversation can extend to any topic and are NOT scoped to any specific project or codebase.
+
+You can help with:
+- General programming questions and concepts
+- Architecture and design discussions
+- Learning and explanations on any topic
+- Brainstorming and problem-solving
+- Writing, research, and analysis
+
+IMPORTANT: If the user asks questions about a specific codebase or wants you to read/modify code, suggest that they open a chat inside that project instead (using the Claude Chat project selector in Buildor's sidebar). This way Buildor can see the current code state and provide much better assistance.`;
 
 export function ClaudeChat() {
   const { projectName, browsePath, browseBranch } = useTabContext();
   const { projects } = useProjectStore();
-  const activeProject = projects.find((p) => p.name === projectName) || null;
-  const repoPath = browsePath || activeProject?.repoPath;
+  const isBuildorChat = projectName === '__buildor__';
+  const activeProject = isBuildorChat ? null : projects.find((p) => p.name === projectName) || null;
+  const repoPath = isBuildorChat ? undefined : (browsePath || activeProject?.repoPath);
+  const [buildorDir, setBuildorDir] = useState<string | null>(null);
+
+  // Resolve home directory for Buildor chat mode
+  useEffect(() => {
+    if (isBuildorChat) {
+      homeDir().then(setBuildorDir).catch(() => setBuildorDir(null));
+    }
+  }, [isBuildorChat]);
+
+  const effectiveDir = isBuildorChat ? buildorDir : repoPath;
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
@@ -35,7 +63,7 @@ export function ClaudeChat() {
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [dynamicCommands, setDynamicCommands] = useState<SlashCommand[]>([]);
   const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
@@ -43,9 +71,9 @@ export function ClaudeChat() {
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const startingRef = useRef(false);
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
-  const branchLabel = browseBranch || activeProject?.currentBranch || 'main';
+  const skills = useSkills({ repoPath, projectName: projectName || undefined });
+  const branchLabel = isBuildorChat ? '' : (browseBranch || activeProject?.currentBranch || 'main');
   const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage } = useChatHistory({
     projectName: projectName || '',
     repoPath: repoPath || '',
@@ -126,7 +154,9 @@ export function ClaudeChat() {
     startingRef.current = true;
     setIsStarting(true);
     try {
-      const systemPrompt = buildSystemPrompt();
+      const systemPrompt = isBuildorChat
+        ? buildSystemPrompt(BUILDOR_CHAT_SYSTEM_PROMPT)
+        : buildSystemPrompt();
       const { sessionId: sid, pid } = await startClaudeSession(dir, modelOverride || selectedModel, systemPrompt);
       setSessionId(sid);
       startChatSession(sid);
@@ -148,10 +178,10 @@ export function ClaudeChat() {
 
   // Auto-start when component mounts with a valid path
   useEffect(() => {
-    if (repoPath && !sessionId && !isStarting) {
-      startClaude(repoPath);
+    if (effectiveDir && !sessionId && !isStarting) {
+      startClaude(effectiveDir);
     }
-  }, [repoPath]);
+  }, [effectiveDir]);
 
   const handleSlashCommand = useCallback(async (command: string, fullMessage?: string) => {
     setInput('');
@@ -317,6 +347,36 @@ export function ClaudeChat() {
     setIsSending(false);
   }, [sessionId]);
 
+  const togglePanel = useCallback((panel: ActivePanel) => {
+    setActivePanel((prev) => (prev === panel ? null : panel));
+  }, []);
+
+  const handlePrefillInput = useCallback((text: string) => {
+    setInput(text);
+    inputRef.current?.focus();
+  }, []);
+
+  const handleTranslateAndSpawn = useCallback((_skill: ProjectSkill) => {
+    // Phase 3 will implement runtime translation + agent spawning
+    setMessages((prev) => [...prev, {
+      role: 'system',
+      content: [{ type: 'text', text: `Loading Skill "${_skill.name}"... (translation pipeline not yet implemented)` }],
+    }]);
+  }, []);
+
+  const handleInvokeSkill = useCallback(async (name: string, params: Record<string, string | number | boolean>) => {
+    // Phase 3 will implement full skill processing pipeline
+    // For now, just inject a placeholder message showing the skill was invoked
+    if (!sessionId) return;
+    const paramStr = Object.keys(params).length > 0
+      ? ` with params: ${JSON.stringify(params)}`
+      : '';
+    setMessages((prev) => [...prev, {
+      role: 'system',
+      content: [{ type: 'text', text: `Skill "${name}" invoked${paramStr} (execution pipeline not yet implemented)` }],
+    }]);
+  }, [sessionId]);
+
   const handleInputChange = (value: string) => {
     setInput(value);
     if (value.startsWith('/') && !value.includes(' ')) {
@@ -352,7 +412,7 @@ export function ClaudeChat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  if (!activeProject) {
+  if (!activeProject && !isBuildorChat) {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontSize: 14 }}>
         Select a project to start a Claude session
@@ -373,13 +433,22 @@ export function ClaudeChat() {
         background: 'var(--bg-secondary)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>Claude Chat</span>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 10 }}>
-            {activeProject.name}
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--accent-primary)', fontFamily: "'Cascadia Code', monospace" }}>
-            {branchLabel}
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{isBuildorChat ? 'Chat with Buildor' : 'Claude Chat'}</span>
+          {!isBuildorChat && (
+            <>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 10 }}>
+                {activeProject!.name}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--accent-primary)', fontFamily: "'Cascadia Code', monospace" }}>
+                {branchLabel}
+              </span>
+            </>
+          )}
+          {isBuildorChat && (
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+              General conversation
+            </span>
+          )}
           {sessionId && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block' }} />}
           {model && <span style={{ fontSize: 10, color: 'var(--text-secondary)', background: 'var(--border-primary)', padding: '1px 6px', borderRadius: 8 }}>{model}</span>}
           {isSending && <span style={{ fontSize: 11, color: '#d29922', fontStyle: 'italic' }}>thinking...</span>}
@@ -393,8 +462,8 @@ export function ClaudeChat() {
           }}>
             {isVerbose ? 'Verbose' : 'Conversation'}
           </button>
-          {!sessionId && repoPath ? (
-            <button onClick={() => startClaude(repoPath)} disabled={isStarting} style={{
+          {!sessionId && effectiveDir ? (
+            <button onClick={() => startClaude(effectiveDir)} disabled={isStarting} style={{
               background: '#238636', border: 'none', color: '#fff', borderRadius: 6,
               padding: '4px 14px', fontSize: 13, fontWeight: 600,
               cursor: isStarting ? 'default' : 'pointer', opacity: isStarting ? 0.6 : 1,
@@ -503,10 +572,26 @@ export function ClaudeChat() {
         )}
       </div>
 
-      {/* Collapsible palette sidebar — inside the glow wrapper */}
-      {paletteOpen ? (
+      {/* Right-side panels — only one open at a time */}
+      <SkillsPalette
+        buildorSkills={skills.filteredBuildorSkills}
+        projectSkills={skills.filteredProjectSkills}
+        activeEyeballs={skills.activeEyeballs}
+        searchQuery={skills.searchQuery}
+        onSearch={skills.search}
+        onToggleEyeball={skills.toggleEyeball}
+        onPrefillInput={handlePrefillInput}
+        onTranslateAndSpawn={handleTranslateAndSpawn}
+        onInvokeSkill={handleInvokeSkill}
+        isOpen={activePanel === 'skills'}
+        onToggleOpen={() => togglePanel('skills')}
+        loading={skills.loading}
+      />
+
+      {/* Agents panel placeholder — Phase 7 */}
+      {activePanel === 'agents' ? (
         <div style={{
-          width: 220,
+          width: 250,
           borderLeft: '1px solid var(--border-primary)',
           background: 'var(--bg-primary)',
           display: 'flex',
@@ -514,7 +599,7 @@ export function ClaudeChat() {
           flexShrink: 0,
         }}>
           <div
-            onClick={() => setPaletteOpen(false)}
+            onClick={() => togglePanel('agents')}
             style={{
               padding: '12px',
               fontSize: 11,
@@ -529,7 +614,7 @@ export function ClaudeChat() {
               justifyContent: 'space-between',
             }}
           >
-            Skills & Flows
+            Agents
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18l6-6-6-6" />
             </svg>
@@ -538,12 +623,12 @@ export function ClaudeChat() {
             padding: 16, color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center',
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            Command palette coming soon
+            Agent pool coming in Phase 7
           </div>
         </div>
       ) : (
         <div
-          onClick={() => setPaletteOpen(true)}
+          onClick={() => togglePanel('agents')}
           style={{
             width: 28,
             borderLeft: '1px solid var(--border-primary)',
@@ -565,7 +650,7 @@ export function ClaudeChat() {
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
         >
-          Skills & Flows
+          Agents
         </div>
       )}
 
@@ -582,8 +667,8 @@ export function ClaudeChat() {
             return next;
           })
         }
-        isOpen={historyOpen}
-        onToggleOpen={() => setHistoryOpen(!historyOpen)}
+        isOpen={activePanel === 'history'}
+        onToggleOpen={() => togglePanel('history')}
       />
       </div>{/* close glow wrapper */}
     </div>

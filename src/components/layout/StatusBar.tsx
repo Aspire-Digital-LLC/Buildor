@@ -410,9 +410,9 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
 
         <Sep />
 
-        {/* Context % used (full bar = about to auto-compress) */}
+        {/* Context % used — Claude Code auto-compresses when full */}
         <StatusItem
-          title={`Context window: ${contextUsedPct}% used\n${formatTokenCount(contextUsedTokens)} / ${formatTokenCount(contextLimitTokens)} tokens\nAuto-compress triggers at ~95-100%`}
+          title={`Context window: ${contextUsedPct}% used\n${formatTokenCount(contextUsedTokens)} / ${formatTokenCount(contextLimitTokens)} tokens\nClaude Code auto-compresses near capacity`}
           gap={6}
         >
           <span style={{ color: 'var(--text-tertiary)', fontSize: 10, fontWeight: 600 }}>CTX</span>
