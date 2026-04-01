@@ -39,6 +39,8 @@ const event = await buildorEvents.once('permission-resolved');
 | `turn-completed` | Claude finished responding | `{ costUsd, durationMs, turns }` | Reset thinking state, re-enable input |
 | `branch-switched` | User switched a checked-out branch | `{ projectName, branch }` | Refresh change counts, update dropdowns |
 | `usage-updated` | Token usage data from stream event | `{ inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, model?, isResultTotal? }` | StatusBar context/session tracking |
+| `compact-started` | Context hit 95% — auto-compact triggered | `{ contextPercent, contextUsedTokens }` | Show CompactingIndicator, send /compact |
+| `compact-completed` | Context dropped after /compact finished | `{ preCompactTokens, postCompactTokens }` | Dismiss indicator, clear UI, start new history session |
 
 ## Adding New Events
 

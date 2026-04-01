@@ -168,6 +168,75 @@ export function ClaudeChat() {
     };
   }, [sessionId, model, autoAcceptTools]);
 
+  // Auto-compact: when context hits 95%, send /compact proactively
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const onCompactNeeded = (event: BuildorEvent) => {
+      if (event.sessionId !== sessionId) return;
+      // Mark compacting in store, then send /compact
+      useUsageStore.getState().markCompacting(sessionId);
+      const preTokens = useUsageStore.getState().sessions[sessionId]?.preCompactTokens || 0;
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: `Context at 95% — auto-compacting...` }],
+      }]);
+      saveSystemEvent('compact-triggered', { preCompactTokens: preTokens, timestamp: new Date().toISOString() });
+      logEvent({
+        repo: repoPath || '',
+        functionArea: 'claude-chat',
+        level: 'info',
+        operation: 'auto-compact',
+        message: `Auto-compact triggered at ${preTokens} tokens`,
+        sessionId,
+      }).catch(() => {});
+      sendClaudeMessage(sessionId, '/compact').catch(() => {});
+    };
+
+    const onCompactDone = (event: BuildorEvent) => {
+      if (event.sessionId !== sessionId) return;
+      const data = event.data as { preCompactTokens: number; postCompactTokens: number };
+      useUsageStore.getState().markCompactDone(sessionId);
+
+      // End current chat history session, start a new one
+      endChatSession();
+
+      // Clear messages and show a fresh start with context reference
+      const preK = data.preCompactTokens >= 1000 ? `${(data.preCompactTokens / 1000).toFixed(0)}k` : String(data.preCompactTokens);
+      const postK = data.postCompactTokens >= 1000 ? `${(data.postCompactTokens / 1000).toFixed(0)}k` : String(data.postCompactTokens);
+      setMessages([{
+        role: 'system',
+        content: [{ type: 'text', text: `Context compacted (${preK} → ${postK} tokens). Previous messages summarized by Claude. Conversation continues.` }],
+      }]);
+      setIsSending(false);
+      buildorEvents.emit('tasks-updated', { action: 'clear' }, sessionId);
+
+      // Start a new chat history session for post-compact messages
+      startChatSession(sessionId);
+      saveSystemEvent('compact-completed', {
+        preCompactTokens: data.preCompactTokens,
+        postCompactTokens: data.postCompactTokens,
+        timestamp: new Date().toISOString(),
+      });
+
+      logEvent({
+        repo: repoPath || '',
+        functionArea: 'claude-chat',
+        level: 'info',
+        operation: 'compact-complete',
+        message: `Compaction done: ${preK} → ${postK} tokens`,
+        sessionId,
+      }).catch(() => {});
+    };
+
+    buildorEvents.on('compact-started', onCompactNeeded);
+    buildorEvents.on('compact-completed', onCompactDone);
+    return () => {
+      buildorEvents.off('compact-started', onCompactNeeded);
+      buildorEvents.off('compact-completed', onCompactDone);
+    };
+  }, [sessionId, repoPath]);
+
   const startClaude = async (dir: string, modelOverride?: string) => {
     if (startingRef.current) return;
     startingRef.current = true;
@@ -234,6 +303,7 @@ export function ClaudeChat() {
       setSessionId(null);
       setIsSending(false);
       setModel(null);
+      buildorEvents.emit('tasks-updated', { action: 'clear' }, sessionId || undefined);
       if (repoPath) {
         setMessages([{ role: 'system', content: [{ type: 'text', text: 'Chat cleared. Restarting...' }] }]);
         startClaude(repoPath);
@@ -587,6 +657,9 @@ export function ClaudeChat() {
 
         {/* Sticky task tracker — always mounted to preserve state across session restarts */}
         <TaskTracker sessionId={sessionId || undefined} />
+
+        {/* Compacting indicator — shown while /compact is in progress */}
+        {sessionId && <CompactingIndicator sessionId={sessionId} />}
 
         {/* Thinking animation */}
         {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}

@@ -36,7 +36,10 @@ export type BuildorEventType =
   // Skill events (Phase 1+)
   | 'skill-activated'         // Skill eyeball toggled on (session restart)
   | 'skill-deactivated'       // Skill eyeball toggled off (session restart)
-  | 'skill-invoked';          // Skill action mode executed
+  | 'skill-invoked'           // Skill action mode executed
+  // Context compaction events
+  | 'compact-started'         // Context compaction triggered (sent /compact)
+  | 'compact-completed';      // Context compaction finished (context dropped)
 
 export interface BuildorEvent<T = unknown> {
   type: BuildorEventType;

@@ -110,10 +110,15 @@ export function TaskTracker({ sessionId }: TaskTrackerProps) {
       // This preserves tasks across session restarts (stop → new session)
 
       const data = event.data as {
-        action: 'replace' | 'create' | 'update';
+        action: 'replace' | 'create' | 'update' | 'clear';
         todos?: TaskItem[];
         task?: Record<string, unknown>;
       };
+
+      if (data.action === 'clear') {
+        setTasks([]);
+        return;
+      }
 
       if (data.action === 'replace' && data.todos && Array.isArray(data.todos)) {
         // TodoWrite — full list replacement. Normalize: assign IDs if missing, default priority.

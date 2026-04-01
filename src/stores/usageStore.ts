@@ -6,6 +6,9 @@ import type { BuildorEvent } from '@/utils/buildorEvents';
 // The actual context window is also reported in stream result events (modelUsage.contextWindow)
 const DEFAULT_CONTEXT_LIMIT = 1_000_000;
 
+// Threshold at which we proactively send /compact before Claude's internal limit
+const AUTO_COMPACT_PERCENT = 95;
+
 export interface SessionContext {
   inputTokens: number;
   outputTokens: number;
@@ -18,6 +21,8 @@ export interface SessionContext {
   contextUsedTokens: number;
   contextLimitTokens: number;
   contextPercent: number;   // 0-100, "% used"
+  isCompacting: boolean;    // true while /compact is in progress
+  preCompactTokens: number; // context tokens before compaction started (for divider display)
 }
 
 export interface ClaudeStatusInfo {
@@ -48,6 +53,8 @@ export interface UsageState {
   updateSessionCost: (sessionId: string, data: CostEventData) => void;
   initSession: (sessionId: string, data: SessionStartData) => void;
   clearSession: (sessionId: string) => void;
+  markCompacting: (sessionId: string) => void;
+  markCompactDone: (sessionId: string) => void;
   setStatus: (status: ClaudeStatusInfo) => void;
   setStatusLoading: (loading: boolean) => void;
 }
@@ -64,6 +71,8 @@ const DEFAULT_SESSION: SessionContext = {
   contextUsedTokens: 0,
   contextLimitTokens: DEFAULT_CONTEXT_LIMIT,
   contextPercent: 0,
+  isCompacting: false,
+  preCompactTokens: 0,
 };
 
 interface UsageEventData {
@@ -158,6 +167,26 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     const newCacheRead = (!data.isResultTotal && (data.cacheReadTokens || 0) > 0) ? (data.cacheReadTokens || 0) : prev.cacheReadTokens;
     const newCacheCreation = (!data.isResultTotal && (data.cacheCreationTokens || 0) > 0) ? (data.cacheCreationTokens || 0) : prev.cacheCreationTokens;
 
+    // Detect compaction completion: context dropped significantly while compacting
+    let isCompacting = prev.isCompacting;
+    let preCompactTokens = prev.preCompactTokens;
+    if (prev.isCompacting && contextUsed > 0 && contextUsed < prev.preCompactTokens * 0.8) {
+      isCompacting = false;
+      // Emit async to avoid state update during render
+      setTimeout(() => buildorEvents.emit('compact-completed', {
+        preCompactTokens: prev.preCompactTokens,
+        postCompactTokens: contextUsed,
+      }, sessionId), 0);
+    }
+
+    // Emit auto-compact signal when crossing threshold (only once, not while already compacting)
+    if (!prev.isCompacting && !isCompacting && contextPct >= AUTO_COMPACT_PERCENT && prev.contextPercent < AUTO_COMPACT_PERCENT) {
+      setTimeout(() => buildorEvents.emit('compact-started', {
+        contextPercent: contextPct,
+        contextUsedTokens: contextUsed,
+      }, sessionId), 0);
+    }
+
     return {
       sessions: {
         ...state.sessions,
@@ -171,6 +200,8 @@ export const useUsageStore = create<UsageState>((set, get) => ({
           contextUsedTokens: contextUsed,
           contextLimitTokens: contextLimit,
           contextPercent: contextPct,
+          isCompacting,
+          preCompactTokens,
         },
       },
     };
@@ -209,6 +240,28 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   clearSession: (sessionId) => set((state) => {
     const { [sessionId]: _, ...rest } = state.sessions;
     return { sessions: rest };
+  }),
+
+  markCompacting: (sessionId) => set((state) => {
+    const prev = state.sessions[sessionId];
+    if (!prev) return {};
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...prev, isCompacting: true, preCompactTokens: prev.contextUsedTokens },
+      },
+    };
+  }),
+
+  markCompactDone: (sessionId) => set((state) => {
+    const prev = state.sessions[sessionId];
+    if (!prev) return {};
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...prev, isCompacting: false },
+      },
+    };
   }),
 
   setStatus: (status) => set({ status, statusLastFetched: Date.now() }),
