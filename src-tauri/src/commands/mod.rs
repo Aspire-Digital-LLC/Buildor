@@ -11,3 +11,4 @@ pub mod account;
 pub mod chat_history;
 pub mod skills;
 pub mod agents;
+pub mod shell;

@@ -10,3 +10,4 @@ export * from './logging';
 export * from './chatHistory';
 export * from './skills';
 export * from './agents';
+export * from './shell';

@@ -16,6 +16,7 @@ interface SkillsPaletteProps {
   isOpen: boolean;
   onToggleOpen: () => void;
   loading?: boolean;
+  loadingForkSkill?: string | null;
 }
 
 export function SkillsPalette({
@@ -31,12 +32,14 @@ export function SkillsPalette({
   isOpen,
   onToggleOpen,
   loading,
+  loadingForkSkill,
 }: SkillsPaletteProps) {
   const [paramsModal, setParamsModal] = useState<BuildorSkill | null>(null);
   const [projectCollapsed, setProjectCollapsed] = useState(false);
   const [buildorCollapsed, setBuildorCollapsed] = useState(false);
 
   const handleProjectSkillClick = (skill: ProjectSkill) => {
+    if (loadingForkSkill) return; // prevent clicks during translation
     if (skill.hasFork) {
       onTranslateAndSpawn(skill);
     } else {
@@ -194,11 +197,28 @@ export function SkillsPalette({
               </div>
             ) : (
               projectSkills.map((s) => (
-                <ProjectSkillEntry
-                  key={`${s.source}:${s.name}`}
-                  skill={s}
-                  onClick={() => handleProjectSkillClick(s)}
-                />
+                <div key={`${s.source}:${s.name}`} style={{ position: 'relative' }}>
+                  <ProjectSkillEntry
+                    skill={s}
+                    onClick={() => handleProjectSkillClick(s)}
+                  />
+                  {loadingForkSkill === s.name && (
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(0,0,0,0.4)',
+                      borderRadius: 4,
+                      fontSize: 10,
+                      color: 'var(--accent-primary)',
+                      fontWeight: 600,
+                    }}>
+                      Loading Skill...
+                    </div>
+                  )}
+                </div>
               ))
             )
           )}

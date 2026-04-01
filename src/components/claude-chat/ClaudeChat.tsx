@@ -4,7 +4,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import { invoke } from '@tauri-apps/api/core';
-import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, interruptSession, setSessionModel, runClaudeCli } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, interruptSession, setSessionModel, runClaudeCli, respondToPermission } from '@/utils/commands/claude';
 import { useImageAttachments } from './useImageAttachments';
 import { ImagePreviewStrip } from './ImagePreviewStrip';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
@@ -14,12 +14,18 @@ import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage, type ChatContent } from './ChatMessage';
 import { SlashCommandMenu, ModelPicker, getFilteredCommands, isBuiltinCommand, type SlashCommand } from './SlashCommandMenu';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { CompactingIndicator } from './CompactingIndicator';
 import { TaskTracker } from './TaskTracker';
+import { useUsageStore } from '@/stores/usageStore';
 import { useChatHistory } from './useChatHistory';
 import { ChatHistory } from './ChatHistory';
 import { SkillsPalette } from './SkillsPalette';
 import { useSkills } from '@/hooks/useSkills';
 import { buildAwareContext } from '@/utils/buildAwareContext';
+import { processSkillPrompt } from '@/utils/skillProcessor';
+import { translateNativeSkill } from '@/utils/nativeSkillTranslator';
+import { readFileContent } from '@/utils/commands/filesystem';
+import { getBuildorSkill } from '@/utils/commands/skills';
 import type { ProjectSkill } from '@/types/skill';
 
 type ActivePanel = 'skills' | 'agents' | 'history' | null;
@@ -66,6 +72,8 @@ export function ClaudeChat() {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [dynamicCommands, setDynamicCommands] = useState<SlashCommand[]>([]);
   const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
+  const [loadingForkSkill, setLoadingForkSkill] = useState<string | null>(null);
+  const [autoAcceptTools, setAutoAcceptTools] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -74,7 +82,7 @@ export function ClaudeChat() {
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
   const skills = useSkills({ repoPath, projectName: projectName || undefined });
   const branchLabel = isBuildorChat ? '' : (browseBranch || activeProject?.currentBranch || 'main');
-  const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage } = useChatHistory({
+  const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage, saveSystemEvent } = useChatHistory({
     projectName: projectName || '',
     repoPath: repoPath || '',
     branchName: branchLabel,
@@ -112,14 +120,25 @@ export function ClaudeChat() {
         if (parsed.model && !model) setModel(parsed.model);
         if (parsed.isResult) {
           setIsSending(false);
+          setAutoAcceptTools([]); // Clear auto-accept after turn completes
           setTimeout(() => inputRef.current?.focus(), 50);
         }
-        // Queue permission requests — only first unresolved one shows at a time
+        // Queue permission requests — auto-accept if tool is in allowedTools, otherwise show UI
         const permBlock = parsed.content.find((c: ChatContent) => c.type === 'permission_request');
         if (permBlock && permBlock.requestId) {
-          setPermissionQueue((q) => [...q, permBlock.requestId!]);
+          const toolName = permBlock.name || '';
+          if (autoAcceptTools.length > 0 && autoAcceptTools.includes(toolName)) {
+            // Auto-accept: respond immediately, don't show permission card
+            respondToPermission(sessionId, permBlock.requestId, true).catch(() => {});
+            buildorEvents.emit('permission-resolved', { requestId: permBlock.requestId, autoAccepted: true, toolName }, sessionId);
+            // Skip adding this message to the UI
+          } else {
+            setPermissionQueue((q) => [...q, permBlock.requestId!]);
+            setMessages((prev) => [...prev, parsed]);
+          }
+        } else {
+          setMessages((prev) => [...prev, parsed]);
         }
-        setMessages((prev) => [...prev, parsed]);
         saveMessage(parsed);
       }
     });
@@ -147,7 +166,7 @@ export function ClaudeChat() {
       unlistenExit.then((fn) => fn());
       buildorEvents.off('permission-resolved', onPermResolved);
     };
-  }, [sessionId, model]);
+  }, [sessionId, model, autoAcceptTools]);
 
   const startClaude = async (dir: string, modelOverride?: string) => {
     if (startingRef.current) return;
@@ -356,26 +375,101 @@ export function ClaudeChat() {
     inputRef.current?.focus();
   }, []);
 
-  const handleTranslateAndSpawn = useCallback((_skill: ProjectSkill) => {
-    // Phase 3 will implement runtime translation + agent spawning
-    setMessages((prev) => [...prev, {
-      role: 'system',
-      content: [{ type: 'text', text: `Loading Skill "${_skill.name}"... (translation pipeline not yet implemented)` }],
-    }]);
-  }, []);
+  const handleTranslateAndSpawn = useCallback(async (skill: ProjectSkill) => {
+    if (loadingForkSkill) return; // prevent duplicate clicks during translation
+    setLoadingForkSkill(skill.name);
+    try {
+      // Read the SKILL.md content
+      const skillMdPaths = [
+        `${skill.skillDir}/${skill.name}.md`,
+        `${skill.skillDir}/SKILL.md`,
+      ];
+      let skillMdContent = '';
+      for (const path of skillMdPaths) {
+        try {
+          skillMdContent = await readFileContent(path.replace(/\//g, '\\'));
+          if (skillMdContent) break;
+        } catch { /* try next path */ }
+      }
+
+      if (!skillMdContent) {
+        setMessages((prev) => [...prev, {
+          role: 'system',
+          content: [{ type: 'text', text: `Could not read skill file for "${skill.name}"` }],
+        }]);
+        return;
+      }
+
+      // Translate to BuildorSkill format (in memory only)
+      const translated = translateNativeSkill(skill, skillMdContent);
+
+      // Process the prompt (param substitution, shell blocks, etc.)
+      const processedPrompt = await processSkillPrompt(translated, {});
+
+      // For fork skills, agent spawning is Phase 5.
+      // For now, inject the processed prompt into the active session.
+      if (sessionId) {
+        setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: processedPrompt }] }]);
+        saveUserMessage([{ type: 'text', text: processedPrompt }]);
+        saveSystemEvent('skill-run', { skillName: skill.name, skillSource: 'project', isFork: true, timestamp: new Date().toISOString() });
+        buildorEvents.emit('skill-invoked', { skillName: skill.name, skillSource: 'project', isFork: true }, sessionId);
+        setIsSending(true);
+        await sendClaudeMessage(sessionId, processedPrompt);
+      }
+    } catch (e) {
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: `Skill translation failed: ${String(e)}` }],
+      }]);
+    } finally {
+      setLoadingForkSkill(null);
+    }
+  }, [sessionId, loadingForkSkill, saveUserMessage, saveSystemEvent]);
 
   const handleInvokeSkill = useCallback(async (name: string, params: Record<string, string | number | boolean>) => {
-    // Phase 3 will implement full skill processing pipeline
-    // For now, just inject a placeholder message showing the skill was invoked
     if (!sessionId) return;
-    const paramStr = Object.keys(params).length > 0
-      ? ` with params: ${JSON.stringify(params)}`
-      : '';
-    setMessages((prev) => [...prev, {
-      role: 'system',
-      content: [{ type: 'text', text: `Skill "${name}" invoked${paramStr} (execution pipeline not yet implemented)` }],
-    }]);
-  }, [sessionId]);
+    try {
+      // Fetch the full skill data
+      const skill = await getBuildorSkill(name);
+
+      // Handle model override if skill specifies one
+      if (skill.execution?.model && skill.execution.model !== model) {
+        try {
+          await setSessionModel(sessionId, skill.execution.model);
+          setModel(skill.execution.model);
+        } catch { /* model switch failed, continue with current model */ }
+      }
+
+      // Process the prompt
+      const processedPrompt = await processSkillPrompt(skill, params);
+
+      // Save skill-run marker to chat history
+      saveSystemEvent('skill-run', {
+        skillName: name,
+        skillSource: 'buildor',
+        params: Object.keys(params).length > 0 ? params : undefined,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Inject as user message
+      setMessages((prev) => [...prev, { role: 'user', content: [{ type: 'text', text: processedPrompt }] }]);
+      saveUserMessage([{ type: 'text', text: processedPrompt }]);
+      buildorEvents.emit('skill-invoked', { skillName: name, skillSource: 'buildor', params }, sessionId);
+
+      // Store allowed tools for auto-accept logic
+      if (skill.execution?.allowedTools && skill.execution.allowedTools.length > 0) {
+        setAutoAcceptTools(skill.execution.allowedTools);
+      }
+
+      setIsSending(true);
+      await sendClaudeMessage(sessionId, processedPrompt);
+    } catch (e) {
+      setMessages((prev) => [...prev, {
+        role: 'system',
+        content: [{ type: 'text', text: `Skill "${name}" failed: ${String(e)}` }],
+      }]);
+    }
+  }, [sessionId, model, saveUserMessage, saveSystemEvent]);
 
   const handleInputChange = (value: string) => {
     setInput(value);
@@ -586,6 +680,7 @@ export function ClaudeChat() {
         isOpen={activePanel === 'skills'}
         onToggleOpen={() => togglePanel('skills')}
         loading={skills.loading}
+        loadingForkSkill={loadingForkSkill}
       />
 
       {/* Agents panel placeholder — Phase 7 */}

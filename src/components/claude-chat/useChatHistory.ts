@@ -67,6 +67,18 @@ export function useChatHistory({ projectName, repoPath, branchName, worktreeSess
     ).catch(() => {});
   }, []);
 
+  const saveSystemEvent = useCallback((eventType: string, metadata: Record<string, unknown>) => {
+    const id = chatSessionIdRef.current;
+    if (!id) return;
+    const seq = ++seqRef.current;
+    saveChatMessage(
+      id,
+      seq,
+      'system-event',
+      JSON.stringify([{ type: 'text', text: JSON.stringify({ event_type: eventType, ...metadata }) }]),
+    ).catch(() => {});
+  }, []);
+
   const saveUserMessage = useCallback((content: unknown[]) => {
     const id = chatSessionIdRef.current;
     if (!id) return;
@@ -93,5 +105,6 @@ export function useChatHistory({ projectName, repoPath, branchName, worktreeSess
     endSession,
     saveMessage,
     saveUserMessage,
+    saveSystemEvent,
   };
 }
