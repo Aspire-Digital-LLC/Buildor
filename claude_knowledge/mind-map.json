@@ -57,6 +57,11 @@
       "file": "../buildor_context.md",
       "description": "Buildor self-identity and capability summary — injected at the top of Claude chat sessions so Buildor always knows who it is regardless of which repo it is working in",
       "keywords": ["identity", "context", "who am I", "buildor", "capabilities", "features", "inject", "chat context", "self-awareness"]
+    },
+    {
+      "file": "buildor_skills_guide.md",
+      "description": "Authoring guide for Buildor skills — skill.json schema, prompt.md syntax, param types, execution modes, and full demo examples",
+      "keywords": ["skill", "skills", "skill.json", "prompt.md", "params", "modal", "fork", "agent", "eyeball", "activate", "action", "authoring", "create skill"]
     }
   ]
 }

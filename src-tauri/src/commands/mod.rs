@@ -9,3 +9,5 @@ pub mod filesystem;
 pub mod logging;
 pub mod account;
 pub mod chat_history;
+pub mod skills;
+pub mod agents;

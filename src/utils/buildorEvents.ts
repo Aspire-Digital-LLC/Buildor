@@ -26,7 +26,17 @@ export type BuildorEventType =
   | 'branch-switched'         // User switched a checked-out branch
   | 'usage-updated'           // Token usage / context window updated
   | 'navigate-settings'       // Navigate to a specific settings section
-  | 'tasks-updated';          // Claude updated task list (TodoWrite)
+  | 'tasks-updated'           // Claude updated task list (TodoWrite)
+  // Agent events (Phase 1+)
+  | 'agent-spawned'           // New agent subprocess started
+  | 'agent-completed'         // Agent finished successfully
+  | 'agent-failed'            // Agent failed or was killed
+  | 'agent-health-changed'    // Agent health state transitioned
+  | 'agent-permission'        // Agent needs permission approval
+  // Skill events (Phase 1+)
+  | 'skill-activated'         // Skill eyeball toggled on (session restart)
+  | 'skill-deactivated'       // Skill eyeball toggled off (session restart)
+  | 'skill-invoked';          // Skill action mode executed
 
 export interface BuildorEvent<T = unknown> {
   type: BuildorEventType;

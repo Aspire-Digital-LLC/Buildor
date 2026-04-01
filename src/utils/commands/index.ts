@@ -8,3 +8,5 @@ export * from './window';
 export * from './filesystem';
 export * from './logging';
 export * from './chatHistory';
+export * from './skills';
+export * from './agents';

@@ -32,6 +32,12 @@ pub struct ChatSession {
     pub ended_at: Option<String>,
     pub message_count: i64,
     pub cached_summary: Option<String>,
+    // Agent/skill fields (Phase 1)
+    pub session_type: Option<String>,         // 'chat' | 'agent' | 'worktree'
+    pub parent_session_id: Option<String>,
+    pub return_to: Option<String>,
+    pub source_skill: Option<String>,
+    pub agent_source: Option<String>,         // 'buildor' | 'native'
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -118,6 +124,21 @@ impl LogDb {
             CREATE INDEX IF NOT EXISTS idx_chat_messages_seq ON chat_messages(session_id, seq);",
         ).map_err(|e| format!("Failed to create tables: {}", e))?;
 
+        // Skills index cache table
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS skills (
+                name TEXT PRIMARY KEY,
+                description TEXT NOT NULL DEFAULT '',
+                tags TEXT DEFAULT '[]',
+                skill_dir TEXT NOT NULL,
+                last_modified INTEGER,
+                skill_type TEXT NOT NULL DEFAULT 'buildor'
+            );"
+        ).map_err(|e| format!("Failed to create skills table: {}", e))?;
+
+        // Migration: add agent/skill columns to chat_sessions for existing installs
+        Self::migrate_chat_sessions_agent_columns(&conn)?;
+
         // Cull logs older than 30 days on startup
         let _ = conn.execute(
             "DELETE FROM logs WHERE timestamp < datetime('now', '-30 days')",
@@ -135,6 +156,29 @@ impl LogDb {
             home.join(".buildor")
         };
         base.join("logs.db")
+    }
+
+    fn migrate_chat_sessions_agent_columns(conn: &Connection) -> Result<(), String> {
+        // Check if columns already exist by attempting to query them
+        let has_session_type = conn
+            .prepare("SELECT session_type FROM chat_sessions LIMIT 0")
+            .is_ok();
+
+        if !has_session_type {
+            let alter_statements = [
+                "ALTER TABLE chat_sessions ADD COLUMN session_type TEXT DEFAULT 'chat'",
+                "ALTER TABLE chat_sessions ADD COLUMN parent_session_id TEXT",
+                "ALTER TABLE chat_sessions ADD COLUMN return_to TEXT",
+                "ALTER TABLE chat_sessions ADD COLUMN source_skill TEXT",
+                "ALTER TABLE chat_sessions ADD COLUMN agent_source TEXT",
+            ];
+            for stmt in &alter_statements {
+                conn.execute(stmt, [])
+                    .map_err(|e| format!("Migration failed ({}): {}", stmt, e))?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn insert(&self, entry: &LogEntry) -> Result<i64, String> {
@@ -228,11 +272,31 @@ impl LogDb {
 
     // --- Chat History methods ---
 
+    fn row_to_chat_session(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
+        Ok(ChatSession {
+            id: row.get(0)?,
+            project_name: row.get(1)?,
+            repo_path: row.get(2)?,
+            worktree_session_id: row.get(3)?,
+            branch_name: row.get(4)?,
+            title: row.get(5)?,
+            started_at: row.get(6)?,
+            ended_at: row.get(7)?,
+            message_count: row.get(8)?,
+            cached_summary: row.get(9)?,
+            session_type: row.get(10)?,
+            parent_session_id: row.get(11)?,
+            return_to: row.get(12)?,
+            source_skill: row.get(13)?,
+            agent_source: row.get(14)?,
+        })
+    }
+
     pub fn insert_chat_session(&self, session: &ChatSession) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
         conn.execute(
-            "INSERT INTO chat_sessions (id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO chat_sessions (id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 session.id,
                 session.project_name,
@@ -244,6 +308,11 @@ impl LogDb {
                 session.ended_at,
                 session.message_count,
                 session.cached_summary,
+                session.session_type.as_deref().unwrap_or("chat"),
+                session.parent_session_id,
+                session.return_to,
+                session.source_skill,
+                session.agent_source,
             ],
         ).map_err(|e| format!("Failed to insert chat session: {}", e))?;
         Ok(())
@@ -295,13 +364,13 @@ impl LogDb {
 
         let (sql, param_values): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(wt_id) = worktree_session_id {
             (
-                "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary
+                "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
                  FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id = ?2 ORDER BY started_at DESC".to_string(),
                 vec![Box::new(project_name.to_string()), Box::new(wt_id.to_string())],
             )
         } else {
             (
-                "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary
+                "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
                  FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id IS NULL ORDER BY started_at DESC".to_string(),
                 vec![Box::new(project_name.to_string())],
             )
@@ -309,20 +378,8 @@ impl LogDb {
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
         let mut stmt = conn.prepare(&sql).map_err(|e| format!("Query error: {}", e))?;
-        let rows = stmt.query_map(params_refs.as_slice(), |row| {
-            Ok(ChatSession {
-                id: row.get(0)?,
-                project_name: row.get(1)?,
-                repo_path: row.get(2)?,
-                worktree_session_id: row.get(3)?,
-                branch_name: row.get(4)?,
-                title: row.get(5)?,
-                started_at: row.get(6)?,
-                ended_at: row.get(7)?,
-                message_count: row.get(8)?,
-                cached_summary: row.get(9)?,
-            })
-        }).map_err(|e| format!("Query error: {}", e))?;
+        let rows = stmt.query_map(params_refs.as_slice(), Self::row_to_chat_session)
+            .map_err(|e| format!("Query error: {}", e))?;
 
         let mut sessions = Vec::new();
         for row in rows {
@@ -377,21 +434,10 @@ impl LogDb {
     pub fn query_chat_sessions_by_id(&self, id: &str) -> Result<ChatSession, String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
         conn.query_row(
-            "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary
+            "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
              FROM chat_sessions WHERE id = ?1",
             params![id],
-            |row| Ok(ChatSession {
-                id: row.get(0)?,
-                project_name: row.get(1)?,
-                repo_path: row.get(2)?,
-                worktree_session_id: row.get(3)?,
-                branch_name: row.get(4)?,
-                title: row.get(5)?,
-                started_at: row.get(6)?,
-                ended_at: row.get(7)?,
-                message_count: row.get(8)?,
-                cached_summary: row.get(9)?,
-            }),
+            Self::row_to_chat_session,
         ).map_err(|e| format!("Session not found: {}", e))
     }
 

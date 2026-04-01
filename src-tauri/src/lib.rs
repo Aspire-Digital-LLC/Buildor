@@ -113,6 +113,17 @@ pub fn run() {
             commands::account::trigger_cli_login,
             commands::account::start_usage_polling,
             commands::account::stop_usage_polling,
+            commands::skills::list_buildor_skills,
+            commands::skills::get_buildor_skill,
+            commands::skills::list_project_skills,
+            commands::skills::save_buildor_skill,
+            commands::skills::delete_buildor_skill,
+            commands::skills::index_skills,
+            commands::agents::spawn_agent,
+            commands::agents::kill_agent,
+            commands::agents::extend_agent,
+            commands::agents::list_agents,
+            commands::agents::get_agent_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

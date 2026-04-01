@@ -8,6 +8,11 @@ pub async fn create_chat_session(
     repo_path: String,
     worktree_session_id: Option<String>,
     branch_name: String,
+    session_type: Option<String>,
+    parent_session_id: Option<String>,
+    return_to: Option<String>,
+    source_skill: Option<String>,
+    agent_source: Option<String>,
 ) -> Result<ChatSession, String> {
     let db = get_log_db()?;
     let now = chrono::Utc::now().to_rfc3339();
@@ -22,6 +27,11 @@ pub async fn create_chat_session(
         ended_at: None,
         message_count: 0,
         cached_summary: None,
+        session_type,
+        parent_session_id,
+        return_to,
+        source_skill,
+        agent_source,
     };
     db.insert_chat_session(&session)?;
     Ok(session)

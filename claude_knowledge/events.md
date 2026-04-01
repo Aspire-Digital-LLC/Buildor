@@ -58,10 +58,22 @@ When building a new feature that produces significant state changes:
 - Use `user-attention-needed` for anything that requires the user to look at the app (permission requests, errors, completions)
 - Don't emit events for routine operations (status polling, etc.) — only for state changes worth reacting to
 
+## Agent & Skill Events (Phase 1)
+
+| Event | When Emitted | Data Shape | Use Case |
+|-------|-------------|------------|----------|
+| `agent-spawned` | New agent subprocess started | `{ agentSessionId, name, parentSessionId, sourceSkill }` | Update agent status card, agents panel |
+| `agent-completed` | Agent finished successfully | `{ agentSessionId, resultSummary, durationMs }` | Inject result into parent, update UI |
+| `agent-failed` | Agent crashed or was killed | `{ agentSessionId, error, durationMs }` | Show error, update agent status |
+| `agent-health-changed` | Agent health state transitioned | `{ agentSessionId, previousState, newState, details }` | Update status indicators, trigger escalation |
+| `agent-permission` | Agent needs permission approval | `{ agentSessionId, agentName, toolUseId, toolName, input, description }` | Surface permission card on main screen |
+| `skill-activated` | Skill eyeball toggled on | `{ skillName, skillDescription, skillSource }` | Trigger silent session restart |
+| `skill-deactivated` | Skill eyeball toggled off | `{ skillName }` | Trigger silent session restart |
+| `skill-invoked` | Skill action mode executed | `{ skillName, params, skillSource }` | Log to history, update UI |
+
 ## Future Events (add as features are built)
 
 - `flow-stage-started` / `flow-stage-completed` — flow execution progress
 - `worktree-created` / `worktree-closed` — session lifecycle
 - `file-changed` — external file change detected
 - `build-started` / `build-completed` — CI/CD integration
-- `skill-invoked` — command palette skill execution
