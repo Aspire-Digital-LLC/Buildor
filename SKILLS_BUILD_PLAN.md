@@ -18,7 +18,7 @@ Skill authoring guide: `claude_knowledge/buildor_skills_guide.md` (schema, synta
 | 5 | Agent Pool Foundation | complete | Agent pool, marker parsing, spawn/kill/inject, --disallowedTools Agent |
 | 6 | Agent Health Monitoring & Escalation | complete | AgentHealthMonitor singleton, extend_agent + takeover_agent Rust commands, escalation flow, health event integration |
 | 7 | Agent UI (Status Card, Panel, History) | complete | useAgentPool hook, AgentStatusCard, AgentsPanel, AgentOutputBlock, ChatMessage system-event rendering, agent-permission routing, history integration |
-| 8 | Shared Skills Repository Sync | pending | |
+| 8 | Shared Skills Repository Sync | complete | Rust backend (clone/pull/push/status), TS wrappers, Settings UI, defaults.json merge, startup auto-sync, useSkills refresh |
 
 ---
 

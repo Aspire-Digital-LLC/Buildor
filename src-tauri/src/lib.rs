@@ -128,6 +128,11 @@ pub fn run() {
             commands::agents::mark_agent_exited,
             commands::agents::takeover_agent,
             commands::shell::execute_shell_command,
+            commands::skill_sync::configure_shared_repo,
+            commands::skill_sync::remove_shared_repo_config,
+            commands::skill_sync::sync_skills_repo,
+            commands::skill_sync::push_skill_changes,
+            commands::skill_sync::get_sync_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

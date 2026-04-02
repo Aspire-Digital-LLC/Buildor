@@ -3,6 +3,7 @@ import { listBuildorSkills } from '@/utils/commands/skills';
 import { listProjectSkills } from '@/utils/commands/skills';
 import type { BuildorSkill, ProjectSkill } from '@/types/skill';
 import type { ActiveSkillDescription } from '@/utils/buildSystemPrompt';
+import { buildorEvents } from '@/utils/buildorEvents';
 
 interface UseSkillsOptions {
   repoPath?: string;
@@ -71,6 +72,18 @@ export function useSkills({ repoPath, projectName }: UseSkillsOptions): UseSkill
   useEffect(() => {
     setActiveEyeballs(loadPersistedEyeballs(projectName || ''));
   }, [projectName]);
+
+  // Re-fetch skills after a sync (shared skills repo pull)
+  useEffect(() => {
+    const handler = (event: { data: unknown }) => {
+      const data = event.data as { reason?: string };
+      if (data?.reason === 'sync') {
+        loadSkills();
+      }
+    };
+    buildorEvents.on('skill-activated', handler);
+    return () => { buildorEvents.off('skill-activated', handler); };
+  }, [loadSkills]);
 
   const toggleEyeball = useCallback((name: string) => {
     setActiveEyeballs((prev) => {

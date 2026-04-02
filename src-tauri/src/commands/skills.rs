@@ -86,12 +86,58 @@ fn buildor_skills_dir() -> PathBuf {
     home.join(".buildor").join("skills")
 }
 
+/// Org-wide fallback defaults loaded from `defaults.json` at skills root.
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct SkillDefaults {
+    model: Option<String>,
+    effort: Option<String>,
+    health: Option<SkillHealthData>,
+}
+
+fn load_defaults(dir: &Path) -> SkillDefaults {
+    let defaults_path = dir.join("defaults.json");
+    if !defaults_path.exists() {
+        return SkillDefaults::default();
+    }
+    let content = match fs::read_to_string(&defaults_path) {
+        Ok(c) => c,
+        Err(_) => return SkillDefaults::default(),
+    };
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
+fn apply_defaults(skill: &mut BuildorSkillData, defaults: &SkillDefaults) {
+    let exec = skill.execution.get_or_insert_with(|| SkillExecutionData {
+        allowed_tools: None,
+        context: None,
+        agent: None,
+        model: None,
+        effort: None,
+        return_mode: None,
+        output_path: None,
+        health: None,
+    });
+
+    if exec.model.is_none() {
+        exec.model = defaults.model.clone();
+    }
+    if exec.effort.is_none() {
+        exec.effort = defaults.effort.clone();
+    }
+    if exec.health.is_none() {
+        exec.health = defaults.health.clone();
+    }
+}
+
 fn scan_buildor_skills(dir: &Path) -> Vec<BuildorSkillData> {
     let mut skills = Vec::new();
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return skills,
     };
+
+    let defaults = load_defaults(dir);
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -139,6 +185,7 @@ fn scan_buildor_skills(dir: &Path) -> Vec<BuildorSkillData> {
             }
         }
 
+        apply_defaults(&mut skill, &defaults);
         skills.push(skill);
     }
 
