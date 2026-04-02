@@ -84,14 +84,65 @@ I never touch project repositories. All my state, configuration, and orchestrati
 - Decoupled event bus for permissions, costs, branch switches, turn completions, and usage updates
 - Any component can subscribe to react without hardcoding
 
+### Skills System
+- **Skills Palette**: right-side panel with two sections (Project Skills from `.claude/skills/`, Buildor Skills from `~/.buildor/skills/`)
+- **Eyeball Mode**: toggle a skill on to inject its description into the system prompt via silent session restart
+- **Action Mode**: click a skill to execute it — param modal, prompt processing ({{param}} substitution, shell commands, relative links), injection into chat
+- **Shared Skills Repo**: git-backed shared repository synced to `~/.buildor/skills/`, auto-pulls on startup, configurable in Settings
+
+### Agent System
+
+Buildor manages its own agent pool. The native Claude Code `Agent` tool is **disabled** (`--disallowedTools Agent`). Instead, you spawn agents by emitting **markers** in your text output.
+
+#### How to Spawn an Agent
+
+To request Buildor spawn an agent, output this exact marker format anywhere in your text:
+
+```
+-<*{ "action": "spawn_agent", "name": "descriptive-name", "prompt": "The task for the agent to perform" }*>-
+```
+
+Buildor intercepts the marker, strips it from the displayed output, and spawns a new Claude subprocess to handle the task. The agent runs independently and its result is injected back into your session when it completes.
+
+#### Marker Format Reference
+
+All markers use the format `-<*{ JSON }*>-`. Available actions:
+
+**Spawn an agent:**
+```
+-<*{ "action": "spawn_agent", "name": "researcher", "prompt": "Find all .ts files and analyze code patterns" }*>-
+```
+
+Optional fields for spawn_agent:
+- `"type"`: agent type — `"Explore"`, `"Plan"`, or `"general-purpose"` (default)
+- `"returnMode"`: `"summary"` (default — result injected into your chat), `"file"` (written to disk), or `"both"`
+
+**Kill an agent:**
+```
+-<*{ "action": "kill_agent", "agentId": "agent-session-id", "mark": "completed" }*>-
+```
+
+**Extend an agent** (reset its health timers if it's running long):
+```
+-<*{ "action": "extend_agent", "agentId": "agent-session-id", "seconds": 60 }*>-
+```
+
+**Take over an agent** (kill it and get its progress summary):
+```
+-<*{ "action": "takeover_agent", "agentId": "agent-session-id" }*>-
+```
+
+#### Agent Behavior
+- Agents run as separate Claude Code subprocesses with their own context
+- When an agent completes, its result summary is automatically injected into your session
+- If an agent stalls, loops, or errors out, Buildor's health monitor will alert you
+- You can see active agents in the **Agents panel** (right sidebar) and the **Agent Status Card** (above chat input)
+- Agent permissions surface on your screen — approve/deny them like any other tool permission
+- Agents cannot spawn their own sub-agents
+
 ---
 
 ## What I Am Building Next
-
-### Skills & Flows Palette (In Progress)
-- Browsable palette of available skills and flows on the right side panel
-- Collapses to a thin vertical bar with sideways text
-- Auto-generated parameter forms from skill schemas
 
 ### Flow Builder (Planned)
 - Drag-and-drop visual canvas using React Flow
@@ -109,11 +160,6 @@ I never touch project repositories. All my state, configuration, and orchestrati
 - Spawn Claude Code per phase with only the stage prompt and scoped context
 - Manage context files between phases in `~/.buildor/`
 - Track progress in UI — no token overhead for task management
-
-### Skill & Flow Library (Planned)
-- Shared team git repo for flows and skills
-- Auto-pull on app open, scoped to global or per-project
-- Git workflow for changes: commit, push, branch, PR
 
 ### Phase 2: Bidirectional API (Future)
 - Internal API/CLI layer that Claude Code can call back into
