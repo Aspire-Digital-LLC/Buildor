@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicerdicer/tauri/refs/heads/v2/crates/tauri-schema-generator/schemas/config.schema.json",
   "productName": "Buildor",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "identifier": "com.productaflows.app",
   "build": {
     "frontendDist": "../dist",

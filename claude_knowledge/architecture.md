@@ -215,6 +215,70 @@ Key design choices:
 - **Session reuse**: agent sessions use the same `ClaudeSession` infrastructure as main sessions (shared stdin/stdout/stderr management)
 - **Pool is flat**: all agents in one HashMap regardless of nesting depth; parent_session_id tracks lineage
 
+## Agent Health Monitoring (Phase 6)
+
+```
+AgentHealthMonitor (singleton class, one instance per agent)
+  → Subscribes to tool-executing, tool-completed, message-received events for its agent
+  → Tracks: lastActivityAt, lastActivityType, recentToolCalls (rolling window), consecutiveErrors
+  → State machine:
+      healthy → idle       (text output, no activity for idleSeconds, default 30)
+      healthy → stalling   (mid-tool, no activity for stallSeconds, default 30)
+      healthy → looping    (same tool+input appears loopThreshold times, default 3)
+      healthy → erroring   (errorThreshold consecutive errors, default 3)
+      any unhealthy → distressed (persists for distressSeconds, default 45)
+  → Escalation:
+      Has parent → inject [BUILDOR_ALERT] into parent stdin with marker options (kill/extend/takeover)
+      No parent → emit user-attention-needed event
+  → Thresholds configurable per skill via skill.json execution.health
+  → Cleanup: monitor destroyed when agent completes/killed
+```
+
+Rust commands: `extend_agent` (resets health timers), `takeover_agent` (kills agent, generates summary, injects into parent)
+
+## Agent UI (Phase 7)
+
+```
+┌──────────────────────────────────────────┐
+│ Chat area                                │
+│                                          │
+│ [AgentOutputBlock: "Agent: explorer"]    │  ← inline surfaced results
+│                                          │
+├──────────────────────────────────────────┤
+│ [AgentStatusCard]                        │  ← pinned above input, auto-hides when empty
+│   ● explorer — Reading foo.ts...         │
+│   ● analyzer — Running cargo test...     │
+├──────────────────────────────────────────┤
+│ [Chat input]                             │
+└──────────────────────────────────────────┘
+```
+
+- `useAgentPool` hook: subscribes to agent-spawned/completed/failed/health-changed/permission events, maintains live Map<string, AgentPoolEntry>
+- `AgentStatusCard`: one row per top-level agent with status icon + name + truncated status line, accordion for children (max 2 levels)
+- `AgentsPanel`: third right-side panel (28px collapsed / 250px expanded), active agents list + completed section, transcript viewer reuses ChatMessage component
+- `AgentOutputBlock`: distinct visual treatment in chat stream (header badge, collapsible)
+- Agent permissions: same PermissionCard but with "Agent: <name>" prefix, routed to correct subprocess
+
+## Shared Skills Repository Sync (Phase 8)
+
+```
+App launch → getSyncStatus() → if configured → syncSkillsRepo() (background)
+  → First time: git clone <url> ~/.buildor/skills/
+  → Subsequent: git fetch + pull --ff-only
+  → If diverged: return error, don't force
+  → On success: emit skill-activated event → useSkills refreshes palette
+
+Settings > Shared Skills:
+  → Configure repo URL (HTTPS or SSH)
+  → Sync Now button → clone or pull
+  → Push Changes → git add -A && commit && push
+  → Status display: cloned/not-cloned, clean/dirty, diverged, last synced, branch
+```
+
+- `defaults.json` at skills root provides org-wide fallback `model`, `effort`, `health` thresholds — individual skill.json values take precedence
+- Existing local skills backed up and merged on first clone (non-conflicting only)
+- Skill palette auto-refreshes after sync via event bus
+
 ## Chat History & Aware System
 
 ```

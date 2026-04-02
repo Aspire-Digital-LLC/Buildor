@@ -9,7 +9,7 @@
 - [x] App launches with `npx tauri dev`, window auto-centers on screen
 - [x] Git repo: Aspire-Digital-LLC/Buildor on main
 - [x] Dark UI with SVG line icons in sidebar
-- [x] Native window title bar: "Buildor v0.0.1"
+- [x] Native window title bar: "Buildor v0.0.4"
 - [x] **Tab system**: VS Code-style tabs with panel-type SVG icons (SC, CV, Chat, Worktrees, Settings), sidebar icons are project-aware launchers with grouped dropdowns, multiple tabs open simultaneously, TabContext provides project+browsePath+browseBranch scoping
 - [x] **Project Manager**: add/remove projects, GitHub-style language bars, safety modal warns about uncommitted/unpushed worktree work before removal, auto-cleanup of worktrees+sessions on removal
 - [x] **Code Viewer**: file tree, Monaco syntax highlighting, Edit/Save/Cancel, multi-source browsing (main repo + worktrees), branch status bar with "CHECKED OUT"/"WORKTREE" label, no change count badges in dropdown
@@ -37,6 +37,7 @@
 - [x] **Theme sync across windows**: applyTheme broadcasts `theme-changed` Tauri event. All breakout windows listen and apply immediately.
 - [x] **Theme system**: 7 themes (Midnight, Ocean, Forest, Aurora, Copper, Arctic, Sakura) with CSS variable architecture, persisted via Zustand+localStorage, dynamic Tauri title bar dark/light switching, ThemeSettings picker in Settings panel with mini app-mockup previews
 - [x] **Skills**: /document and /read-logs in .claude/skills/
+- [x] **Shared Skills Repository**: Settings panel for configuring git-backed shared skills repo URL, sync (clone/pull), push local edits, status display, auto-sync on startup
 - [x] **Data persistence**: OS-standard paths (%APPDATA% on Windows)
 - [x] **Personality system**: 6 built-in personalities (Default, Mentor, Senior Engineer, Pair Programmer, Architect, Move Fast) + custom personality CRUD, injected via `--append-system-prompt` at session start, invisible to users, Settings > Personality panel with card picker and create/edit form
 - [x] **Worktree dependency config**: Settings > Worktrees panel with 4 strategies (None, Symlink, pnpm, npm), auto-detects `package.json` in new worktrees, runs configured strategy after session creation, platform-aware (junction on Windows, symlink on Unix)
@@ -45,15 +46,16 @@
 
 - [x] **Skills & Agents system Phase 1-4**: Data model + types + backend foundations (Phase 1), Skill Palette UI with two sections + panel refactor (Phase 2), Skill execution pipeline with param substitution + shell commands + auto-accept (Phase 3), Eyeball Mode with silent session restart + description injection + message replay (Phase 4)
 - [x] **Skills & Agents system Phase 5**: Agent Pool Foundation — flat in-memory agent pool (Mutex<HashMap>), `start_agent_session_sync` in claude.rs, `spawn_agent`/`kill_agent`/`inject_into_agent`/`mark_agent_exited` fully implemented, `--disallowedTools Agent` on all sessions, agent marker parser (`-<*{...}*>-` format), marker interception in parseClaudeStream.ts with auto-dispatch to spawn/kill/extend commands, working dir inheritance from parent session
+- [x] **Skills & Agents system Phase 6**: Agent Health Monitoring — `AgentHealthMonitor` singleton class tracking per-agent state (healthy/idle/stalling/looping/erroring/distressed), configurable thresholds from skill.json, escalation flow injecting `[BUILDOR_ALERT]` into parent agents, `extend_agent` + `takeover_agent` Rust commands, health events integrated with event bus
+- [x] **Skills & Agents system Phase 7**: Agent UI — `useAgentPool` hook subscribing to agent events, `AgentStatusCard` pinned above chat input (live status per agent, accordion for children), `AgentsPanel` as third right-side panel (250px expanded, active/completed sections, transcript viewer), `AgentOutputBlock` for inline surfaced results, agent-permission routing to main screen with agent name badge, `ChatMessage` system-event rendering for agent lifecycle markers
+- [x] **Skills & Agents system Phase 8**: Shared Skills Repository Sync — `skill_sync.rs` Rust backend (clone/pull --ff-only/push/status), `SharedSkillsRepo.tsx` Settings UI (URL config, sync/push buttons, status indicators, divergence warnings), `defaults.json` merge (org-wide fallback model/effort/health applied to skills), startup auto-sync in MainApp.tsx, useSkills hook refreshes on sync events
 
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
-2. [ ] **Skills & Agents Phase 6+** — Agent Health Monitoring, Agent UI, Shared Skills Repo
 
 ### Not Started
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)
 - [ ] Command Palette (skill browser with auto-generated parameter forms — component is placeholder only)
-- [ ] Skill & Flow Library (shared repo sync, auto-pull, scoping, commit/PR workflow)
 - [ ] App-as-Orchestrator (flow execution engine — backend stubs exist but return empty)
 - [ ] Phase 2: Internal API/CLI for Claude-to-app bidirectional communication
 
