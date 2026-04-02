@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { AgentOutputBlock } from './AgentOutputBlock';
 
 export interface ChatContent {
   type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'permission_request';
@@ -15,7 +16,7 @@ export interface ChatContent {
 }
 
 export interface ParsedMessage {
-  role: 'assistant' | 'user' | 'system' | 'tool';
+  role: 'assistant' | 'user' | 'system' | 'system-event' | 'tool';
   content: ChatContent[];
   model?: string;
   costUsd?: number;
@@ -79,6 +80,63 @@ export function ChatMessage({ message, isVerbose, sessionId, activePermissionId 
         fontStyle: 'italic',
       }}>
         {message.content[0]?.text || ''}
+      </div>
+    );
+  }
+
+  // System-event messages: render as subtle inline divider markers
+  if (message.role === 'system-event') {
+    const raw = message.content[0]?.text || '{}';
+    let eventData: { event_type?: string; skillName?: string; agentName?: string; durationMs?: number; sourceSkill?: string; details?: string; resultSummary?: string } = {};
+    try { eventData = JSON.parse(raw); } catch { /* ignore */ }
+
+    const eventType = eventData.event_type || 'unknown';
+
+    // Agent completed/failed with output — render as AgentOutputBlock
+    if ((eventType === 'agent-completed' || eventType === 'agent-failed') && eventData.agentName) {
+      return (
+        <AgentOutputBlock
+          agentName={eventData.agentName}
+          status={eventType === 'agent-completed' ? 'completed' : 'failed'}
+          summary={eventData.resultSummary || eventData.details || ''}
+          durationMs={eventData.durationMs}
+        />
+      );
+    }
+
+    let icon = '';
+    let label = '';
+
+    if (eventType === 'skill-activated') {
+      icon = '\u2B50'; // star
+      label = `Skill activated: ${eventData.skillName || 'unknown'}`;
+    } else if (eventType === 'skill-deactivated') {
+      icon = '\u2B50';
+      label = `Skill deactivated: ${eventData.skillName || 'unknown'}`;
+    } else if (eventType === 'skill-run') {
+      icon = '\u26A1'; // lightning
+      label = `Skill invoked: ${eventData.skillName || 'unknown'}`;
+    } else if (eventType === 'agent-started') {
+      icon = '\uD83E\uDD16'; // robot
+      label = `Agent started: ${eventData.agentName || 'unknown'}${eventData.sourceSkill ? ` (from ${eventData.sourceSkill})` : ''}`;
+    } else {
+      label = eventType;
+    }
+
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '4px 12px',
+        margin: '2px 0',
+      }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--border-primary)' }} />
+        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>{icon}</span>
+          {label}
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'var(--border-primary)' }} />
       </div>
     );
   }

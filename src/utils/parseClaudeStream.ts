@@ -140,6 +140,18 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
         description,
       }, sessionId);
 
+      // If this permission comes from an agent session, emit agent-permission event
+      if (sessionId && agentHealthMonitor.getState(sessionId) !== null) {
+        const agentName = agentHealthMonitor.getName(sessionId);
+        buildorEvents.emit('agent-permission', {
+          agentSessionId: sessionId,
+          agentName: agentName || 'Agent',
+          requestId,
+          toolName,
+          description,
+        }, sessionId);
+      }
+
       buildorEvents.emit('user-attention-needed', {
         reason: 'permission',
         toolName,

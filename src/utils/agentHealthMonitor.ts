@@ -161,6 +161,13 @@ class AgentHealthMonitor {
   }
 
   /**
+   * Get the name of a tracked agent.
+   */
+  getName(sessionId: string): string | null {
+    return this.agents.get(sessionId)?.name ?? null;
+  }
+
+  /**
    * Check if any agents are currently tracked.
    */
   get active(): boolean {

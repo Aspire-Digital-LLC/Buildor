@@ -27,6 +27,10 @@ import { translateNativeSkill } from '@/utils/nativeSkillTranslator';
 import { readFileContent } from '@/utils/commands/filesystem';
 import { getBuildorSkill } from '@/utils/commands/skills';
 import type { ProjectSkill } from '@/types/skill';
+import { useAgentPool } from '@/hooks/useAgentPool';
+import { AgentStatusCard } from './AgentStatusCard';
+import { AgentsPanel } from './AgentsPanel';
+// AgentOutputBlock is rendered via ChatMessage for system-event messages
 
 type ActivePanel = 'skills' | 'agents' | 'history' | null;
 
@@ -82,6 +86,7 @@ export function ClaudeChat() {
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
   const skills = useSkills({ repoPath, projectName: projectName || undefined });
+  const agentPool = useAgentPool();
   const branchLabel = isBuildorChat ? '' : (browseBranch || activeProject?.currentBranch || 'main');
   const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage, saveSystemEvent } = useChatHistory({
     projectName: projectName || '',
@@ -163,19 +168,44 @@ export function ClaudeChat() {
 
     // When a permission is resolved, remove it from queue so next one shows
     const onPermResolved = (event: BuildorEvent) => {
-      if (event.sessionId === sessionId) {
-        const data = event.data as { requestId?: string };
-        if (data.requestId) {
-          setPermissionQueue((q) => q.filter((id) => id !== data.requestId));
-        }
+      // Accept resolutions from any session (main or agent)
+      const data = event.data as { requestId?: string };
+      if (data.requestId) {
+        setPermissionQueue((q) => q.filter((id) => id !== data.requestId));
       }
     };
     buildorEvents.on('permission-resolved', onPermResolved);
+
+    // Agent permissions: surface in main chat with agent name badge
+    const onAgentPermission = (event: BuildorEvent) => {
+      const data = event.data as {
+        agentSessionId?: string;
+        agentName?: string;
+        requestId?: string;
+        toolName?: string;
+        description?: string;
+      };
+      if (data.requestId && data.agentSessionId) {
+        setPermissionQueue((q) => [...q, data.requestId!]);
+        setMessages((prev) => [...prev, {
+          role: 'tool' as const,
+          content: [{
+            type: 'permission_request' as const,
+            name: `Agent: ${data.agentName || 'Agent'} → ${data.toolName || 'Unknown'}`,
+            text: data.description || '',
+            requestId: data.requestId,
+            toolUseId: '',
+          }],
+        }]);
+      }
+    };
+    buildorEvents.on('agent-permission', onAgentPermission);
 
     return () => {
       unlistenOutput.then((fn) => fn());
       unlistenExit.then((fn) => fn());
       buildorEvents.off('permission-resolved', onPermResolved);
+      buildorEvents.off('agent-permission', onAgentPermission);
     };
   }, [sessionId, model, autoAcceptTools]);
 
@@ -272,6 +302,92 @@ export function ClaudeChat() {
       buildorEvents.off('agent-health-changed', onHealthChanged);
     };
   }, []);
+
+  // Agent completed: inject AgentOutputBlock into chat messages
+  useEffect(() => {
+    const onAgentCompleted = (event: BuildorEvent) => {
+      const data = event.data as {
+        agentSessionId?: string;
+        agentName?: string;
+        resultSummary?: string;
+        durationMs?: number;
+      };
+      if (data.agentName) {
+        // Save system-event marker for history
+        saveSystemEvent('agent-completed', {
+          agentName: data.agentName,
+          agentSessionId: data.agentSessionId,
+          durationMs: data.durationMs,
+          timestamp: new Date().toISOString(),
+        });
+        // Inject output block as a special message
+        setMessages((prev) => [...prev, {
+          role: 'system-event' as const,
+          content: [{ type: 'text', text: JSON.stringify({
+            event_type: 'agent-completed',
+            agentName: data.agentName,
+            resultSummary: data.resultSummary || '',
+            durationMs: data.durationMs,
+          }) }],
+        }]);
+      }
+    };
+
+    const onAgentFailed = (event: BuildorEvent) => {
+      const data = event.data as {
+        agentSessionId?: string;
+        agentName?: string;
+        details?: string;
+      };
+      if (data.agentName) {
+        saveSystemEvent('agent-failed', {
+          agentName: data.agentName,
+          agentSessionId: data.agentSessionId,
+          details: data.details,
+          timestamp: new Date().toISOString(),
+        });
+        setMessages((prev) => [...prev, {
+          role: 'system-event' as const,
+          content: [{ type: 'text', text: JSON.stringify({
+            event_type: 'agent-failed',
+            agentName: data.agentName,
+            details: data.details || 'Unknown error',
+          }) }],
+        }]);
+      }
+    };
+
+    const onAgentSpawned = (event: BuildorEvent) => {
+      const data = event.data as {
+        marker?: { name?: string };
+        parentSessionId?: string;
+      };
+      const name = data.marker?.name;
+      if (name) {
+        saveSystemEvent('agent-started', {
+          agentName: name,
+          parentSessionId: data.parentSessionId,
+          timestamp: new Date().toISOString(),
+        });
+        setMessages((prev) => [...prev, {
+          role: 'system-event' as const,
+          content: [{ type: 'text', text: JSON.stringify({
+            event_type: 'agent-started',
+            agentName: name,
+          }) }],
+        }]);
+      }
+    };
+
+    buildorEvents.on('agent-completed', onAgentCompleted);
+    buildorEvents.on('agent-failed', onAgentFailed);
+    buildorEvents.on('agent-spawned', onAgentSpawned);
+    return () => {
+      buildorEvents.off('agent-completed', onAgentCompleted);
+      buildorEvents.off('agent-failed', onAgentFailed);
+      buildorEvents.off('agent-spawned', onAgentSpawned);
+    };
+  }, [saveSystemEvent]);
 
   const startClaude = async (dir: string, modelOverride?: string, activeSkills?: ActiveSkillDescription[]) => {
     if (startingRef.current) return;
@@ -821,6 +937,9 @@ export function ClaudeChat() {
         {/* Sticky task tracker — always mounted to preserve state across session restarts */}
         <TaskTracker sessionId={sessionId || undefined} />
 
+        {/* Agent status card — shows active agents above input */}
+        <AgentStatusCard agents={agentPool.agents} onOpenPanel={() => setActivePanel('agents')} />
+
         {/* Compacting indicator — shown while /compact is in progress */}
         {sessionId && <CompactingIndicator sessionId={sessionId} />}
 
@@ -919,71 +1038,17 @@ export function ClaudeChat() {
         loadingForkSkill={loadingForkSkill}
       />
 
-      {/* Agents panel placeholder — Phase 7 */}
-      {activePanel === 'agents' ? (
-        <div style={{
-          width: 250,
-          borderLeft: '1px solid var(--border-primary)',
-          background: 'var(--bg-primary)',
-          display: 'flex',
-          flexDirection: 'column',
-          flexShrink: 0,
-        }}>
-          <div
-            onClick={() => togglePanel('agents')}
-            style={{
-              padding: '12px',
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--text-secondary)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              borderBottom: '1px solid var(--border-primary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            Agents
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </div>
-          <div style={{
-            padding: 16, color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center',
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            Agent pool coming in Phase 7
-          </div>
-        </div>
-      ) : (
-        <div
-          onClick={() => togglePanel('agents')}
-          style={{
-            width: 28,
-            borderLeft: '1px solid var(--border-primary)',
-            background: 'var(--bg-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            cursor: 'pointer',
-            writingMode: 'vertical-rl',
-            textOrientation: 'mixed',
-            fontSize: 10,
-            fontWeight: 600,
-            color: 'var(--text-tertiary)',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            userSelect: 'none',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
-        >
-          Agents
-        </div>
-      )}
+      {/* Agents panel */}
+      <AgentsPanel
+        agents={agentPool.agents}
+        completedAgents={agentPool.completedAgents}
+        activeCount={agentPool.activeCount}
+        expandedAgentId={agentPool.expandedAgentId}
+        onExpandAgent={agentPool.expandAgent}
+        onGetMessages={agentPool.getAgentMessages}
+        isOpen={activePanel === 'agents'}
+        onToggleOpen={() => togglePanel('agents')}
+      />
 
       {/* History sidebar */}
       <ChatHistory
