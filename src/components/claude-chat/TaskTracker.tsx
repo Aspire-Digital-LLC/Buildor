@@ -104,6 +104,17 @@ export function TaskTracker({ sessionId }: TaskTrackerProps) {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [collapsed, setCollapsed] = useState(false);
 
+  // Dismiss completed task list when user sends next message
+  useEffect(() => {
+    if (tasks.length === 0) return;
+    const allDone = tasks.every((t) => t.status === 'completed');
+    if (!allDone) return;
+
+    const onMessage = () => { setTasks([]); };
+    buildorEvents.on('message-received', onMessage);
+    return () => { buildorEvents.off('message-received', onMessage); };
+  }, [tasks]);
+
   useEffect(() => {
     const handler = (event: { sessionId?: string; data: unknown }) => {
       // Accept events from current session, or any session if we don't have one yet
