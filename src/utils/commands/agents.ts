@@ -52,6 +52,10 @@ export async function updateAgentHealth(
   return invoke('update_agent_health', { sessionId, healthState });
 }
 
+export async function checkAgentAlive(sessionId: string): Promise<boolean> {
+  return invoke('check_agent_alive', { sessionId });
+}
+
 export async function listAgents(): Promise<AgentPoolEntry[]> {
   return invoke('list_agents');
 }

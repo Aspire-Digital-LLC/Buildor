@@ -13,6 +13,8 @@ export interface ChatContent {
   toolUseId?: string;
   requestId?: string;
   isError?: boolean;
+  /** Agent sessionId for permission_request blocks from agents */
+  agentSessionId?: string;
   /** data URL for image thumbnails in user messages */
   imageDataUrl?: string;
   /** file path on disk for persisted images */
@@ -383,7 +385,7 @@ export function ChatMessage({ message, isVerbose, sessionId, activePermissionId 
               input={block.input}
               toolUseId={block.toolUseId || ''}
               requestId={block.requestId || ''}
-              sessionId={sessionId}
+              sessionId={block.agentSessionId || sessionId}
               isVerbose={isVerbose}
             />
           );

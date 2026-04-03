@@ -9,7 +9,7 @@
  */
 
 import { buildorEvents, type BuildorEvent } from './buildorEvents';
-import { injectIntoAgent, updateAgentHealth } from './commands/agents';
+import { injectIntoAgent, updateAgentHealth, checkAgentAlive } from './commands/agents';
 import { logEvent } from './commands/logging';
 import type { AgentHealthState } from '@/types/agent';
 import type { SkillHealthConfig } from '@/types/skill';
@@ -23,6 +23,8 @@ const DEFAULT_LOOP_THRESHOLD = 3;
 const DEFAULT_ERROR_THRESHOLD = 3;
 const DEFAULT_DISTRESS_SECONDS = 45;
 const TICK_INTERVAL_MS = 5000; // Check every 5s
+const MAX_TOOL_IN_FLIGHT_SECONDS = 120; // No tool takes >2 minutes
+const MAX_SILENCE_SECONDS = 180; // Absolute ceiling — no agent should be silent for 3 minutes
 
 // --- Types ---
 
@@ -273,18 +275,28 @@ class AgentHealthMonitor {
     for (const agent of this.agents.values()) {
       if (agent.healthState === 'distressed') continue; // Already at terminal unhealthy state
 
-      // If a tool is in-flight, the agent is actively working.
-      // Don't escalate — a Read on a 226KB file takes time.
+      // If a tool is in-flight, the agent is actively working — BUT enforce a ceiling.
+      // No tool legitimately takes >2 minutes. If the flag is stuck, force it off.
       if (agent.toolInFlight) {
-        // Still healthy while tool is executing
-        if (agent.healthState !== 'healthy') {
-          this.transition(agent, 'healthy');
+        const inFlightSec = (now - agent.lastToolCallAt) / 1000;
+        if (inFlightSec < MAX_TOOL_IN_FLIGHT_SECONDS) {
+          // Still within reasonable tool execution time
+          if (agent.healthState !== 'healthy') {
+            this.transition(agent, 'healthy');
+          }
+          continue;
         }
-        continue;
+        // Tool in-flight too long — flag is probably stuck, force it off
+        agent.toolInFlight = false;
       }
 
       const elapsedMs = now - agent.lastActivityAt;
       const elapsedSec = elapsedMs / 1000;
+
+      // Absolute silence ceiling — if nothing at all for MAX_SILENCE_SECONDS, go directly to stalling
+      if (elapsedSec >= MAX_SILENCE_SECONDS && agent.healthState === 'healthy') {
+        this.transition(agent, 'stalling');
+      }
 
       // Check for idle (last activity was text, no new activity, no tool running)
       if (
@@ -313,6 +325,23 @@ class AgentHealthMonitor {
         if (unhealthyDurationSec >= agent.thresholds.distressSeconds) {
           this.transition(agent, 'distressed');
         }
+      }
+
+      // PID liveness check — if agent has been idle/stalling, verify process is alive
+      if (agent.healthState !== 'healthy' && elapsedSec > 30) {
+        const sid = agent.sessionId;
+        checkAgentAlive(sid).then((alive) => {
+          const a = this.agents.get(sid);
+          if (a && !alive && a.healthState !== 'distressed') {
+            logEvent({
+              functionArea: 'claude-chat',
+              level: 'warn',
+              operation: 'agent-health-pid-dead',
+              message: `Agent "${a.name}" (${sid}) process is dead`,
+            }).catch(() => {});
+            this.transition(a, 'distressed');
+          }
+        }).catch(() => {});
       }
     }
   }

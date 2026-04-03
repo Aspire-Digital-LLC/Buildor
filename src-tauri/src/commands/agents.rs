@@ -330,6 +330,48 @@ pub async fn list_agents() -> Result<Vec<AgentPoolEntryData>, String> {
     Ok(map.values().cloned().collect())
 }
 
+/// Check if an agent's process is still alive by PID.
+#[tauri::command]
+pub async fn check_agent_alive(session_id: String) -> Result<bool, String> {
+    let pool = get_pool();
+    let map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
+    let entry = map.get(&session_id)
+        .ok_or_else(|| format!("Agent not found: {}", session_id))?;
+
+    if entry.status != "running" {
+        return Ok(false);
+    }
+
+    match entry.pid {
+        Some(pid) => {
+            // Check if process exists — platform-specific
+            #[cfg(target_os = "windows")]
+            {
+                let output = std::process::Command::new("tasklist")
+                    .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+                    .output();
+                match output {
+                    Ok(o) => {
+                        let text = String::from_utf8_lossy(&o.stdout);
+                        Ok(text.contains(&pid.to_string()))
+                    }
+                    Err(_) => Ok(false),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                // Unix: kill -0 checks existence without sending a signal
+                use std::process::Command;
+                let status = Command::new("kill")
+                    .args(["-0", &pid.to_string()])
+                    .status();
+                Ok(status.map(|s| s.success()).unwrap_or(false))
+            }
+        }
+        None => Ok(false), // No PID recorded
+    }
+}
+
 #[tauri::command]
 pub async fn get_agent_status(session_id: String) -> Result<AgentPoolEntryData, String> {
     let pool = get_pool();

@@ -198,6 +198,7 @@ export function ClaudeChat() {
             text: data.description || '',
             requestId: data.requestId,
             toolUseId: '',
+            agentSessionId: data.agentSessionId,
           }],
         }]);
       }

@@ -60,6 +60,11 @@ fn build_tree(dir: &Path, respect_gitignore: bool, depth: usize, max_depth: usiz
             continue;
         }
 
+        // Skip temp/lock files (Office ~$, editor ~, .swp, etc.)
+        if !is_dir && (name.starts_with("~$") || name.starts_with("~") || name.ends_with(".swp") || name.ends_with(".swo")) {
+            continue;
+        }
+
         // Skip known junk directories
         if is_dir && skip_dirs.contains(&name.as_str()) {
             continue;
