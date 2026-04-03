@@ -1,10 +1,18 @@
-import { useState } from 'react';
 import type { AgentPoolAgent } from '@/hooks/useAgentPool';
 import { healthIcon } from '@/hooks/useAgentPool';
 
 interface AgentStatusCardProps {
   agents: AgentPoolAgent[];
   onOpenPanel: () => void;
+}
+
+/** Count all agents in a tree (node + all descendants) */
+function countAll(agents: AgentPoolAgent[]): number {
+  let n = 0;
+  for (const a of agents) {
+    n += 1 + countAll(a.children);
+  }
+  return n;
 }
 
 const statusIconSvg = (state: string, status: string) => {
@@ -44,7 +52,6 @@ const statusIconSvg = (state: string, status: string) => {
 };
 
 function AgentRow({ agent, depth = 0 }: { agent: AgentPoolAgent; depth?: number }) {
-  const [expanded, setExpanded] = useState(false);
   const hasChildren = agent.children.length > 0;
 
   return (
@@ -59,17 +66,8 @@ function AgentRow({ agent, depth = 0 }: { agent: AgentPoolAgent; depth?: number 
           cursor: 'pointer',
           fontSize: 12,
         }}
-        onClick={() => hasChildren && setExpanded(!expanded)}
       >
-        {hasChildren && (
-          <svg
-            width="10" height="10" viewBox="0 0 10 10"
-            style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
-          >
-            <path d="M3 1l4 4-4 4" stroke="var(--text-tertiary)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-          </svg>
-        )}
-        {!hasChildren && <div style={{ width: 10 }} />}
+        <div style={{ width: 10, flexShrink: 0 }} />
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           {statusIconSvg(agent.healthState, agent.status)}
         </div>
@@ -94,20 +92,17 @@ function AgentRow({ agent, depth = 0 }: { agent: AgentPoolAgent; depth?: number 
           {agent.statusLine}
         </span>
       </div>
-      {expanded && depth < 2 && agent.children.map((child) => (
+      {hasChildren && agent.children.map((child) => (
         <AgentRow key={child.sessionId} agent={child} depth={depth + 1} />
       ))}
-      {expanded && depth >= 2 && agent.children.length > 0 && (
-        <div style={{ paddingLeft: (depth + 1) * 16, fontSize: 10, color: 'var(--text-tertiary)', padding: '2px 0' }}>
-          {agent.children.length} more...
-        </div>
-      )}
     </>
   );
 }
 
 export function AgentStatusCard({ agents, onOpenPanel }: AgentStatusCardProps) {
   if (agents.length === 0) return null;
+
+  const totalCount = countAll(agents);
 
   return (
     <div
@@ -142,7 +137,7 @@ export function AgentStatusCard({ agents, onOpenPanel }: AgentStatusCardProps) {
           borderRadius: 8,
           fontWeight: 600,
         }}>
-          {agents.length}
+          {totalCount}
         </span>
       </div>
       {agents.map((agent) => (

@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { listAgents, markAgentExited, injectIntoAgent } from '@/utils/commands/agents';
-import { respondToPermission } from '@/utils/commands/claude';
+import { respondToPermission, sendClaudeMessage } from '@/utils/commands/claude';
 import { getChatMessages, saveChatMessage, createChatSession, type ChatMessageRecord } from '@/utils/commands/chatHistory';
 import { updateAgentDraft } from '@/utils/commands/mailbox';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
+import { logEvent } from '@/utils/commands/logging';
 import type { AgentPoolEntry, AgentHealthState } from '@/types/agent';
 
 export interface AgentPoolAgent extends AgentPoolEntry {
@@ -67,6 +68,7 @@ function healthIcon(state: AgentHealthState): string {
 }
 
 export { healthIcon };
+
 
 export function useAgentPool(): UseAgentPoolResult {
   const [pool, setPool] = useState<Map<string, AgentPoolEntry>>(new Map());
@@ -137,62 +139,82 @@ export function useAgentPool(): UseAgentPoolResult {
 
         const setupListeners = async () => {
           unlistenOutput = await listen<string>(`claude-output-${agentSid}`, (evt) => {
-            // Parse raw JSON for status updates BEFORE calling parseStreamEvent
-            // (parseStreamEvent returns null for content_block_start which is the
-            // primary source of real-time tool activity)
+            let raw: Record<string, unknown> | null = null;
             try {
-              const raw = JSON.parse(evt.payload);
+              raw = JSON.parse(evt.payload as string);
+            } catch { /* ignore parse failures */ }
 
-              // content_block_delta with text = agent is streaming text output.
-              // This is the PRIMARY vehicle for text during generation — parseStreamEvent
-              // doesn't handle deltas, so the health monitor would never see text activity
-              // without this explicit emission.
-              if (raw.type === 'content_block_delta' && raw.delta?.text) {
-                buildorEvents.emit('message-received', { text: raw.delta.text }, agentSid);
+            if (raw) {
+              // ── Result detection — agent completed its turn ──
+              if (raw.type === 'result') {
+                const success = raw.subtype === 'success';
+                const output = agentOutputRef.current.get(agentSid) || '';
+                markAgentExited(agentSid, success, output || undefined).catch(() => {});
+                // Bridge to JS event bus — Rust emits buildor-event but nothing listens for it
+                // Include output so onCompleted can inject result back to parent
+                buildorEvents.emit(success ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+                import('@/utils/commands/claude').then(({ stopSession }) => {
+                  stopSession(agentSid).catch(() => {});
+                });
+                agentOutputRef.current.delete(agentSid);
+                agentSeqRef.current.delete(agentSid);
+                const draftTimer = agentDraftTimerRef.current.get(agentSid);
+                if (draftTimer) { clearTimeout(draftTimer); agentDraftTimerRef.current.delete(agentSid); }
+                unlistenOutput?.();
+                unlistenExit?.();
+                agentListenersRef.current.delete(agentSid);
+                return;
               }
 
-              // content_block_start with text = new text block beginning
-              if (raw.type === 'content_block_start' && raw.content_block?.type === 'text') {
+              // ── content_block_delta — text streaming ──
+              if (raw.type === 'content_block_delta' && (raw.delta as Record<string, unknown>)?.text) {
+                buildorEvents.emit('message-received', { text: (raw.delta as Record<string, unknown>).text }, agentSid);
+              }
+
+              // ── content_block_start — text block beginning ──
+              else if (raw.type === 'content_block_start' && (raw.content_block as Record<string, unknown>)?.type === 'text') {
                 buildorEvents.emit('message-received', { text: '(generating...)' }, agentSid);
               }
 
-              // content_block_start with tool_use = real-time tool activity
-              if (raw.type === 'content_block_start' && raw.content_block?.type === 'tool_use') {
+              // ── content_block_start — tool_use activity ──
+              else if (raw.type === 'content_block_start' && (raw.content_block as Record<string, unknown>)?.type === 'tool_use') {
+                const block = raw.content_block as Record<string, unknown>;
                 setStatusLines((prev) => {
                   const next = new Map(prev);
-                  next.set(agentSid, deriveStatusLine({
-                    toolName: raw.content_block.name,
-                    input: raw.content_block.input,
-                  }));
+                  next.set(agentSid, deriveStatusLine({ toolName: block.name, input: block.input }));
                   return next;
                 });
               }
 
-              // Auto-accept agent permission requests — agents are autonomous workers
-              if (
-                (raw.type === 'control_request' && raw.request?.subtype === 'can_use_tool') ||
+              // ── Permission requests — auto-approve ──
+              else if (
+                (raw.type === 'control_request' && (raw.request as Record<string, unknown>)?.subtype === 'can_use_tool') ||
                 raw.type === 'permission_request' || raw.type === 'permission'
               ) {
-                const requestId = raw.request_id || raw.id || '';
-                const toolInput = raw.request?.input || raw.tool?.input || raw.permission?.input || undefined;
+                const requestId = (raw.request_id || raw.id || '') as string;
+                const reqObj = raw.request as Record<string, unknown> | undefined;
+                const toolObj = raw.tool as Record<string, unknown> | undefined;
+                const permObj = raw.permission as Record<string, unknown> | undefined;
+                const toolInput = reqObj?.input || toolObj?.input || permObj?.input || undefined;
                 if (requestId) {
-                  respondToPermission(agentSid, requestId, true, toolInput).catch(() => {});
+                  respondToPermission(agentSid, requestId, true, toolInput as Record<string, unknown> | undefined).catch(() => {});
                   setStatusLines((prev) => {
                     const next = new Map(prev);
-                    const toolName = raw.request?.tool_name || raw.tool?.name || 'tool';
-                    next.set(agentSid, `Approved ${toolName}...`);
+                    const toolName = reqObj?.tool_name || toolObj?.name || 'tool';
+                    next.set(agentSid, `Approved ${String(toolName)}...`);
                     return next;
                   });
                 }
               }
 
-              // assistant message with text = agent is writing output
-              if (raw.type === 'assistant' && raw.message?.content) {
-                for (const block of raw.message.content) {
+              // ── assistant message — complete message with content blocks ──
+              else if (raw.type === 'assistant' && (raw.message as Record<string, unknown>)?.content) {
+                const content = (raw.message as Record<string, unknown>).content as Array<Record<string, unknown>>;
+                for (const block of content) {
                   if (block.type === 'text' && block.text) {
                     setStatusLines((prev) => {
                       const next = new Map(prev);
-                      next.set(agentSid, truncate(block.text, 60));
+                      next.set(agentSid, truncate(String(block.text), 60));
                       return next;
                     });
                   }
@@ -205,32 +227,9 @@ export function useAgentPool(): UseAgentPoolResult {
                   }
                 }
               }
-            } catch { /* not JSON, ignore */ }
 
-            // Detect agent completion — in --print mode with stream-json, the process
-            // sends "result: success/failure" but does NOT exit. The stdout pipe stays
-            // open so claude-exit never fires. Treat result as completion.
-            try {
-              const raw2 = JSON.parse(evt.payload);
-              if (raw2.type === 'result') {
-                const success = raw2.subtype === 'success';
-                const output = agentOutputRef.current.get(agentSid) || '';
-                markAgentExited(agentSid, success, output || undefined).catch(() => {});
-                // Stop the underlying Claude process since it won't exit on its own
-                import('@/utils/commands/claude').then(({ stopSession }) => {
-                  stopSession(agentSid).catch(() => {});
-                });
-                // Cleanup listeners and timers
-                agentOutputRef.current.delete(agentSid);
-                agentSeqRef.current.delete(agentSid);
-                const draftTimer = agentDraftTimerRef.current.get(agentSid);
-                if (draftTimer) { clearTimeout(draftTimer); agentDraftTimerRef.current.delete(agentSid); }
-                unlistenOutput?.();
-                unlistenExit?.();
-                agentListenersRef.current.delete(agentSid);
-                return; // Don't process further
-              }
-            } catch { /* ignore */ }
+              // Unhandled event types — no action needed
+            }
 
             // Still call parseStreamEvent for event emission + output accumulation
             const parsed = parseStreamEvent(evt.payload, agentSid);
@@ -271,7 +270,9 @@ export function useAgentPool(): UseAgentPoolResult {
 
           unlistenExit = await listen<string>(`claude-exit-${agentSid}`, () => {
             const output = agentOutputRef.current.get(agentSid) || '';
-            markAgentExited(agentSid, output.length > 0, output || undefined).catch(() => {});
+            const exitSuccess = output.length > 0;
+            markAgentExited(agentSid, exitSuccess, output || undefined).catch(() => {});
+            buildorEvents.emit(exitSuccess ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
 
             // Cleanup
             agentOutputRef.current.delete(agentSid);
@@ -298,7 +299,7 @@ export function useAgentPool(): UseAgentPoolResult {
     };
 
     const onCompleted = (event: BuildorEvent) => {
-      const data = event.data as { agentSessionId?: string };
+      const data = event.data as { agentSessionId?: string; output?: string };
       if (data.agentSessionId) {
         setPool((prev) => {
           const next = new Map(prev);
@@ -309,16 +310,52 @@ export function useAgentPool(): UseAgentPoolResult {
           return next;
         });
       }
-      // Also refresh from backend for accuracy
+      // Refresh from backend, then inject result back to parent for implicit (native) agents
       listAgents().then((agents) => {
         const map = new Map<string, AgentPoolEntry>();
         for (const a of agents) map.set(a.sessionId, a);
         setPool(map);
+
+        // Return-to-caller: inject result back to parent session
+        // All agents with a parentSessionId return to caller (implicit contract)
+        // When flows are added, flow-orchestrated agents will use a different routing mechanism
+        if (data.agentSessionId) {
+          const entry = map.get(data.agentSessionId);
+          if (entry && entry.parentSessionId) {
+            const output = data.output || '(No output captured)';
+            const resultMessage = [
+              `[AGENT RESULT — ${entry.name}]`,
+              `Status: completed`,
+              `Duration: ${entry.startedAt && entry.endedAt ? Math.round((new Date(entry.endedAt).getTime() - new Date(entry.startedAt).getTime()) / 1000) + 's' : 'unknown'}`,
+              '',
+              output,
+              '',
+              `[END AGENT RESULT]`,
+            ].join('\n');
+            logEvent({
+              sessionId: entry.parentSessionId,
+              functionArea: 'claude-chat',
+              level: 'info',
+              operation: 'agent-result-inject',
+              message: `Injecting result from agent "${entry.name}" (${data.agentSessionId}) into parent ${entry.parentSessionId}`,
+              details: `Output length: ${output.length} chars`,
+            }).catch(() => {});
+            sendClaudeMessage(entry.parentSessionId, resultMessage).catch((err) => {
+              logEvent({
+                sessionId: entry.parentSessionId!,
+                functionArea: 'claude-chat',
+                level: 'error',
+                operation: 'agent-result-inject',
+                message: `Failed to inject result for "${entry.name}" into parent: ${err}`,
+              }).catch(() => {});
+            });
+          }
+        }
       }).catch(() => {});
     };
 
     const onFailed = (event: BuildorEvent) => {
-      const data = event.data as { agentSessionId?: string };
+      const data = event.data as { agentSessionId?: string; output?: string };
       if (data.agentSessionId) {
         setPool((prev) => {
           const next = new Map(prev);
@@ -333,6 +370,37 @@ export function useAgentPool(): UseAgentPoolResult {
         const map = new Map<string, AgentPoolEntry>();
         for (const a of agents) map.set(a.sessionId, a);
         setPool(map);
+
+        // Return-to-caller: notify parent of failure
+        if (data.agentSessionId) {
+          const entry = map.get(data.agentSessionId);
+          if (entry && entry.parentSessionId) {
+            const output = data.output || '';
+            const resultMessage = [
+              `[AGENT FAILED — ${entry.name}]`,
+              `Status: failed`,
+              output ? `\nPartial output:\n${output}` : '(No output captured)',
+              '',
+              `[END AGENT RESULT]`,
+            ].join('\n');
+            logEvent({
+              sessionId: entry.parentSessionId,
+              functionArea: 'claude-chat',
+              level: 'warn',
+              operation: 'agent-result-inject',
+              message: `Injecting failure notice from agent "${entry.name}" (${data.agentSessionId}) into parent ${entry.parentSessionId}`,
+            }).catch(() => {});
+            sendClaudeMessage(entry.parentSessionId, resultMessage).catch((err) => {
+              logEvent({
+                sessionId: entry.parentSessionId!,
+                functionArea: 'claude-chat',
+                level: 'error',
+                operation: 'agent-result-inject',
+                message: `Failed to inject failure notice for "${entry.name}" into parent: ${err}`,
+              }).catch(() => {});
+            });
+          }
+        }
       }).catch(() => {});
     };
 

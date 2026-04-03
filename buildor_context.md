@@ -139,7 +139,7 @@ Optional fields for spawn_agent:
 - If an agent stalls, loops, or errors out, Buildor's health monitor will alert you
 - You can see active agents in the **Agents panel** (right sidebar) and the **Agent Status Card** (above chat input)
 - Agent permissions surface on your screen — approve/deny them like any other tool permission
-- Agents cannot spawn their own sub-agents
+- Agents cannot spawn sub-agents via native Claude Code mechanisms (the Agent tool is disabled). They spawn sub-agents via the same Buildor marker protocol. Sub-agent results return to the spawning agent, not to you.
 
 ---
 
