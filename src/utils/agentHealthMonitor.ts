@@ -39,6 +39,9 @@ interface MonitoredAgent {
   healthState: AgentHealthState;
   lastActivityAt: number;
   lastActivityType: 'tool_call' | 'text' | 'none';
+  lastToolCallAt: number;          // last tool invocation (content_block_start)
+  lastToolCompleteAt: number;      // last tool result (content_block_stop / tool_result)
+  toolInFlight: boolean;           // true between tool_call and tool_complete
   recentToolCalls: ToolCallRecord[];
   consecutiveErrors: number;
   unhealthySince: number | null; // timestamp when first went unhealthy
@@ -103,6 +106,9 @@ class AgentHealthMonitor {
       healthState: 'healthy',
       lastActivityAt: Date.now(),
       lastActivityType: 'none',
+      lastToolCallAt: Date.now(),
+      lastToolCompleteAt: Date.now(),
+      toolInFlight: false,
       recentToolCalls: [],
       consecutiveErrors: 0,
       unhealthySince: null,
@@ -183,8 +189,11 @@ class AgentHealthMonitor {
     if (!agent) return;
 
     const data = event.data as { toolName?: string; input?: unknown };
-    agent.lastActivityAt = Date.now();
+    const now = Date.now();
+    agent.lastActivityAt = now;
     agent.lastActivityType = 'tool_call';
+    agent.lastToolCallAt = now;
+    agent.toolInFlight = true;
 
     // Record for loop detection
     agent.recentToolCalls.push({
@@ -220,7 +229,10 @@ class AgentHealthMonitor {
     if (!agent) return;
 
     const data = event.data as { isError?: boolean };
-    agent.lastActivityAt = Date.now();
+    const now = Date.now();
+    agent.lastActivityAt = now;
+    agent.lastToolCompleteAt = now;
+    agent.toolInFlight = false;
 
     if (data.isError) {
       agent.consecutiveErrors++;
@@ -261,10 +273,20 @@ class AgentHealthMonitor {
     for (const agent of this.agents.values()) {
       if (agent.healthState === 'distressed') continue; // Already at terminal unhealthy state
 
+      // If a tool is in-flight, the agent is actively working.
+      // Don't escalate — a Read on a 226KB file takes time.
+      if (agent.toolInFlight) {
+        // Still healthy while tool is executing
+        if (agent.healthState !== 'healthy') {
+          this.transition(agent, 'healthy');
+        }
+        continue;
+      }
+
       const elapsedMs = now - agent.lastActivityAt;
       const elapsedSec = elapsedMs / 1000;
 
-      // Check for idle (last activity was text, no new activity)
+      // Check for idle (last activity was text, no new activity, no tool running)
       if (
         agent.healthState === 'healthy' &&
         agent.lastActivityType === 'text' &&
@@ -273,7 +295,7 @@ class AgentHealthMonitor {
         this.transition(agent, 'idle');
       }
 
-      // Check for stalling (last activity was tool_call or none, no new activity)
+      // Check for stalling (no activity AND no tool in flight)
       if (
         agent.healthState === 'healthy' &&
         (agent.lastActivityType === 'tool_call' || agent.lastActivityType === 'none') &&
@@ -283,7 +305,6 @@ class AgentHealthMonitor {
       }
 
       // Check for distress (any unhealthy state persisting)
-      // Note: 'distressed' is already excluded by the continue guard above
       if (
         agent.unhealthySince &&
         agent.healthState !== 'healthy'

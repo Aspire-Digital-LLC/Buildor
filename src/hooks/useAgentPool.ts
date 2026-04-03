@@ -117,6 +117,46 @@ export function useAgentPool(): UseAgentPoolResult {
 
         const setupListeners = async () => {
           unlistenOutput = await listen<string>(`claude-output-${agentSid}`, (evt) => {
+            // Parse raw JSON for status updates BEFORE calling parseStreamEvent
+            // (parseStreamEvent returns null for content_block_start which is the
+            // primary source of real-time tool activity)
+            try {
+              const raw = JSON.parse(evt.payload);
+
+              // content_block_start with tool_use = real-time tool activity
+              if (raw.type === 'content_block_start' && raw.content_block?.type === 'tool_use') {
+                setStatusLines((prev) => {
+                  const next = new Map(prev);
+                  next.set(agentSid, deriveStatusLine({
+                    toolName: raw.content_block.name,
+                    input: raw.content_block.input,
+                  }));
+                  return next;
+                });
+              }
+
+              // assistant message with text = agent is writing output
+              if (raw.type === 'assistant' && raw.message?.content) {
+                for (const block of raw.message.content) {
+                  if (block.type === 'text' && block.text) {
+                    setStatusLines((prev) => {
+                      const next = new Map(prev);
+                      next.set(agentSid, truncate(block.text, 60));
+                      return next;
+                    });
+                  }
+                  if (block.type === 'tool_use' && block.name) {
+                    setStatusLines((prev) => {
+                      const next = new Map(prev);
+                      next.set(agentSid, deriveStatusLine({ toolName: block.name, input: block.input }));
+                      return next;
+                    });
+                  }
+                }
+              }
+            } catch { /* not JSON, ignore */ }
+
+            // Still call parseStreamEvent for event emission + output accumulation
             const parsed = parseStreamEvent(evt.payload, agentSid);
             if (parsed?.role === 'assistant') {
               const textBlocks = parsed.content
@@ -124,7 +164,6 @@ export function useAgentPool(): UseAgentPoolResult {
                 .map((b) => b.text)
                 .join('\n');
               if (textBlocks) {
-                // Keep last output (agent's final response is what matters)
                 agentOutputRef.current.set(agentSid, textBlocks);
               }
             }

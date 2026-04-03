@@ -63,7 +63,9 @@ pub async fn spawn_agent(
         - Focus exclusively on the task described above.\n\
         - When you are done, output your findings/results clearly.\n\
         - Do not ask the user questions — complete the task autonomously.\n\
-        - You cannot spawn sub-agents.",
+        - You cannot spawn sub-agents via native Claude Code mechanisms (the Agent tool is disabled).\n\
+        - You MUST order sub-agents via the Buildor marker protocol: -<*{{ \"action\": \"spawn_agent\", \"name\": \"agent-name\", \"prompt\": \"task\" }}*>-\n\
+        - You may declare dependencies on other agents: -<*{{ \"action\": \"spawn_agent\", \"name\": \"agent-name\", \"prompt\": \"task\", \"dependencies\": [\"other-agent-name\"] }}*>-",
     );
 
     // Start the Claude session via the shared session infrastructure
