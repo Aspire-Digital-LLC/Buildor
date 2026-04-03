@@ -143,6 +143,19 @@ export function useAgentPool(): UseAgentPoolResult {
             try {
               const raw = JSON.parse(evt.payload);
 
+              // content_block_delta with text = agent is streaming text output.
+              // This is the PRIMARY vehicle for text during generation — parseStreamEvent
+              // doesn't handle deltas, so the health monitor would never see text activity
+              // without this explicit emission.
+              if (raw.type === 'content_block_delta' && raw.delta?.text) {
+                buildorEvents.emit('message-received', { text: raw.delta.text }, agentSid);
+              }
+
+              // content_block_start with text = new text block beginning
+              if (raw.type === 'content_block_start' && raw.content_block?.type === 'text') {
+                buildorEvents.emit('message-received', { text: '(generating...)' }, agentSid);
+              }
+
               // content_block_start with tool_use = real-time tool activity
               if (raw.type === 'content_block_start' && raw.content_block?.type === 'tool_use') {
                 setStatusLines((prev) => {
