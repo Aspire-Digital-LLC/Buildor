@@ -305,10 +305,12 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
           parentSessionId ?? null,
         );
         // Emit after backend registration so useAgentPool can find the entry
+        // Include prompt so frontend can send it after listeners are ready
         buildorEvents.emit('agent-registered', {
           agentSessionId,
           name: marker.name,
           parentSessionId,
+          prompt: marker.prompt,
         }, parentSessionId);
       }).catch((err) => {
         buildorEvents.emit('error-occurred', {

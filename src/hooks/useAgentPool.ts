@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
-import { listAgents, markAgentExited } from '@/utils/commands/agents';
+import { listAgents, markAgentExited, injectIntoAgent } from '@/utils/commands/agents';
 import { getChatMessages, type ChatMessageRecord } from '@/utils/commands/chatHistory';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import type { AgentPoolEntry, AgentHealthState } from '@/types/agent';
@@ -98,8 +98,9 @@ export function useAgentPool(): UseAgentPoolResult {
   // Subscribe to agent events
   useEffect(() => {
     const onRegistered = (event: BuildorEvent) => {
-      const data = event.data as { agentSessionId?: string; name?: string };
+      const data = event.data as { agentSessionId?: string; name?: string; prompt?: string };
       const agentSid = data.agentSessionId;
+      const agentPrompt = data.prompt;
 
       // Refresh pool from backend — agent is now registered in Rust pool
       listAgents().then((agents) => {
@@ -181,7 +182,13 @@ export function useAgentPool(): UseAgentPoolResult {
           });
         };
 
-        const cleanupPromise = setupListeners();
+        const cleanupPromise = setupListeners().then(() => {
+          // Send the initial prompt AFTER listeners are active
+          // (Rust spawn_agent deliberately does NOT send it to avoid race condition)
+          if (agentPrompt) {
+            injectIntoAgent(agentSid, agentPrompt).catch(() => {});
+          }
+        });
         agentListenersRef.current.set(agentSid, () => {
           cleanupPromise.then(() => {
             unlistenOutput?.();
