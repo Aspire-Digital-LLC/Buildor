@@ -16,12 +16,12 @@ import type { SkillHealthConfig } from '@/types/skill';
 
 // --- Defaults ---
 
-const DEFAULT_IDLE_SECONDS = 30;
-const DEFAULT_STALL_SECONDS = 30;
+const DEFAULT_IDLE_SECONDS = 60;
+const DEFAULT_STALL_SECONDS = 60;
 const DEFAULT_LOOP_DETECTION_WINDOW = 5;
 const DEFAULT_LOOP_THRESHOLD = 3;
 const DEFAULT_ERROR_THRESHOLD = 3;
-const DEFAULT_DISTRESS_SECONDS = 45;
+const DEFAULT_DISTRESS_SECONDS = 90;
 const TICK_INTERVAL_MS = 5000; // Check every 5s
 const MAX_TOOL_IN_FLIGHT_SECONDS = 120; // No tool takes >2 minutes
 const MAX_SILENCE_SECONDS = 180; // Absolute ceiling — no agent should be silent for 3 minutes
@@ -261,8 +261,8 @@ class AgentHealthMonitor {
     agent.lastActivityAt = Date.now();
     agent.lastActivityType = 'text';
 
-    // Text output can recover from stalling/looping
-    if (agent.healthState === 'stalling' || agent.healthState === 'looping') {
+    // Text output = agent is alive. Recover from any non-distressed unhealthy state.
+    if (agent.healthState !== 'healthy' && agent.healthState !== 'distressed') {
       this.transition(agent, 'healthy');
     }
   }
