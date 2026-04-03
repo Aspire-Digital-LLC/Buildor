@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { listAgents, markAgentExited, injectIntoAgent } from '@/utils/commands/agents';
+import { respondToPermission } from '@/utils/commands/claude';
 import { getChatMessages, type ChatMessageRecord } from '@/utils/commands/chatHistory';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import type { AgentPoolEntry, AgentHealthState } from '@/types/agent';
@@ -134,6 +135,24 @@ export function useAgentPool(): UseAgentPoolResult {
                   }));
                   return next;
                 });
+              }
+
+              // Auto-accept agent permission requests — agents are autonomous workers
+              if (
+                (raw.type === 'control_request' && raw.request?.subtype === 'can_use_tool') ||
+                raw.type === 'permission_request' || raw.type === 'permission'
+              ) {
+                const requestId = raw.request_id || raw.id || '';
+                const toolInput = raw.request?.input || raw.tool?.input || raw.permission?.input || undefined;
+                if (requestId) {
+                  respondToPermission(agentSid, requestId, true, toolInput).catch(() => {});
+                  setStatusLines((prev) => {
+                    const next = new Map(prev);
+                    const toolName = raw.request?.tool_name || raw.tool?.name || 'tool';
+                    next.set(agentSid, `Approved ${toolName}...`);
+                    return next;
+                  });
+                }
               }
 
               // assistant message with text = agent is writing output
