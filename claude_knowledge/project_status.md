@@ -50,6 +50,9 @@
 - [x] **Skills & Agents system Phase 7**: Agent UI — `useAgentPool` hook subscribing to agent events, `AgentStatusCard` pinned above chat input (live status per agent, accordion for children), `AgentsPanel` as third right-side panel (250px expanded, active/completed sections, transcript viewer), `AgentOutputBlock` for inline surfaced results, agent-permission routing to main screen with agent name badge, `ChatMessage` system-event rendering for agent lifecycle markers
 - [x] **Skills & Agents system Phase 8**: Shared Skills Repository Sync — `skill_sync.rs` Rust backend (clone/pull --ff-only/push/status), `SharedSkillsRepo.tsx` Settings UI (URL config, sync/push buttons, status indicators, divergence warnings), `defaults.json` merge (org-wide fallback model/effort/health applied to skills), startup auto-sync in MainApp.tsx, useSkills hook refreshes on sync events
 
+- [x] **Agent Result Mailbox**: File-backed inter-agent communication system — `mailbox.rs` (deposit/query/purge/dependency resolution), `~/.buildor/agent-results/{sessionId}.json` storage, in-memory cache, pending spawn queue for unmet dependencies, dependency context injection into spawned agent prompts, output capture via `useAgentPool` hook, cleanup on parent session end. This is the **defacto agent communication technique** — all inter-agent data sharing uses this system.
+- [x] **Agent spawn race condition fix**: `agent-spawned` event fired before backend registration, causing `listAgents()` to return empty. Fixed by adding `agent-registered` event that fires after `spawnAgent()` resolves.
+
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
 

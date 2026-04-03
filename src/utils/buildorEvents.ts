@@ -28,11 +28,16 @@ export type BuildorEventType =
   | 'navigate-settings'       // Navigate to a specific settings section
   | 'tasks-updated'           // Claude updated task list (TodoWrite)
   // Agent events (Phase 1+)
-  | 'agent-spawned'           // New agent subprocess started
+  | 'agent-spawned'           // New agent subprocess started (fires immediately, before backend registration)
+  | 'agent-registered'        // Agent registered in backend pool (fires after spawnAgent resolves)
   | 'agent-completed'         // Agent finished successfully
   | 'agent-failed'            // Agent failed or was killed
   | 'agent-health-changed'    // Agent health state transitioned
   | 'agent-permission'        // Agent needs permission approval
+  | 'agent-result-deposited'  // Agent result persisted to mailbox
+  | 'agent-dependency-resolved' // Pending agent's dependencies met, now spawning
+  | 'agent-dependency-waiting'  // Agent queued waiting for dependencies
+  | 'agent-dependency-failed'   // Agent abandoned because a dependency failed
   // Skill events (Phase 1+)
   | 'skill-activated'         // Skill eyeball toggled on (session restart)
   | 'skill-deactivated'       // Skill eyeball toggled off (session restart)

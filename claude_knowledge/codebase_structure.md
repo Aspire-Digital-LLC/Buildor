@@ -50,8 +50,12 @@ Buildor/
 │   │   ├── commands/
 │   │   │   ├── skills.ts            # listBuildorSkills, listProjectSkills, etc.
 │   │   │   ├── skillSync.ts         # configureSharedRepo, syncSkillsRepo, pushSkillChanges
-│   │   │   └── agents.ts            # spawnAgent, killAgent, extendAgent, etc.
+│   │   │   ├── agents.ts            # spawnAgent, killAgent, extendAgent, markAgentExited
+│   │   │   ├── mailbox.ts          # depositResult, queryResult, purgeResults, spawnAgentWithDeps
+│   │   │   └── chatImages.ts        # saveChatImage, readChatImage, deleteSessionImages
 │   │   └── buildorEvents.ts         # Event bus (permissions, agents, skills, compact, etc.)
+│   ├── prompts/                 # Centralized prompt templates
+│   │   └── historyInjection.ts      # Aware injection instructions (header, footer, modes, image markers)
 │   └── windows/                 # Per-window entry points
 │       └── main/MainApp.tsx         # App entry — loads projects, auto-syncs shared skills
 ├── src-tauri/                   # Tauri / Rust backend
@@ -59,9 +63,11 @@ Buildor/
 │   │   ├── main.rs              # App entry point
 │   │   ├── commands/            # Tauri command handlers (IPC)
 │   │   │   ├── chat_history.rs  # Chat history CRUD + title/summary generation
+│   │   │   ├── chat_images.rs  # Image storage (save/read/delete), session cleanup
 │   │   │   ├── skills.rs        # Skill scanning (~/.buildor/skills/, .claude/skills/), defaults.json merge
 │   │   │   ├── skill_sync.rs    # Shared repo git ops (clone, pull, push, status)
 │   │   │   ├── agents.rs        # Agent pool (spawn, kill, extend, takeover, inject, list)
+│   │   │   ├── mailbox.rs      # Agent result mailbox (deposit, query, purge, dependency resolution)
 │   │   │   ├── claude.rs        # Claude session management (main + agent sessions)
 │   │   │   └── shell.rs         # Shell command execution (for skill !`command` blocks)
 │   │   ├── logging/             # SQLite DB (logs + chat_sessions + chat_messages tables)

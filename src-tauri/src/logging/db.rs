@@ -468,6 +468,30 @@ impl LogDb {
         Ok(())
     }
 
+    /// Get session IDs for a worktree (used for image cleanup before DB deletion)
+    pub fn get_session_ids_by_worktree(&self, worktree_session_id: &str) -> Result<Vec<String>, String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let mut stmt = conn.prepare("SELECT id FROM chat_sessions WHERE worktree_session_id = ?1")
+            .map_err(|e| format!("Query error: {}", e))?;
+        let ids = stmt.query_map(params![worktree_session_id], |row| row.get(0))
+            .map_err(|e| format!("Query error: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(ids)
+    }
+
+    /// Get session IDs for a project (used for image cleanup before DB deletion)
+    pub fn get_session_ids_by_project(&self, project_name: &str) -> Result<Vec<String>, String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let mut stmt = conn.prepare("SELECT id FROM chat_sessions WHERE project_name = ?1")
+            .map_err(|e| format!("Query error: {}", e))?;
+        let ids = stmt.query_map(params![project_name], |row| row.get(0))
+            .map_err(|e| format!("Query error: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(ids)
+    }
+
     pub fn delete_sessions_by_worktree(&self, worktree_session_id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
         // CASCADE deletes messages automatically

@@ -133,6 +133,15 @@ pub fn run() {
             commands::skill_sync::sync_skills_repo,
             commands::skill_sync::push_skill_changes,
             commands::skill_sync::get_sync_status,
+            commands::chat_images::save_chat_image,
+            commands::chat_images::read_chat_image,
+            commands::chat_images::delete_session_images,
+            commands::mailbox::deposit_result,
+            commands::mailbox::query_result,
+            commands::mailbox::query_results_by_parent,
+            commands::mailbox::query_result_by_name,
+            commands::mailbox::purge_results,
+            commands::mailbox::spawn_agent_with_deps,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,6 +2,7 @@ import type { ParsedMessage, ChatContent } from '@/components/claude-chat/ChatMe
 import { buildorEvents } from './buildorEvents';
 import { hasAgentMarkers, parseAgentMarkers } from './agentMarker';
 import { spawnAgent, killAgent, extendAgent, takeoverAgent } from './commands/agents';
+import { spawnAgentWithDeps } from './commands/mailbox';
 import { agentHealthMonitor } from './agentHealthMonitor';
 
 export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMessage | null {
@@ -264,25 +265,51 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
         parentSessionId,
       }, parentSessionId);
 
-      // Also attempt to spawn directly if we have enough info.
-      // The frontend listener in ClaudeChat can override this if needed.
-      spawnAgent(
-        '', // workingDir — filled by Rust from parent session if empty; will need ClaudeChat to provide
-        marker.prompt,
-        marker.name,
-        parentSessionId ?? null,
-        parentSessionId ?? null, // return_to = parent session
-        null,
-        null,
-        marker.returnMode ?? 'summary',
-        marker.outputPath ?? null,
-      ).then((agentSessionId) => {
+      // Spawn agent — use dependency-aware path if dependencies declared
+      const hasDeps = marker.dependencies && marker.dependencies.length > 0;
+
+      const spawnPromise = hasDeps
+        ? spawnAgentWithDeps(
+            '', // workingDir — resolved by Rust from parent session
+            marker.prompt,
+            marker.name,
+            parentSessionId ?? null,
+            parentSessionId ?? null,
+            null,
+            null,
+            marker.returnMode ?? 'summary',
+            marker.outputPath ?? null,
+            marker.dependencies!,
+          )
+        : spawnAgent(
+            '', // workingDir — resolved by Rust from parent session
+            marker.prompt,
+            marker.name,
+            parentSessionId ?? null,
+            parentSessionId ?? null,
+            null,
+            null,
+            marker.returnMode ?? 'summary',
+            marker.outputPath ?? null,
+          );
+
+      spawnPromise.then((agentSessionId) => {
+        if (agentSessionId === 'pending') {
+          // Agent queued waiting for dependencies — no health tracking yet
+          return;
+        }
         // Register with health monitor
         agentHealthMonitor.track(
           agentSessionId,
           marker.name!,
           parentSessionId ?? null,
         );
+        // Emit after backend registration so useAgentPool can find the entry
+        buildorEvents.emit('agent-registered', {
+          agentSessionId,
+          name: marker.name,
+          parentSessionId,
+        }, parentSessionId);
       }).catch((err) => {
         buildorEvents.emit('error-occurred', {
           message: `Failed to spawn agent "${marker.name}": ${err}`,

@@ -215,6 +215,55 @@ Key design choices:
 - **Session reuse**: agent sessions use the same `ClaudeSession` infrastructure as main sessions (shared stdin/stdout/stderr management)
 - **Pool is flat**: all agents in one HashMap regardless of nesting depth; parent_session_id tracks lineage
 
+## Agent Result Mailbox (Defacto Agent Communication)
+
+The mailbox is Buildor's **standard inter-agent communication mechanism**. All agent results pass through it. All agent dependencies resolve through it. No other communication pattern should be used for agent-to-agent data sharing.
+
+```
+Agent A completes
+  → mark_agent_exited(sid, success, output)
+  → agents.rs deposits into mailbox
+  → mailbox.rs writes ~/.buildor/agent-results/{sessionId}.json
+  → mailbox.rs updates in-memory cache
+  → emits agent-result-deposited event
+  → check_pending_spawns(): scans pending queue
+  → If Agent B was waiting on Agent A → deps met → spawn Agent B
+  → Agent B's prompt is augmented with Agent A's output
+```
+
+**Storage**: JSON files at `~/.buildor/agent-results/{sessionId}.json`, backed by in-memory `Mutex<HashMap>` cache. Each entry stores: sessionId, name, parentSessionId, status, timestamps, output text, duration, model.
+
+**Dependency resolution**: Agents can declare `dependencies: ["agent-name"]` in their spawn marker. The orchestrator checks the mailbox:
+- All deps satisfied → spawn immediately with dependency outputs injected into prompt
+- Missing deps → enqueue in `PENDING_SPAWNS` queue
+- Failed dep → abandon the pending spawn, emit `agent-dependency-failed`
+
+**Dependency context injection**: When a dependent agent spawns, its prompt is augmented with:
+```
+You have access to results from prerequisite agents:
+--- Result from agent "data-collector" (status: completed) ---
+{output text}
+---
+
+Your task:
+{original prompt}
+```
+
+**Result capture**: The `useAgentPool` hook listens to `claude-output-{agentSessionId}` events, accumulates the last assistant text output, and passes it to `markAgentExited()` when the agent exits. The Rust backend then deposits it into the mailbox.
+
+**Cleanup**: `purgeResults(parentSessionId)` called when the parent chat session ends — removes all result files and pending spawns for that parent.
+
+**Marker format** for dependency-aware spawning:
+```
+-<*{ "action": "spawn_agent", "name": "analyzer", "prompt": "...", "dependencies": ["data-collector"] }*>-
+```
+
+**Key design choices**:
+- File-backed, not SQLite — matches `~/.buildor/` convention, simple per-result files
+- Dependency resolution in Rust — atomic, works even without frontend
+- Name-based deps scoped to parent — prevents cross-session collisions
+- Failed deps abandon pending spawns — no infinite waits
+
 ## Agent Health Monitoring (Phase 6)
 
 ```
@@ -303,8 +352,13 @@ Aware injection:
 
 **Storage**: `chat_sessions` and `chat_messages` tables in existing `logs.db` SQLite database. Messages use `ON DELETE CASCADE` — deleting a session removes all its messages.
 
+**Image attachments**: Images pasted/dropped into chat are auto-compressed (canvas JPEG, progressive quality reduction) if >35KB. Stored to `{appData}/images/{sessionId}/{uuid}_{name}.ext`. Message content stores `{ type: 'image', text: filename, imagePath: absolutePath }` — the `imageDataUrl` (data URL) is only kept in-memory for the active session, never persisted to DB. Image files cleaned up alongside chat history on worktree close and project deletion (`delete_images_for_sessions()` called before DB CASCADE delete).
+
 **Lifecycle**:
 - Main chat history: scoped to project, deleted when project removed from Buildor
 - Worktree history: scoped to worktree session ID, deleted when worktree closed
+- Image files: follow same lifecycle as their parent session
+
+**History injection instructions**: Centralized in `src/prompts/historyInjection.ts` — all prompt text for the aware system lives there (header, footer, injection mode labels, image markers). No hardcoded prompt strings in `buildAwareContext.ts`.
 
 **Title generation**: Haiku generates <8 word title after 3rd user message, refreshes every 15th. Untitled sessions get retroactive titles on history panel load.

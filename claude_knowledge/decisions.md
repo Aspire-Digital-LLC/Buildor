@@ -172,3 +172,30 @@ Architectural and design decisions with rationale. Each entry explains why X was
 **Rejected**: Toggle button in the header that shows/hides the palette completely
 
 **Why**: A toggle button that makes the palette disappear entirely loses the visual affordance — users forget it exists. A persistent thin bar with sideways "SKILLS & FLOWS" text (VS Code's Debug Console pattern) maintains discoverability while reclaiming horizontal space. Clicking the bar expands, clicking the header chevron collapses.
+
+---
+
+## Image File Storage over DB Blob Storage
+
+**Choice**: Save chat images as files in `{appData}/images/{sessionId}/`, store file path in message JSON
+**Rejected**: Storing base64 image data directly in SQLite `content_json`
+
+**Why**: Base64 screenshots can be 100KB+ each. Storing them in SQLite bloats the DB, slows queries, and makes history injection (which reads `content_json`) carry image payloads it doesn't need. File-based storage decouples image lifecycle from DB access patterns. Cleanup is simple: `delete_images_for_sessions()` removes the directory before CASCADE deletes the DB rows.
+
+---
+
+## Result Mailbox over Message Queue / Mutex Locks
+
+**Choice**: File-backed mailbox with dependency resolution for inter-agent communication
+**Rejected**: Traditional message queue, shared mutex locks, real-time pub/sub channels
+
+**Why**: Agents are I/O-bound (waiting on Claude API), not CPU-bound — mutex semantics are the wrong primitive. A message queue implies continuous consumption, but agents produce one result and exit. The mailbox pattern matches the actual lifecycle: agent runs → deposits result → consumer reads it when ready. File-backed storage (`~/.buildor/agent-results/`) survives app restarts and works without the frontend being alive. Dependency resolution is event-driven (check on deposit) rather than polling. This is the **defacto agent communication technique** — all future inter-agent data sharing must use this system.
+
+---
+
+## Centralized History Injection Prompts over Inline Strings
+
+**Choice**: All history injection prompt text in `src/prompts/historyInjection.ts`
+**Rejected**: Hardcoded strings scattered in `buildAwareContext.ts`
+
+**Why**: History injection instructions are the kind of text that evolves — adding image handling guidance, tweaking partial-mode language, etc. Having them in one file makes them auditable, diffable, and easy to update without hunting through utility functions. Also establishes the pattern for future prompt centralization (flow prompts, skill prompts).

@@ -112,9 +112,10 @@ pub async fn spawn_agent(
         }
     }));
 
-    // Send the initial prompt as the first user message
-    // (system prompt sets context, but the task itself is sent as a user message to trigger Claude)
-    super::claude::send_message(agent_session_id.clone(), prompt).await?;
+    // NOTE: Do NOT send the initial prompt here. There is a race condition:
+    // the frontend needs to set up its output listeners before any messages are
+    // sent, otherwise Claude's output events fire before anyone is listening.
+    // The frontend sends the initial prompt after listeners are ready.
 
     Ok(agent_session_id)
 }
@@ -265,19 +266,21 @@ pub async fn inject_into_agent(session_id: String, message: String) -> Result<()
 }
 
 /// Called by the frontend when it detects a claude-exit event for an agent session.
-/// Marks the agent as completed/failed and returns the pool entry for result routing.
+/// Marks the agent as completed/failed, deposits result into the mailbox, and returns the pool entry.
 #[tauri::command]
 pub async fn mark_agent_exited(
     app: AppHandle,
     session_id: String,
     exit_success: bool,
+    output: Option<String>,
 ) -> Result<Option<AgentPoolEntryData>, String> {
     let pool = get_pool();
     let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
     if let Some(entry) = map.get_mut(&session_id) {
         if entry.status == "running" {
+            let now = chrono::Utc::now().to_rfc3339();
             entry.status = if exit_success { "completed".to_string() } else { "failed".to_string() };
-            entry.ended_at = Some(chrono::Utc::now().to_rfc3339());
+            entry.ended_at = Some(now.clone());
 
             let event_type = if exit_success { "agent-completed" } else { "agent-failed" };
             let _ = app.emit("buildor-event", serde_json::json!({
@@ -286,6 +289,38 @@ pub async fn mark_agent_exited(
                     "agentSessionId": &session_id,
                 }
             }));
+
+            // Deposit result into the mailbox
+            let duration_ms = chrono::DateTime::parse_from_rfc3339(&now)
+                .ok()
+                .and_then(|end| {
+                    chrono::DateTime::parse_from_rfc3339(&entry.started_at)
+                        .ok()
+                        .map(|start| (end - start).num_milliseconds())
+                })
+                .unwrap_or(0);
+
+            let mailbox_entry = super::mailbox::MailboxEntryData {
+                session_id: entry.session_id.clone(),
+                name: entry.name.clone(),
+                parent_session_id: entry.parent_session_id.clone(),
+                status: entry.status.clone(),
+                started_at: entry.started_at.clone(),
+                ended_at: now,
+                output,
+                output_path: entry.output_path.clone(),
+                return_mode: entry.return_mode.clone(),
+                duration_ms,
+                model: entry.model.clone(),
+            };
+
+            // Drop the pool lock before depositing (mailbox takes its own lock)
+            let entry_clone = entry.clone();
+            drop(map);
+
+            let _ = super::mailbox::deposit_result_internal(&app, mailbox_entry);
+
+            return Ok(Some(entry_clone));
         }
         Ok(Some(entry.clone()))
     } else {

@@ -44,7 +44,7 @@ export function ClaudeChatWindow() {
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const startingRef = useRef(false);
-  const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
+  const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments(sessionId || undefined);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
   const [projectName, setProjectName] = useState<string>('');
@@ -336,12 +336,15 @@ export function ClaudeChatWindow() {
     const userContent: ChatContent[] = [];
     if (hasImages) {
       for (const img of images) {
-        userContent.push({ type: 'text', text: `[Image: ${img.name}]` });
+        userContent.push({ type: 'image', text: img.name, imageDataUrl: img.preview, imagePath: img.filePath });
       }
     }
     if (msg) userContent.push({ type: 'text', text: msg });
     setMessages((prev) => [...prev, { role: 'user', content: userContent }]);
-    saveUserMessage(userContent);
+    const persistContent = userContent.map((c) =>
+      c.type === 'image' ? { type: 'image' as const, text: c.text, imagePath: c.imagePath } : c
+    );
+    saveUserMessage(persistContent);
     try {
       // Build aware context prefix if any sessions are selected
       let messageToSend = msg;

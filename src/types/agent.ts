@@ -50,6 +50,7 @@ export interface AgentMarker {
   name?: string;
   returnMode?: AgentReturnMode;
   outputPath?: string;
+  dependencies?: string[];    // sessionIds or agent names that must complete first
   // kill_agent / extend_agent / takeover_agent fields
   agentId?: string;           // session ID or agent name
   mark?: 'completed' | 'failed';   // for kill_agent
@@ -68,4 +69,20 @@ export interface AgentSpawnRequest {
   model: string | null;
   returnMode: AgentReturnMode;
   outputPath: string | null;
+}
+
+// --- Mailbox Entry (persisted agent result) ---
+
+export interface MailboxEntry {
+  sessionId: string;
+  name: string;
+  parentSessionId: string | null;
+  status: 'completed' | 'failed';
+  startedAt: string;
+  endedAt: string;
+  output: string | null;
+  outputPath: string | null;
+  returnMode: AgentReturnMode;
+  durationMs: number;
+  model: string | null;
 }

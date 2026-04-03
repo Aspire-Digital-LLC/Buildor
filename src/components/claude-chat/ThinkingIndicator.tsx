@@ -31,9 +31,14 @@ interface ThinkingIndicatorProps {
 
 export function ThinkingIndicator({ sessionId }: ThinkingIndicatorProps) {
   const [activity, setActivity] = useState<string | null>(null);
+  const [activityHistory, setActivityHistory] = useState<string[]>([]);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [toolStartTime, setToolStartTime] = useState<number | null>(null);
 
   // Listen for tool events to show what Claude is doing
   useEffect(() => {
+    let clearTimer: ReturnType<typeof setTimeout> | null = null;
+
     const onToolExec = (event: BuildorEvent) => {
       if (sessionId && event.sessionId !== sessionId) return;
       const data = event.data as { toolName?: string; input?: Record<string, unknown> };
@@ -42,28 +47,60 @@ export function ThinkingIndicator({ sessionId }: ThinkingIndicatorProps) {
       if (tool === 'Bash') detail = String(data.input?.command || '').split(' ').slice(0, 3).join(' ');
       else if (tool === 'Read' || tool === 'Write' || tool === 'Edit') detail = String(data.input?.file_path || '').split(/[/\\]/).pop() || '';
       else if (tool === 'Grep' || tool === 'Glob') detail = String(data.input?.pattern || '');
-      setActivity(detail ? `${tool}: ${detail}` : tool);
+      const label = detail ? `${tool}: ${detail}` : tool;
+      if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }
+      // Move current activity to history before replacing
+      setActivity(prev => {
+        if (prev) {
+          setActivityHistory(h => {
+            if (h[h.length - 1] === prev) return h; // dedupe consecutive
+            const next = [...h, prev];
+            return next.length > 3 ? next.slice(-3) : next;
+          });
+        }
+        return label;
+      });
+      setToolStartTime(Date.now());
+      setElapsedMs(0);
     };
 
     const onToolDone = (event: BuildorEvent) => {
       if (sessionId && event.sessionId !== sessionId) return;
-      setActivity(null);
+      // Keep activity visible briefly so users can see what just happened
+      setToolStartTime(null);
+      setElapsedMs(0);
+      if (clearTimer) clearTimeout(clearTimer);
+      clearTimer = setTimeout(() => { setActivity(null); }, 1500);
     };
 
-    const onMessage = (event: BuildorEvent) => {
+    const onTurnComplete = (event: BuildorEvent) => {
       if (sessionId && event.sessionId !== sessionId) return;
+      if (clearTimer) clearTimeout(clearTimer);
       setActivity(null);
+      setActivityHistory([]);
+      setToolStartTime(null);
+      setElapsedMs(0);
     };
 
     buildorEvents.on('tool-executing', onToolExec);
     buildorEvents.on('tool-completed', onToolDone);
-    buildorEvents.on('message-received', onMessage);
+    buildorEvents.on('turn-completed', onTurnComplete);
     return () => {
+      if (clearTimer) clearTimeout(clearTimer);
       buildorEvents.off('tool-executing', onToolExec);
       buildorEvents.off('tool-completed', onToolDone);
-      buildorEvents.off('message-received', onMessage);
+      buildorEvents.off('turn-completed', onTurnComplete);
     };
   }, [sessionId]);
+
+  // Elapsed time ticker
+  useEffect(() => {
+    if (!toolStartTime) return;
+    const iv = setInterval(() => {
+      setElapsedMs(Date.now() - toolStartTime);
+    }, 500);
+    return () => clearInterval(iv);
+  }, [toolStartTime]);
 
   return (
     <div style={{
@@ -96,18 +133,30 @@ export function ThinkingIndicator({ sessionId }: ThinkingIndicatorProps) {
 
       {/* Label */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
-          animation: 'pulseGlow 2s ease-in-out infinite',
-        }}>
-          Claude is thinking...
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+            animation: 'pulseGlow 2s ease-in-out infinite',
+          }}>
+            Claude is thinking...
+          </span>
+          {activity && elapsedMs > 0 && (
+            <span style={{
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              fontFamily: "'Cascadia Code', monospace",
+              opacity: 0.7,
+            }}>
+              {elapsedMs < 1000 ? '<1s' : `${Math.floor(elapsedMs / 1000)}s`}
+            </span>
+          )}
+        </div>
         {activity && (
           <span style={{
             fontSize: 10,
-            color: 'var(--text-tertiary)',
+            color: 'var(--accent-primary)',
             fontFamily: "'Cascadia Code', monospace",
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -115,6 +164,24 @@ export function ThinkingIndicator({ sessionId }: ThinkingIndicatorProps) {
           }}>
             {activity}
           </span>
+        )}
+        {activityHistory.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, overflow: 'hidden' }}>
+            {activityHistory.slice(activity ? -3 : -2).map((item, i, arr) => (
+              <span key={i} style={{
+                fontSize: 9,
+                color: 'var(--text-tertiary)',
+                fontFamily: "'Cascadia Code', monospace",
+                opacity: 0.4 + (i / arr.length) * 0.3,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 150,
+              }}>
+                {item}
+              </span>
+            ))}
+          </div>
         )}
       </div>
 

@@ -64,11 +64,16 @@ When building a new feature that produces significant state changes:
 
 | Event | When Emitted | Data Shape | Use Case |
 |-------|-------------|------------|----------|
-| `agent-spawned` | New agent subprocess started | `{ agentSessionId, name, parentSessionId, sourceSkill }` | Update agent status card, agents panel |
+| `agent-spawned` | Agent marker detected (before backend registration) | `{ marker, parentSessionId }` | Show "Agent started" banner in chat |
+| `agent-registered` | Agent registered in backend pool (after spawnAgent resolves) | `{ agentSessionId, name, parentSessionId }` | Refresh agent pool, set up output listeners |
 | `agent-completed` | Agent finished successfully | `{ agentSessionId, resultSummary, durationMs }` | Inject result into parent, update UI |
 | `agent-failed` | Agent crashed or was killed | `{ agentSessionId, error, durationMs }` | Show error, update agent status |
 | `agent-health-changed` | Agent health state transitioned | `{ agentSessionId, previousState, newState, details }` | Update status indicators, trigger escalation |
 | `agent-permission` | Agent needs permission approval | `{ agentSessionId, agentName, toolUseId, toolName, input, description }` | Surface permission card on main screen |
+| `agent-result-deposited` | Agent result persisted to mailbox | `{ sessionId, name, parentSessionId, status }` | Trigger dependency checks, update UI |
+| `agent-dependency-resolved` | Pending agent's deps met, now spawning | `{ agentSessionId, agentName, parentSessionId }` | Refresh agent pool |
+| `agent-dependency-waiting` | Agent queued waiting for dependencies | `{ agentName }` | Show waiting state in UI |
+| `agent-dependency-failed` | Agent abandoned because a dep failed | `{ agentName, failedDependency, parentSessionId }` | Show failure in UI |
 | `skill-activated` | Skill eyeball toggled on | `{ skillName, skillDescription, skillSource }` | Trigger silent session restart |
 | `skill-deactivated` | Skill eyeball toggled off | `{ skillName }` | Trigger silent session restart |
 | `skill-invoked` | Skill action mode executed | `{ skillName, params, skillSource }` | Log to history, update UI |

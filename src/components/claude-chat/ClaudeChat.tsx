@@ -28,6 +28,7 @@ import { readFileContent } from '@/utils/commands/filesystem';
 import { getBuildorSkill } from '@/utils/commands/skills';
 import type { ProjectSkill } from '@/types/skill';
 import { useAgentPool } from '@/hooks/useAgentPool';
+import { purgeResults } from '@/utils/commands/mailbox';
 import { AgentStatusCard } from './AgentStatusCard';
 import { AgentsPanel } from './AgentsPanel';
 // AgentOutputBlock is rendered via ChatMessage for system-event messages
@@ -83,7 +84,7 @@ export function ClaudeChat() {
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const startingRef = useRef(false);
   const replayingRef = useRef(false);
-  const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments();
+  const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments(sessionId || undefined);
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
   const skills = useSkills({ repoPath, projectName: projectName || undefined });
   const agentPool = useAgentPool();
@@ -162,6 +163,8 @@ export function ClaudeChat() {
     const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
       endChatSession();
+      // Purge agent mailbox results for this parent session
+      purgeResults(sessionId!).catch(() => {});
       setSessionId(null);
       setIsSending(false);
     });
@@ -544,16 +547,20 @@ export function ClaudeChat() {
     }
     setInput('');
     setIsSending(true);
-    // Build user message content with optional image previews
+    // Build user message content with optional image thumbnails
     const userContent: ChatContent[] = [];
     if (hasImages) {
       for (const img of images) {
-        userContent.push({ type: 'text', text: `[Image: ${img.name}]` });
+        userContent.push({ type: 'image', text: img.name, imageDataUrl: img.preview, imagePath: img.filePath });
       }
     }
     userContent.push({ type: 'text', text: msg });
     setMessages((prev) => [...prev, { role: 'user', content: userContent }]);
-    saveUserMessage(userContent);
+    // Persist with file path but strip the data URL to avoid bloating the DB
+    const persistContent = userContent.map((c) =>
+      c.type === 'image' ? { type: 'image' as const, text: c.text, imagePath: c.imagePath } : c
+    );
+    saveUserMessage(persistContent);
     try {
       // Build aware context prefix if any sessions are selected
       let messageToSend = msg;

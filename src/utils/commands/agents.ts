@@ -69,6 +69,7 @@ export async function takeoverAgent(
 export async function markAgentExited(
   sessionId: string,
   exitSuccess: boolean,
+  output?: string,
 ): Promise<AgentPoolEntry | null> {
-  return invoke('mark_agent_exited', { sessionId, exitSuccess });
+  return invoke('mark_agent_exited', { sessionId, exitSuccess, output: output ?? null });
 }

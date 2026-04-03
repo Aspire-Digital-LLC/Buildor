@@ -349,8 +349,11 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
     // Stop any Claude sessions running in this worktree (releases file locks)
     super::claude::stop_sessions_in_dir(&worktree_path);
 
-    // Delete chat history associated with this worktree session
+    // Clean up images and chat history associated with this worktree session
     if let Ok(db) = crate::logging::get_log_db() {
+        if let Ok(ids) = db.get_session_ids_by_worktree(&session_id) {
+            super::chat_images::delete_images_for_sessions(&ids);
+        }
         let _ = db.delete_sessions_by_worktree(&session_id);
     }
 

@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { AgentOutputBlock } from './AgentOutputBlock';
 
 export interface ChatContent {
-  type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'permission_request';
+  type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'permission_request' | 'image';
   text?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -13,6 +13,10 @@ export interface ChatContent {
   toolUseId?: string;
   requestId?: string;
   isError?: boolean;
+  /** data URL for image thumbnails in user messages */
+  imageDataUrl?: string;
+  /** file path on disk for persisted images */
+  imagePath?: string;
 }
 
 export interface ParsedMessage {
@@ -45,25 +49,64 @@ const toolIcons: Record<string, string> = {
 };
 
 export function ChatMessage({ message, isVerbose, sessionId, activePermissionId }: ChatMessageProps) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
   if (message.role === 'user') {
+    const imageBlocks = message.content.filter((b) => b.type === 'image' && b.imageDataUrl);
+    const textBlocks = message.content.filter((b) => b.type === 'text' && b.text);
+    const textContent = textBlocks.map((b) => b.text).join('\n');
+
     return (
-      <div style={{ padding: '8px 12px', marginBottom: 4, display: 'flex', justifyContent: 'flex-end' }}>
-        <div style={{
-          maxWidth: '80%',
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-secondary)',
-          borderRadius: 12,
-          borderBottomRightRadius: 4,
-          padding: '8px 14px',
-        }}>
+      <>
+        <div style={{ padding: '8px 12px', marginBottom: 4, display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{
-            fontSize: 13,
-            color: 'var(--accent-primary)',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}>{message.content[0]?.text || ''}</div>
+            maxWidth: '80%',
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-secondary)',
+            borderRadius: 12,
+            borderBottomRightRadius: 4,
+            padding: '8px 14px',
+          }}>
+            {imageBlocks.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: textContent ? 8 : 0 }}>
+                {imageBlocks.map((img, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setLightboxSrc(img.imageDataUrl!)}
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      border: '1px solid var(--border-secondary)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                    title={img.text || 'Image'}
+                  >
+                    <img
+                      src={img.imageDataUrl}
+                      alt={img.text || 'Attached image'}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            {textContent && (
+              <div style={{
+                fontSize: 13,
+                color: 'var(--accent-primary)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>{textContent}</div>
+            )}
+          </div>
         </div>
-      </div>
+        {lightboxSrc && (
+          <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+        )}
+      </>
     );
   }
 
@@ -591,6 +634,37 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.8)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        cursor: 'pointer',
+      }}
+    >
+      <img
+        src={src}
+        alt="Preview"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '90vw',
+          maxHeight: '90vh',
+          borderRadius: 8,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+          cursor: 'default',
+        }}
+      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
-import { listAgents } from '@/utils/commands/agents';
+import { listAgents, markAgentExited } from '@/utils/commands/agents';
 import { getChatMessages, type ChatMessageRecord } from '@/utils/commands/chatHistory';
+import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import type { AgentPoolEntry, AgentHealthState } from '@/types/agent';
 
 export interface AgentPoolAgent extends AgentPoolEntry {
@@ -69,6 +71,10 @@ export function useAgentPool(): UseAgentPoolResult {
   const [statusLines, setStatusLines] = useState<Map<string, string>>(new Map());
   const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
 
+  // Track accumulated output per agent session and cleanup listeners
+  const agentOutputRef = useRef<Map<string, string>>(new Map());
+  const agentListenersRef = useRef<Map<string, () => void>>(new Map());
+
   // Initial load from backend
   useEffect(() => {
     listAgents().then((agents) => {
@@ -78,15 +84,72 @@ export function useAgentPool(): UseAgentPoolResult {
     }).catch(() => {});
   }, []);
 
+  // Cleanup all agent listeners on unmount
+  useEffect(() => {
+    return () => {
+      for (const cleanup of agentListenersRef.current.values()) {
+        cleanup();
+      }
+      agentListenersRef.current.clear();
+      agentOutputRef.current.clear();
+    };
+  }, []);
+
   // Subscribe to agent events
   useEffect(() => {
-    const onSpawned = (_event: BuildorEvent) => {
-      // Refresh pool from backend to get the actual AgentPoolEntry
+    const onRegistered = (event: BuildorEvent) => {
+      const data = event.data as { agentSessionId?: string; name?: string };
+      const agentSid = data.agentSessionId;
+
+      // Refresh pool from backend — agent is now registered in Rust pool
       listAgents().then((agents) => {
         const map = new Map<string, AgentPoolEntry>();
         for (const a of agents) map.set(a.sessionId, a);
         setPool(map);
       }).catch(() => {});
+
+      // Set up output capture + exit listener for this agent
+      if (agentSid) {
+        agentOutputRef.current.set(agentSid, '');
+
+        let unlistenOutput: UnlistenFn | null = null;
+        let unlistenExit: UnlistenFn | null = null;
+
+        const setupListeners = async () => {
+          unlistenOutput = await listen<string>(`claude-output-${agentSid}`, (evt) => {
+            const parsed = parseStreamEvent(evt.payload, agentSid);
+            if (parsed?.role === 'assistant') {
+              const textBlocks = parsed.content
+                .filter((b) => b.type === 'text' && b.text)
+                .map((b) => b.text)
+                .join('\n');
+              if (textBlocks) {
+                // Keep last output (agent's final response is what matters)
+                agentOutputRef.current.set(agentSid, textBlocks);
+              }
+            }
+          });
+
+          unlistenExit = await listen<string>(`claude-exit-${agentSid}`, () => {
+            const output = agentOutputRef.current.get(agentSid) || '';
+            markAgentExited(agentSid, output.length > 0, output || undefined).catch(() => {});
+
+            // Cleanup
+            agentOutputRef.current.delete(agentSid);
+            unlistenOutput?.();
+            unlistenExit?.();
+            agentListenersRef.current.delete(agentSid);
+          });
+        };
+
+        const cleanupPromise = setupListeners();
+        agentListenersRef.current.set(agentSid, () => {
+          cleanupPromise.then(() => {
+            unlistenOutput?.();
+            unlistenExit?.();
+          });
+        });
+      }
     };
 
     const onCompleted = (event: BuildorEvent) => {
@@ -166,18 +229,29 @@ export function useAgentPool(): UseAgentPoolResult {
       }
     };
 
-    buildorEvents.on('agent-spawned', onSpawned);
+    // When a dependency-resolved event fires, a pending agent just spawned — refresh pool
+    const onDependencyResolved = (_event: BuildorEvent) => {
+      listAgents().then((agents) => {
+        const map = new Map<string, AgentPoolEntry>();
+        for (const a of agents) map.set(a.sessionId, a);
+        setPool(map);
+      }).catch(() => {});
+    };
+
+    buildorEvents.on('agent-registered', onRegistered);
     buildorEvents.on('agent-completed', onCompleted);
     buildorEvents.on('agent-failed', onFailed);
     buildorEvents.on('agent-health-changed', onHealthChanged);
+    buildorEvents.on('agent-dependency-resolved', onDependencyResolved);
     buildorEvents.on('tool-executing', onToolExecuting);
     buildorEvents.on('message-received', onMessageReceived);
 
     return () => {
-      buildorEvents.off('agent-spawned', onSpawned);
+      buildorEvents.off('agent-registered', onRegistered);
       buildorEvents.off('agent-completed', onCompleted);
       buildorEvents.off('agent-failed', onFailed);
       buildorEvents.off('agent-health-changed', onHealthChanged);
+      buildorEvents.off('agent-dependency-resolved', onDependencyResolved);
       buildorEvents.off('tool-executing', onToolExecuting);
       buildorEvents.off('message-received', onMessageReceived);
     };
