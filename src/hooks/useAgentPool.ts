@@ -176,6 +176,28 @@ export function useAgentPool(): UseAgentPoolResult {
               }
             } catch { /* not JSON, ignore */ }
 
+            // Detect agent completion — in --print mode with stream-json, the process
+            // sends "result: success/failure" but does NOT exit. The stdout pipe stays
+            // open so claude-exit never fires. Treat result as completion.
+            try {
+              const raw2 = JSON.parse(evt.payload);
+              if (raw2.type === 'result') {
+                const success = raw2.subtype === 'success';
+                const output = agentOutputRef.current.get(agentSid) || '';
+                markAgentExited(agentSid, success, output || undefined).catch(() => {});
+                // Stop the underlying Claude process since it won't exit on its own
+                import('@/utils/commands/claude').then(({ stopSession }) => {
+                  stopSession(agentSid).catch(() => {});
+                });
+                // Cleanup listeners
+                agentOutputRef.current.delete(agentSid);
+                unlistenOutput?.();
+                unlistenExit?.();
+                agentListenersRef.current.delete(agentSid);
+                return; // Don't process further
+              }
+            } catch { /* ignore */ }
+
             // Still call parseStreamEvent for event emission + output accumulation
             const parsed = parseStreamEvent(evt.payload, agentSid);
             if (parsed?.role === 'assistant') {

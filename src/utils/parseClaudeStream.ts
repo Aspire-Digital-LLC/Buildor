@@ -116,6 +116,7 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
       event.type === 'control_request' && event.request?.subtype === 'can_use_tool' ||
       event.type === 'permission_request' || event.type === 'permission'
     ) {
+      console.log(`[PERM DETECTED] sessionId=${sessionId}, type=${event.type}, requestId=${event.request_id}, tool=${event.request?.tool_name || event.tool?.name || '?'}`);
       const toolName = event.request?.tool_name || event.tool?.name || event.permission?.tool_name || 'Unknown tool';
       const toolUseId = event.request?.tool_use_id || event.tool?.id || event.permission?.tool_use_id || '';
       const requestId = event.request_id || '';
@@ -142,8 +143,10 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
       }, sessionId);
 
       // If this permission comes from an agent session, emit agent-permission event
+      console.log(`[PERM AGENT CHECK] sessionId=${sessionId}, healthState=${sessionId ? agentHealthMonitor.getState(sessionId) : 'no-sid'}`);
       if (sessionId && agentHealthMonitor.getState(sessionId) !== null) {
         const agentName = agentHealthMonitor.getName(sessionId);
+        console.log(`[PERM → AGENT-PERMISSION] emitting for agent=${agentName}, tool=${toolName}, requestId=${requestId}`);
         buildorEvents.emit('agent-permission', {
           agentSessionId: sessionId,
           agentName: agentName || 'Agent',
