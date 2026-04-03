@@ -122,6 +122,7 @@ pub fn run() {
             commands::agents::spawn_agent,
             commands::agents::kill_agent,
             commands::agents::extend_agent,
+            commands::agents::update_agent_health,
             commands::agents::list_agents,
             commands::agents::get_agent_status,
             commands::agents::inject_into_agent,

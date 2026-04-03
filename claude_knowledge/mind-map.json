@@ -6,7 +6,7 @@
     {
       "file": "codebase_structure.md",
       "description": "Project directory layout, module boundaries, and file organization conventions",
-      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file"]
+      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection"]
     },
     {
       "file": "tech_stack.md",
@@ -40,8 +40,8 @@
     },
     {
       "file": "events.md",
-      "description": "Buildor event bus system — event types, how to subscribe/emit, rules for adding new events",
-      "keywords": ["event", "events", "bus", "subscribe", "emit", "permission", "attention", "notification", "blink"]
+      "description": "Buildor event bus system — event types, how to subscribe/emit, rules for adding new events, agent lifecycle events, mailbox events",
+      "keywords": ["event", "events", "bus", "subscribe", "emit", "permission", "attention", "notification", "blink", "agent-spawned", "agent-registered", "agent-completed", "agent-failed", "agent-health-changed", "agent-result-deposited", "agent-dependency"]
     },
     {
       "file": "project_status.md",

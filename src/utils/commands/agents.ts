@@ -45,6 +45,13 @@ export async function extendAgent(
   });
 }
 
+export async function updateAgentHealth(
+  sessionId: string,
+  healthState: string,
+): Promise<void> {
+  return invoke('update_agent_health', { sessionId, healthState });
+}
+
 export async function listAgents(): Promise<AgentPoolEntry[]> {
   return invoke('list_agents');
 }

@@ -9,7 +9,7 @@
  */
 
 import { buildorEvents, type BuildorEvent } from './buildorEvents';
-import { injectIntoAgent } from './commands/agents';
+import { injectIntoAgent, updateAgentHealth } from './commands/agents';
 import { logEvent } from './commands/logging';
 import type { AgentHealthState } from '@/types/agent';
 import type { SkillHealthConfig } from '@/types/skill';
@@ -318,6 +318,9 @@ class AgentHealthMonitor {
     if (previousState === newState) return;
 
     agent.healthState = newState;
+
+    // Sync to Rust backend so pool entry + mailbox deposit reflect real state
+    updateAgentHealth(agent.sessionId, newState).catch(() => {});
 
     // Track unhealthy start time
     if (newState === 'healthy') {

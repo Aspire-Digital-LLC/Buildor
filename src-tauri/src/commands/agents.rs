@@ -127,19 +127,52 @@ pub async fn kill_agent(
     mark_completed: Option<bool>,
 ) -> Result<(), String> {
     let completed = mark_completed.unwrap_or(false);
+    let now = chrono::Utc::now().to_rfc3339();
 
-    // Update pool entry
-    {
+    // Capture pool entry before updating, then update
+    let pool_entry = {
         let pool = get_pool();
         let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
         if let Some(entry) = map.get_mut(&session_id) {
             entry.status = if completed { "completed".to_string() } else { "failed".to_string() };
-            entry.ended_at = Some(chrono::Utc::now().to_rfc3339());
+            entry.ended_at = Some(now.clone());
+            Some(entry.clone())
+        } else {
+            None
         }
-    }
+    };
 
     // Stop the underlying Claude session
     super::claude::stop_session(session_id.clone()).await?;
+
+    // Deposit into mailbox so dependency resolution works
+    if let Some(ref entry) = pool_entry {
+        let duration_ms = chrono::DateTime::parse_from_rfc3339(&now)
+            .ok()
+            .and_then(|end| {
+                chrono::DateTime::parse_from_rfc3339(&entry.started_at)
+                    .ok()
+                    .map(|start| (end - start).num_milliseconds())
+            })
+            .unwrap_or(0);
+
+        let mailbox_entry = super::mailbox::MailboxEntryData {
+            session_id: entry.session_id.clone(),
+            name: entry.name.clone(),
+            parent_session_id: entry.parent_session_id.clone(),
+            status: entry.status.clone(),
+            health_state: entry.health_state.clone(),
+            started_at: entry.started_at.clone(),
+            ended_at: now.clone(),
+            output: None,
+            output_path: entry.output_path.clone(),
+            return_mode: entry.return_mode.clone(),
+            duration_ms,
+            model: entry.model.clone(),
+            exit_reason: Some("killed".to_string()),
+        };
+        let _ = super::mailbox::deposit_result_internal(&app, mailbox_entry);
+    }
 
     // Emit event
     let event_type = if completed { "agent-completed" } else { "agent-failed" };
@@ -188,6 +221,23 @@ pub async fn extend_agent(
     Ok(())
 }
 
+/// Sync a health state transition from the frontend AgentHealthMonitor to the backend pool.
+/// Called on every state transition so the pool entry reflects the real health state.
+#[tauri::command]
+pub async fn update_agent_health(
+    session_id: String,
+    health_state: String,
+) -> Result<(), String> {
+    let pool = get_pool();
+    let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
+    if let Some(entry) = map.get_mut(&session_id) {
+        if entry.status == "running" {
+            entry.health_state = health_state;
+        }
+    }
+    Ok(())
+}
+
 /// Kill an agent and generate a summary of its work so far.
 /// The summary is injected into the parent session (if any).
 #[tauri::command]
@@ -205,18 +255,46 @@ pub async fn takeover_agent(
     let agent = agent_info.ok_or_else(|| format!("Agent not found: {}", session_id))?;
 
     // Update pool status
+    let now = chrono::Utc::now().to_rfc3339();
     {
         let pool = get_pool();
         let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
         if let Some(entry) = map.get_mut(&session_id) {
             entry.status = "failed".to_string();
             entry.health_state = "distressed".to_string();
-            entry.ended_at = Some(chrono::Utc::now().to_rfc3339());
+            entry.ended_at = Some(now.clone());
         }
     }
 
     // Stop the Claude session
     let _ = super::claude::stop_session(session_id.clone()).await;
+
+    // Deposit into mailbox so dependency resolution detects the failure
+    let duration_ms = chrono::DateTime::parse_from_rfc3339(&now)
+        .ok()
+        .and_then(|end| {
+            chrono::DateTime::parse_from_rfc3339(&agent.started_at)
+                .ok()
+                .map(|start| (end - start).num_milliseconds())
+        })
+        .unwrap_or(0);
+
+    let mailbox_entry = super::mailbox::MailboxEntryData {
+        session_id: agent.session_id.clone(),
+        name: agent.name.clone(),
+        parent_session_id: agent.parent_session_id.clone(),
+        status: "failed".to_string(),
+        health_state: "distressed".to_string(),
+        started_at: agent.started_at.clone(),
+        ended_at: now,
+        output: None,
+        output_path: agent.output_path.clone(),
+        return_mode: agent.return_mode.clone(),
+        duration_ms,
+        model: agent.model.clone(),
+        exit_reason: Some("takeover".to_string()),
+    };
+    let _ = super::mailbox::deposit_result_internal(&app, mailbox_entry);
 
     // Emit agent-failed event
     let _ = app.emit("buildor-event", serde_json::json!({
@@ -305,6 +383,7 @@ pub async fn mark_agent_exited(
                 name: entry.name.clone(),
                 parent_session_id: entry.parent_session_id.clone(),
                 status: entry.status.clone(),
+                health_state: entry.health_state.clone(),
                 started_at: entry.started_at.clone(),
                 ended_at: now,
                 output,
@@ -312,6 +391,7 @@ pub async fn mark_agent_exited(
                 return_mode: entry.return_mode.clone(),
                 duration_ms,
                 model: entry.model.clone(),
+                exit_reason: Some("natural".to_string()),
             };
 
             // Drop the pool lock before depositing (mailbox takes its own lock)

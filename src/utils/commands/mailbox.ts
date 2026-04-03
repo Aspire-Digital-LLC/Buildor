@@ -7,6 +7,7 @@ export async function depositResult(entry: MailboxEntry): Promise<void> {
     name: entry.name,
     parentSessionId: entry.parentSessionId,
     status: entry.status,
+    healthState: entry.healthState,
     startedAt: entry.startedAt,
     endedAt: entry.endedAt,
     output: entry.output,
@@ -14,6 +15,7 @@ export async function depositResult(entry: MailboxEntry): Promise<void> {
     returnMode: entry.returnMode,
     durationMs: entry.durationMs,
     model: entry.model,
+    exitReason: entry.exitReason,
   });
 }
 

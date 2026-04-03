@@ -35,6 +35,7 @@ pub struct MailboxEntryData {
     pub name: String,
     pub parent_session_id: Option<String>,
     pub status: String,           // "completed" | "failed"
+    pub health_state: String,     // "healthy" | "idle" | "stalling" | "looping" | "erroring" | "distressed"
     pub started_at: String,
     pub ended_at: String,
     pub output: Option<String>,
@@ -42,6 +43,7 @@ pub struct MailboxEntryData {
     pub return_mode: String,
     pub duration_ms: i64,
     pub model: Option<String>,
+    pub exit_reason: Option<String>, // "natural" | "killed" | "takeover" | null
 }
 
 #[derive(Debug, Clone)]
@@ -312,6 +314,7 @@ pub async fn deposit_result(
     name: String,
     parent_session_id: Option<String>,
     status: String,
+    health_state: Option<String>,
     started_at: String,
     ended_at: String,
     output: Option<String>,
@@ -319,12 +322,14 @@ pub async fn deposit_result(
     return_mode: Option<String>,
     duration_ms: Option<i64>,
     model: Option<String>,
+    exit_reason: Option<String>,
 ) -> Result<(), String> {
     let entry = MailboxEntryData {
         session_id,
         name,
         parent_session_id,
         status,
+        health_state: health_state.unwrap_or_else(|| "healthy".to_string()),
         started_at,
         ended_at,
         output,
@@ -332,6 +337,7 @@ pub async fn deposit_result(
         return_mode: return_mode.unwrap_or_else(|| "summary".to_string()),
         duration_ms: duration_ms.unwrap_or(0),
         model,
+        exit_reason,
     };
     deposit_result_internal(&app, entry)
 }

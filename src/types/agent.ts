@@ -73,11 +73,14 @@ export interface AgentSpawnRequest {
 
 // --- Mailbox Entry (persisted agent result) ---
 
+export type AgentExitReason = 'natural' | 'killed' | 'takeover';
+
 export interface MailboxEntry {
   sessionId: string;
   name: string;
   parentSessionId: string | null;
   status: 'completed' | 'failed';
+  healthState: AgentHealthState;
   startedAt: string;
   endedAt: string;
   output: string | null;
@@ -85,4 +88,5 @@ export interface MailboxEntry {
   returnMode: AgentReturnMode;
   durationMs: number;
   model: string | null;
+  exitReason: AgentExitReason | null;
 }

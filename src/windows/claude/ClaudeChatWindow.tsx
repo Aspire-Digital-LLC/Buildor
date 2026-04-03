@@ -10,6 +10,7 @@ import { ImagePreviewStrip } from '@/components/claude-chat/ImagePreviewStrip';
 import type { ChatContent } from '@/components/claude-chat/ChatMessage';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { buildSystemPrompt } from '@/utils/buildSystemPrompt';
+import { purgeResults } from '@/utils/commands/mailbox';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
@@ -144,6 +145,7 @@ export function ClaudeChatWindow() {
     const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
       endChatSession();
+      purgeResults(sessionId!).catch(() => {});
       setSessionId(null);
       setIsSending(false);
     });
