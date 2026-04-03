@@ -60,6 +60,10 @@ export async function listAgents(): Promise<AgentPoolEntry[]> {
   return invoke('list_agents');
 }
 
+export async function clearAgentsForParent(parentSessionId: string): Promise<number> {
+  return invoke('clear_agents_for_parent', { parentSessionId });
+}
+
 export async function getAgentStatus(sessionId: string): Promise<AgentPoolEntry> {
   return invoke('get_agent_status', { sessionId });
 }

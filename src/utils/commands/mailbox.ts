@@ -34,6 +34,10 @@ export async function queryResultByName(
   return invoke('query_result_by_name', { name, parentSessionId: parentSessionId ?? null });
 }
 
+export async function updateAgentDraft(sessionId: string, output: string): Promise<void> {
+  return invoke('update_agent_draft', { sessionId, output });
+}
+
 export async function purgeResults(parentSessionId: string): Promise<number> {
   return invoke('purge_results', { parentSessionId });
 }

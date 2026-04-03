@@ -29,6 +29,7 @@ import { getBuildorSkill } from '@/utils/commands/skills';
 import type { ProjectSkill } from '@/types/skill';
 import { useAgentPool } from '@/hooks/useAgentPool';
 import { purgeResults } from '@/utils/commands/mailbox';
+import { clearAgentsForParent } from '@/utils/commands/agents';
 import { AgentStatusCard } from './AgentStatusCard';
 import { AgentsPanel } from './AgentsPanel';
 // AgentOutputBlock is rendered via ChatMessage for system-event messages
@@ -163,8 +164,9 @@ export function ClaudeChat() {
     const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
       endChatSession();
-      // Purge agent mailbox results for this parent session
+      // Clean up agents for this parent session (pool + mailbox)
       purgeResults(sessionId!).catch(() => {});
+      clearAgentsForParent(sessionId!).catch(() => {});
       setSessionId(null);
       setIsSending(false);
     });

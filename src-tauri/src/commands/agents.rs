@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter};
 
 static AGENT_POOL: std::sync::OnceLock<Mutex<HashMap<String, AgentPoolEntryData>>> = std::sync::OnceLock::new();
 
-fn get_pool() -> &'static Mutex<HashMap<String, AgentPoolEntryData>> {
+pub fn get_pool() -> &'static Mutex<HashMap<String, AgentPoolEntryData>> {
     AGENT_POOL.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -328,6 +328,23 @@ pub async fn list_agents() -> Result<Vec<AgentPoolEntryData>, String> {
     let pool = get_pool();
     let map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
     Ok(map.values().cloned().collect())
+}
+
+/// Remove all agents belonging to a parent session from the pool.
+/// Called when the parent session exits to prevent stale entries.
+#[tauri::command]
+pub async fn clear_agents_for_parent(parent_session_id: String) -> Result<u32, String> {
+    let pool = get_pool();
+    let mut map = pool.lock().map_err(|e| format!("Pool lock error: {}", e))?;
+    let to_remove: Vec<String> = map.values()
+        .filter(|e| e.parent_session_id.as_deref() == Some(&parent_session_id))
+        .map(|e| e.session_id.clone())
+        .collect();
+    let count = to_remove.len() as u32;
+    for sid in &to_remove {
+        map.remove(sid);
+    }
+    Ok(count)
 }
 
 /// Check if an agent's process is still alive by PID.

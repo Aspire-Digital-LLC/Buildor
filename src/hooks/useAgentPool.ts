@@ -3,7 +3,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { listAgents, markAgentExited, injectIntoAgent } from '@/utils/commands/agents';
 import { respondToPermission } from '@/utils/commands/claude';
-import { getChatMessages, type ChatMessageRecord } from '@/utils/commands/chatHistory';
+import { getChatMessages, saveChatMessage, createChatSession, type ChatMessageRecord } from '@/utils/commands/chatHistory';
+import { updateAgentDraft } from '@/utils/commands/mailbox';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import type { AgentPoolEntry, AgentHealthState } from '@/types/agent';
 
@@ -75,6 +76,8 @@ export function useAgentPool(): UseAgentPoolResult {
   // Track accumulated output per agent session and cleanup listeners
   const agentOutputRef = useRef<Map<string, string>>(new Map());
   const agentListenersRef = useRef<Map<string, () => void>>(new Map());
+  const agentSeqRef = useRef<Map<string, number>>(new Map()); // message sequence counters
+  const agentDraftTimerRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map()); // debounce timers
 
   // Initial load from backend
   useEffect(() => {
@@ -113,6 +116,21 @@ export function useAgentPool(): UseAgentPoolResult {
       // Set up output capture + exit listener for this agent
       if (agentSid) {
         agentOutputRef.current.set(agentSid, '');
+        agentSeqRef.current.set(agentSid, 0);
+
+        // Create a chat session record for this agent (enables transcript viewer)
+        createChatSession(
+          agentSid,
+          '', // projectName — will be filled by pool lookup
+          '', // repoPath
+          null, // worktreeSessionId
+          '', // branchName
+          'agent',
+          event.sessionId || null, // parentSessionId from the event's session context
+          event.sessionId || null, // returnTo
+          null, // sourceSkill
+          'buildor', // agentSource
+        ).catch(() => {}); // Ignore if session already exists
 
         let unlistenOutput: UnlistenFn | null = null;
         let unlistenExit: UnlistenFn | null = null;
@@ -189,8 +207,11 @@ export function useAgentPool(): UseAgentPoolResult {
                 import('@/utils/commands/claude').then(({ stopSession }) => {
                   stopSession(agentSid).catch(() => {});
                 });
-                // Cleanup listeners
+                // Cleanup listeners and timers
                 agentOutputRef.current.delete(agentSid);
+                agentSeqRef.current.delete(agentSid);
+                const draftTimer = agentDraftTimerRef.current.get(agentSid);
+                if (draftTimer) { clearTimeout(draftTimer); agentDraftTimerRef.current.delete(agentSid); }
                 unlistenOutput?.();
                 unlistenExit?.();
                 agentListenersRef.current.delete(agentSid);
@@ -200,13 +221,37 @@ export function useAgentPool(): UseAgentPoolResult {
 
             // Still call parseStreamEvent for event emission + output accumulation
             const parsed = parseStreamEvent(evt.payload, agentSid);
-            if (parsed?.role === 'assistant') {
-              const textBlocks = parsed.content
-                .filter((b) => b.type === 'text' && b.text)
-                .map((b) => b.text)
-                .join('\n');
-              if (textBlocks) {
-                agentOutputRef.current.set(agentSid, textBlocks);
+            if (parsed) {
+              // Persist to SQLite for transcript viewer
+              const seq = (agentSeqRef.current.get(agentSid) || 0) + 1;
+              agentSeqRef.current.set(agentSid, seq);
+              saveChatMessage(
+                agentSid, seq, parsed.role,
+                JSON.stringify(parsed.content),
+                parsed.model || null,
+              ).catch(() => {});
+
+              // Accumulate text output for mailbox
+              if (parsed.role === 'assistant') {
+                const textBlocks = parsed.content
+                  .filter((b) => b.type === 'text' && b.text)
+                  .map((b) => b.text)
+                  .join('\n');
+                if (textBlocks) {
+                  agentOutputRef.current.set(agentSid, textBlocks);
+
+                  // Debounced draft update to mailbox (every 10s)
+                  const existingTimer = agentDraftTimerRef.current.get(agentSid);
+                  if (existingTimer) clearTimeout(existingTimer);
+                  const timer = setTimeout(() => {
+                    const currentOutput = agentOutputRef.current.get(agentSid);
+                    if (currentOutput) {
+                      updateAgentDraft(agentSid, currentOutput).catch(() => {});
+                    }
+                    agentDraftTimerRef.current.delete(agentSid);
+                  }, 10_000);
+                  agentDraftTimerRef.current.set(agentSid, timer);
+                }
               }
             }
           });

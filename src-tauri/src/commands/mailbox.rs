@@ -410,6 +410,72 @@ pub async fn query_result_by_name(
     Ok(None)
 }
 
+/// Update the draft output for a running agent without changing status.
+/// Called periodically by the frontend to persist incremental work.
+#[tauri::command]
+pub async fn update_agent_draft(
+    session_id: String,
+    output: String,
+) -> Result<(), String> {
+    let mb = get_mailbox();
+    let mut map = mb.lock().map_err(|e| format!("Mailbox lock error: {}", e))?;
+
+    if let Some(entry) = map.get_mut(&session_id) {
+        entry.output = Some(output.clone());
+        // Write updated entry to disk
+        let dir = mailbox_dir()?;
+        let path = dir.join(format!("{}.json", &session_id));
+        let json = serde_json::to_string_pretty(entry)
+            .map_err(|e| format!("Failed to serialize: {}", e))?;
+        std::fs::write(&path, json)
+            .map_err(|e| format!("Failed to write: {}", e))?;
+    } else {
+        // No entry yet — create a draft entry with status "running"
+        let entry = MailboxEntryData {
+            session_id: session_id.clone(),
+            name: String::new(), // Will be filled by agent pool lookup
+            parent_session_id: None,
+            status: "running".to_string(),
+            health_state: "healthy".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            ended_at: String::new(),
+            output: Some(output),
+            output_path: None,
+            return_mode: "summary".to_string(),
+            duration_ms: 0,
+            model: None,
+            exit_reason: None,
+        };
+        // Try to fill name/parent from agent pool
+        let pool = super::agents::get_pool();
+        if let Ok(pool_map) = pool.lock() {
+            if let Some(pool_entry) = pool_map.get(&session_id) {
+                let mut e = entry.clone();
+                e.name = pool_entry.name.clone();
+                e.parent_session_id = pool_entry.parent_session_id.clone();
+                e.started_at = pool_entry.started_at.clone();
+                e.model = pool_entry.model.clone();
+                map.insert(session_id.clone(), e.clone());
+                let dir = mailbox_dir()?;
+                let path = dir.join(format!("{}.json", &session_id));
+                let json = serde_json::to_string_pretty(&e)
+                    .map_err(|e| format!("Failed to serialize: {}", e))?;
+                std::fs::write(&path, json)
+                    .map_err(|e| format!("Failed to write: {}", e))?;
+                return Ok(());
+            }
+        }
+        map.insert(session_id.clone(), entry.clone());
+        let dir = mailbox_dir()?;
+        let path = dir.join(format!("{}.json", &session_id));
+        let json = serde_json::to_string_pretty(&entry)
+            .map_err(|e| format!("Failed to serialize: {}", e))?;
+        std::fs::write(&path, json)
+            .map_err(|e| format!("Failed to write: {}", e))?;
+    }
+    Ok(())
+}
+
 /// Delete all results for a parent session (disk + cache).
 #[tauri::command]
 pub async fn purge_results(parent_session_id: String) -> Result<u32, String> {

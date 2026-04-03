@@ -125,6 +125,7 @@ pub fn run() {
             commands::agents::update_agent_health,
             commands::agents::check_agent_alive,
             commands::agents::list_agents,
+            commands::agents::clear_agents_for_parent,
             commands::agents::get_agent_status,
             commands::agents::inject_into_agent,
             commands::agents::mark_agent_exited,
@@ -142,6 +143,7 @@ pub fn run() {
             commands::mailbox::query_result,
             commands::mailbox::query_results_by_parent,
             commands::mailbox::query_result_by_name,
+            commands::mailbox::update_agent_draft,
             commands::mailbox::purge_results,
             commands::mailbox::spawn_agent_with_deps,
         ])
