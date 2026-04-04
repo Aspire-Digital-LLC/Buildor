@@ -54,7 +54,7 @@ impl Lane {
         }
     }
 
-    pub fn enqueue(&mut self, mut op: PendingOp, max_queue_depth: usize) -> Result<(), String> {
+    pub fn enqueue(&self, mut op: PendingOp, max_queue_depth: usize) -> Result<(), String> {
         let total_depth = self.tier1_queue.lock().len() + self.tier2_queue.lock().len();
         if total_depth >= max_queue_depth {
             let err_msg = format!(

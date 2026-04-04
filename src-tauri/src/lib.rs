@@ -158,7 +158,7 @@ pub fn run() {
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if let Some(pool) = crate::operation_pool::OPERATION_POOL.get() {
-                    pool.persist_limits();
+                    pool.shutdown();
                 }
             }
         })

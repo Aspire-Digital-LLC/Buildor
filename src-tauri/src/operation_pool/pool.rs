@@ -89,9 +89,10 @@ impl OperationPool {
     {
         let (tx, rx) = oneshot::channel();
 
+        // Tier 1 base must exceed Tier 2 base + age_cap so Tier 2 can never age past Tier 1
         let base_priority = match tier {
-            Tier::User => 10,
-            Tier::Subagent => 1,
+            Tier::User => 100,
+            Tier::Subagent => 0,
         };
 
         let op = PendingOp {
@@ -111,7 +112,7 @@ impl OperationPool {
         {
             let lanes = self.lanes.read();
             if let Some(lane_lock) = lanes.get(&resource_key) {
-                let mut lane = lane_lock.write();
+                let lane = lane_lock.read();
                 let _ = lane.enqueue(op, max_queue_depth);
                 return rx;
             }
@@ -122,7 +123,7 @@ impl OperationPool {
             let mut lanes = self.lanes.write();
             // Double-check after acquiring write lock
             if let Some(lane_lock) = lanes.get(&resource_key) {
-                let mut lane = lane_lock.write();
+                let lane = lane_lock.read();
                 let _ = lane.enqueue(op, max_queue_depth);
             } else {
                 let config = self.config.read();
@@ -424,7 +425,40 @@ impl OperationPool {
             }
         }
 
-        // Step 2: Wait for in-flight Tier 1 ops (poll completions with timeout)
+        // Step 2: Execute remaining queued Tier 1 ops
+        {
+            let lanes = self.lanes.read();
+            for (_key, lane_lock) in lanes.iter() {
+                let mut lane = lane_lock.write();
+                // Collect remaining Tier 1 ops
+                let tier1_ids: Vec<Uuid> = {
+                    let mut q = lane.tier1_queue.lock();
+                    let ids: Vec<Uuid> = q.iter().map(|(id, _)| *id).collect();
+                    q.clear();
+                    ids
+                };
+                // Extract ops then execute them inline
+                let mut extracted_ops: Vec<PendingOp> = Vec::new();
+                {
+                    let mut ops = lane.ops.lock();
+                    for id in tier1_ids {
+                        if let Some(op) = ops.remove(&id) {
+                            extracted_ops.push(op);
+                        }
+                    }
+                }
+                for mut op in extracted_ops {
+                    if let (Some(func), Some(tx)) = (op.operation.take(), op.response_tx.take()) {
+                        let result = func();
+                        let success = result.is_ok();
+                        let _ = tx.send(result);
+                        lane.record_completion(success);
+                    }
+                }
+            }
+        }
+
+        // Step 3: Wait for in-flight ops to complete (poll with timeout)
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             let has_active = {
@@ -440,7 +474,7 @@ impl OperationPool {
             std::thread::sleep(Duration::from_millis(50));
         }
 
-        // Step 3: Drop remaining ops
+        // Step 4: Drop remaining ops
         {
             let mut lanes = self.lanes.write();
             lanes.clear();
