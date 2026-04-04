@@ -121,8 +121,8 @@ Call `get_pool_status` from the frontend (Tauri invoke) to see:
 ### 1. Claude Tool Permission Pipeline (Spec Section: "Unified Permission Pipeline")
 The spec defines a PreToolUse hook that forces all Claude tool calls to `"ask"` and routes them through the pool before approval. This crosses the Rust/JS boundary (permission responses flow through `parseClaudeStream.ts`) and was explicitly deferred. **This is the biggest remaining piece** — it means Claude agent tool calls currently bypass the pool entirely.
 
-### 2. setup_worktree_deps Bypass
-`src-tauri/src/commands/worktree.rs:524-565` — `pnpm install` / `npm install` during worktree setup calls `no_window_command()` directly, bypassing the pool. These are heavy process spawns that should be routed.
+### 2. setup_worktree_deps Bypass — FIXED
+`pnpm install` / `npm install` now route through the pool as `Tier::Subagent`.
 
 ### 3. query_claude_status and run_claude_cli Bypass
 `src-tauri/src/commands/claude.rs:744, 757` — Two low-frequency Claude CLI calls bypass the pool. Minor but inconsistent.
