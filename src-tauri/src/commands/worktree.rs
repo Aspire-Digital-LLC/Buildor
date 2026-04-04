@@ -1,5 +1,4 @@
 use serde::{Serialize, Deserialize};
-use std::process::Command;
 use std::path::{Path, PathBuf};
 use crate::config::app_config::AppConfig;
 
@@ -25,23 +24,42 @@ pub struct SessionInfo {
     pub created_at: String,
 }
 
-fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let output = crate::no_window_command("git")
-        .args(args)
-        .current_dir(repo_path)
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
+    let resource_key = format!("process/git/{}", repo_path);
+    let pool = crate::operation_pool::OPERATION_POOL
+        .get()
+        .ok_or_else(|| "Operation pool not initialized".to_string())?;
 
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        if stderr.trim().is_empty() {
-            Ok(String::new())
-        } else {
-            Err(stderr.trim().to_string())
-        }
-    }
+    let repo_path = repo_path.to_string();
+    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+    let rx = pool
+        .submit(
+            resource_key,
+            crate::operation_pool::Tier::User,
+            move || {
+                let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                let output = crate::no_window_command("git")
+                    .args(&arg_refs)
+                    .current_dir(&repo_path)
+                    .output()
+                    .map_err(|e| format!("Failed to run git: {}", e))?;
+
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                    if stderr.trim().is_empty() {
+                        Ok(String::new())
+                    } else {
+                        Err(stderr.trim().to_string())
+                    }
+                }
+            },
+        )
+        .await;
+
+    rx.await.map_err(|_| "Operation cancelled".to_string())?
 }
 
 fn worktree_base_dir(repo_path: &str) -> PathBuf {
@@ -137,7 +155,7 @@ fn sessions_dir(project_name: &str) -> PathBuf {
 
 #[tauri::command]
 pub async fn list_worktrees(repo_path: String) -> Result<Vec<WorktreeInfo>, String> {
-    let output = run_git(&repo_path, &["worktree", "list", "--porcelain"])?;
+    let output = run_git(&repo_path, &["worktree", "list", "--porcelain"]).await?;
     let mut worktrees = Vec::new();
     let mut current_path = String::new();
     let mut current_branch = String::new();
@@ -208,17 +226,18 @@ pub async fn create_session(
         .map_err(|e| format!("Failed to create worktree directory: {}", e))?;
 
     // Fetch latest
-    let _ = run_git(&repo_path, &["fetch", "--all"]);
+    let _ = run_git(&repo_path, &["fetch", "--all"]).await;
 
     // Create branch and worktree
-    run_git(&repo_path, &["branch", "--no-track", &branch_name, &format!("origin/{}", base_branch)])
-        .or_else(|_| run_git(&repo_path, &["branch", "--no-track", &branch_name, &base_branch]))?;
+    if run_git(&repo_path, &["branch", "--no-track", &branch_name, &format!("origin/{}", base_branch)]).await.is_err() {
+        run_git(&repo_path, &["branch", "--no-track", &branch_name, &base_branch]).await?;
+    }
 
     // Add worktree
-    run_git(&repo_path, &["worktree", "add", &wt_path_str, &branch_name])?;
+    run_git(&repo_path, &["worktree", "add", &wt_path_str, &branch_name]).await?;
 
     // Push branch to remote and set upstream tracking
-    let _ = run_git(&wt_path_str, &["push", "-u", "origin", &branch_name]);
+    let _ = run_git(&wt_path_str, &["push", "-u", "origin", &branch_name]).await;
 
     // Copy .claude/settings.local.json from main repo to worktree (inherit permission rules)
     let source_settings = Path::new(&repo_path).join(".claude").join("settings.local.json");
@@ -292,7 +311,7 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
     // If the worktree directory no longer exists, just clean up the session file and prune
     let wt_path = Path::new(&worktree_path);
     if !wt_path.exists() {
-        let _ = run_git(&repo_path, &["worktree", "prune"]);
+        let _ = run_git(&repo_path, &["worktree", "prune"]).await;
         let session_file = sessions_dir(&project_name).join(format!("{}.json", session_id));
         if session_file.exists() {
             let _ = std::fs::remove_file(&session_file);
@@ -307,7 +326,7 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
     // Safety check: warn if there are uncommitted changes or unpushed commits
     if !force {
         // Check for uncommitted changes
-        let status = run_git(&worktree_path, &["status", "--porcelain"]).unwrap_or_default();
+        let status = run_git(&worktree_path, &["status", "--porcelain"]).await.unwrap_or_default();
         if !status.trim().is_empty() {
             return Err("Session has uncommitted changes. Commit or discard them first, or force-close.".to_string());
         }
@@ -328,17 +347,17 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
         if let Some(ref base) = base_branch {
             let base_ref = format!("origin/{}", base);
             // Check if branch has commits beyond the base
-            let ahead = run_git(&worktree_path, &["rev-list", "--count", &format!("{}..HEAD", base_ref)]).unwrap_or_default();
+            let ahead = run_git(&worktree_path, &["rev-list", "--count", &format!("{}..HEAD", base_ref)]).await.unwrap_or_default();
             if ahead.trim().parse::<i32>().unwrap_or(0) > 0 {
                 // Has local commits — check if they've been pushed to a remote branch
-                let branch_name = run_git(&worktree_path, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+                let branch_name = run_git(&worktree_path, &["rev-parse", "--abbrev-ref", "HEAD"]).await.unwrap_or_default();
                 let remote_ref = format!("origin/{}", branch_name.trim());
-                let remote_exists = run_git(&worktree_path, &["rev-parse", "--verify", &remote_ref]).is_ok();
+                let remote_exists = run_git(&worktree_path, &["rev-parse", "--verify", &remote_ref]).await.is_ok();
                 if !remote_exists {
                     return Err("Session branch was never pushed to remote. Push first, or force-close.".to_string());
                 }
                 // Remote exists — check if local is ahead of it
-                let ahead_of_remote = run_git(&worktree_path, &["rev-list", "--count", &format!("{}..HEAD", remote_ref)]).unwrap_or_default();
+                let ahead_of_remote = run_git(&worktree_path, &["rev-list", "--count", &format!("{}..HEAD", remote_ref)]).await.unwrap_or_default();
                 if ahead_of_remote.trim().parse::<i32>().unwrap_or(0) > 0 {
                     return Err("Session has unpushed commits. Push first, or force-close.".to_string());
                 }
@@ -364,7 +383,7 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
     std::thread::sleep(std::time::Duration::from_millis(300));
 
     // Remove worktree — try git first, fall back to manual deletion on Windows lock errors
-    let remove_result = run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"]);
+    let remove_result = run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"]).await;
     if let Err(ref e) = remove_result {
         if e.contains("Permission denied") || e.contains("being used by another process") {
             // Windows file lock — try to remove the directory manually after a short delay
@@ -375,7 +394,7 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
                 let _ = std::fs::remove_dir_all(wt);
             }
             // Force git to forget about the worktree even if dir removal partially failed
-            let _ = run_git(&repo_path, &["worktree", "prune"]);
+            let _ = run_git(&repo_path, &["worktree", "prune"]).await;
         } else {
             // Non-lock error — still clean up the session file so it doesn't become a zombie
             let session_file = sessions_dir(&project_name).join(format!("{}.json", session_id));
@@ -387,7 +406,7 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
     }
 
     // Prune
-    let _ = run_git(&repo_path, &["worktree", "prune"]);
+    let _ = run_git(&repo_path, &["worktree", "prune"]).await;
 
     // Delete session file
     let session_file = sessions_dir(&project_name).join(format!("{}.json", session_id));
@@ -435,14 +454,14 @@ pub async fn close_all_sessions(project_name: Option<String>, force: Option<bool
 
 #[tauri::command]
 pub async fn create_worktree(repo_path: String, branch: String, path: String) -> Result<(), String> {
-    run_git(&repo_path, &["worktree", "add", &path, &branch])?;
+    run_git(&repo_path, &["worktree", "add", &path, &branch]).await?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn remove_worktree(repo_path: String, path: String) -> Result<(), String> {
-    run_git(&repo_path, &["worktree", "remove", &path, "--force"])?;
-    let _ = run_git(&repo_path, &["worktree", "prune"]);
+    run_git(&repo_path, &["worktree", "remove", &path, "--force"]).await?;
+    let _ = run_git(&repo_path, &["worktree", "prune"]).await;
     Ok(())
 }
 
@@ -451,18 +470,18 @@ pub async fn clean_worktrees(repo_path: String) -> Result<(), String> {
     let worktrees = list_worktrees(repo_path.clone()).await?;
     for wt in worktrees {
         if !wt.is_main {
-            let _ = run_git(&repo_path, &["worktree", "remove", &wt.path, "--force"]);
+            let _ = run_git(&repo_path, &["worktree", "remove", &wt.path, "--force"]).await;
         }
     }
-    let _ = run_git(&repo_path, &["worktree", "prune"]);
+    let _ = run_git(&repo_path, &["worktree", "prune"]).await;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn get_branches_for_repo(repo_path: String) -> Result<Vec<String>, String> {
     // Get remote branches for base branch selection
-    let _ = run_git(&repo_path, &["fetch", "--all"]);
-    let output = run_git(&repo_path, &["branch", "-r", "--format=%(refname:short)"])?;
+    let _ = run_git(&repo_path, &["fetch", "--all"]).await;
+    let output = run_git(&repo_path, &["branch", "-r", "--format=%(refname:short)"]).await?;
     let mut branches: Vec<String> = output
         .lines()
         .map(|l| l.trim().to_string())

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{AppHandle, Emitter};
 
@@ -63,17 +63,30 @@ fn clean_response(raw: &str) -> String {
 }
 
 pub fn call_haiku(prompt: &str) -> Result<String, String> {
-    let output = crate::no_window_command("claude")
-        .args(["--print", "--model", "haiku", prompt])
-        .output()
-        .map_err(|e| format!("Failed to run claude: {}", e))?;
+    let pool = crate::operation_pool::OPERATION_POOL.get()
+        .ok_or_else(|| "Operation pool not initialized".to_string())?;
 
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Claude failed: {}", stderr.trim()))
-    }
+    let prompt_owned = prompt.to_string();
+    let rx = tauri::async_runtime::block_on(pool.submit(
+        "llm/haiku-oneshot".to_string(),
+        crate::operation_pool::Tier::Subagent,
+        move || {
+            let output = crate::no_window_command("claude")
+                .args(["--print", "--model", "haiku", &prompt_owned])
+                .output()
+                .map_err(|e| format!("Failed to run claude: {}", e))?;
+
+            if output.status.success() {
+                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("Claude failed: {}", stderr.trim()))
+            }
+        },
+    ));
+
+    rx.blocking_recv()
+        .map_err(|_| "Pool operation cancelled".to_string())?
 }
 
 #[tauri::command]
@@ -158,16 +171,38 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
         args.push(prompt.clone());
     }
 
-    let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    // Route the initial spawn through the operation pool
+    let pool = crate::operation_pool::OPERATION_POOL.get()
+        .ok_or_else(|| "Operation pool not initialized".to_string())?;
 
-    let mut child = crate::no_window_command("claude")
-        .args(&args_refs)
-        .current_dir(&working_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+    let child_slot: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
+    let child_slot_inner = child_slot.clone();
+    let working_dir_clone = working_dir.clone();
+
+    let rx = pool.submit(
+        format!("llm/{}", session_id),
+        crate::operation_pool::Tier::User,
+        move || {
+            let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let child = crate::no_window_command("claude")
+                .args(&args_refs)
+                .current_dir(&working_dir_clone)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+            *child_slot_inner.lock().map_err(|e| format!("Lock error: {}", e))? = Some(child);
+            Ok("spawned".to_string())
+        },
+    ).await;
+
+    rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
+
+    let mut child = child_slot.lock()
+        .map_err(|e| format!("Lock error: {}", e))?
+        .take()
+        .ok_or_else(|| "Child process not available after pool spawn".to_string())?;
 
     let pid = child.id();
 
@@ -495,6 +530,8 @@ pub fn start_agent_session_sync(
 
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
+    // Note: pool gating for agent sessions happens in spawn_agent (agents.rs),
+    // which wraps this entire function call. No double-pooling needed here.
     let mut child = crate::no_window_command("claude")
         .args(&args_refs)
         .current_dir(working_dir)

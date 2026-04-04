@@ -68,13 +68,39 @@ pub async fn spawn_agent(
         - You may declare dependencies on other agents: -<*{{ \"action\": \"spawn_agent\", \"name\": \"agent-name\", \"prompt\": \"task\", \"dependencies\": [\"other-agent-name\"] }}*>-",
     );
 
-    // Start the Claude session via the shared session infrastructure
-    let result = super::claude::start_agent_session_sync(
-        &app,
-        &resolved_dir,
-        model.as_deref(),
-        &agent_system_prompt,
-    )?;
+    // Route the agent spawn through the operation pool
+    let pool = crate::operation_pool::OPERATION_POOL.get()
+        .ok_or_else(|| "Operation pool not initialized".to_string())?;
+
+    let app_clone = app.clone();
+    let resolved_dir_clone = resolved_dir.clone();
+    let model_clone = model.clone();
+    let agent_prompt_clone = agent_system_prompt.clone();
+    let result_slot: std::sync::Arc<std::sync::Mutex<Option<super::claude::SessionStartResult>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let result_slot_inner = result_slot.clone();
+
+    let rx = pool.submit(
+        format!("llm/agent-{}", name),
+        crate::operation_pool::Tier::Subagent,
+        move || {
+            let r = super::claude::start_agent_session_sync(
+                &app_clone,
+                &resolved_dir_clone,
+                model_clone.as_deref(),
+                &agent_prompt_clone,
+            )?;
+            *result_slot_inner.lock().map_err(|e| format!("Lock error: {}", e))? = Some(r);
+            Ok("spawned".to_string())
+        },
+    ).await;
+
+    rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
+
+    let result = result_slot.lock()
+        .map_err(|e| format!("Lock error: {}", e))?
+        .take()
+        .ok_or_else(|| "Agent session result not available after pool spawn".to_string())?;
 
     let agent_session_id = result.session_id.clone();
 

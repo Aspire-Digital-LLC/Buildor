@@ -25,3 +25,6 @@ uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 reqwest = { version = "0.12", features = ["json", "cookies", "native-tls"] }
 urlencoding = "2"
+parking_lot = "0.12"
+priority-queue = "2"
+num_cpus = "1"
