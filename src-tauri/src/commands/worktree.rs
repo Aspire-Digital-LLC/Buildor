@@ -36,7 +36,7 @@ async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
     let rx = pool
         .submit(
             resource_key,
-            crate::operation_pool::Tier::User,
+            crate::operation_pool::Tier::App,
             move || {
                 let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
                 let output = crate::no_window_command("git")
@@ -544,36 +544,57 @@ pub async fn setup_worktree_deps(
         }
 
         "pnpm" => {
-            let output = crate::no_window_command("pnpm")
-                .arg("install")
-                .arg("--frozen-lockfile")
-                .current_dir(&worktree_path)
-                .output()
-                .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
-            if !output.status.success() {
-                // Retry without --frozen-lockfile (lockfile may differ on branch)
-                let retry = crate::no_window_command("pnpm")
-                    .arg("install")
-                    .current_dir(&worktree_path)
-                    .output()
-                    .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
-                if !retry.status.success() {
-                    return Err(format!("pnpm install failed: {}", String::from_utf8_lossy(&retry.stderr)));
-                }
-            }
-            Ok("ok:pnpm".to_string())
+            let resource_key = format!("process/pnpm/{}", worktree_path);
+            let wt_path = worktree_path.clone();
+            let pool = crate::operation_pool::OPERATION_POOL.get()
+                .ok_or_else(|| "Operation pool not initialized".to_string())?;
+            let rx = pool.submit(
+                resource_key,
+                crate::operation_pool::Tier::Subagent,
+                move || {
+                    let output = crate::no_window_command("pnpm")
+                        .arg("install")
+                        .arg("--frozen-lockfile")
+                        .current_dir(&wt_path)
+                        .output()
+                        .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
+                    if !output.status.success() {
+                        let retry = crate::no_window_command("pnpm")
+                            .arg("install")
+                            .current_dir(&wt_path)
+                            .output()
+                            .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
+                        if !retry.status.success() {
+                            return Err(format!("pnpm install failed: {}", String::from_utf8_lossy(&retry.stderr)));
+                        }
+                    }
+                    Ok("ok:pnpm".to_string())
+                },
+            ).await;
+            rx.await.map_err(|_| "Operation cancelled".to_string())?
         }
 
         "npm" => {
-            let output = crate::no_window_command("npm")
-                .arg("install")
-                .current_dir(&worktree_path)
-                .output()
-                .map_err(|e| format!("Failed to run npm install: {}", e))?;
-            if !output.status.success() {
-                return Err(format!("npm install failed: {}", String::from_utf8_lossy(&output.stderr)));
-            }
-            Ok("ok:npm".to_string())
+            let resource_key = format!("process/npm/{}", worktree_path);
+            let wt_path = worktree_path.clone();
+            let pool = crate::operation_pool::OPERATION_POOL.get()
+                .ok_or_else(|| "Operation pool not initialized".to_string())?;
+            let rx = pool.submit(
+                resource_key,
+                crate::operation_pool::Tier::Subagent,
+                move || {
+                    let output = crate::no_window_command("npm")
+                        .arg("install")
+                        .current_dir(&wt_path)
+                        .output()
+                        .map_err(|e| format!("Failed to run npm install: {}", e))?;
+                    if !output.status.success() {
+                        return Err(format!("npm install failed: {}", String::from_utf8_lossy(&output.stderr)));
+                    }
+                    Ok("ok:npm".to_string())
+                },
+            ).await;
+            rx.await.map_err(|_| "Operation cancelled".to_string())?
         }
 
         _ => Err(format!("Unknown strategy: {}", strategy)),

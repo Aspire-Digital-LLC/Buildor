@@ -39,7 +39,7 @@ async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
     let rx = pool
         .submit(
             resource_key,
-            crate::operation_pool::Tier::User,
+            crate::operation_pool::Tier::App,
             move || {
                 let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
                 let output = crate::no_window_command("git")

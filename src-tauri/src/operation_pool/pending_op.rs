@@ -4,8 +4,9 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tier {
-    User,
-    Subagent,
+    App,       // Tier 0: Buildor UI-driven operations (base 200)
+    User,      // Tier 1: Primary Claude session tool calls (base 100)
+    Subagent,  // Tier 2: Sub-agent / background operations (base 0)
 }
 
 pub struct PendingOp {

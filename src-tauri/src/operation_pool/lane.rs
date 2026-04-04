@@ -78,7 +78,7 @@ impl Lane {
         self.ops.lock().insert(id, op);
 
         match tier {
-            Tier::User => { self.tier1_queue.lock().push(id, priority); },
+            Tier::App | Tier::User => { self.tier1_queue.lock().push(id, priority); },
             Tier::Subagent => { self.tier2_queue.lock().push(id, priority); },
         }
         Ok(())
@@ -141,7 +141,7 @@ impl Lane {
             };
             let id = op.id;
             match op.tier {
-                Tier::User => {
+                Tier::App | Tier::User => {
                     t1.change_priority(&id, new_priority);
                 }
                 Tier::Subagent => {

@@ -31,7 +31,7 @@ pub async fn execute_shell_command(
         .ok_or_else(|| "Operation pool not initialized".to_string())?;
 
     let rx = pool
-        .submit(resource_key, Tier::User, move || {
+        .submit(resource_key, Tier::App, move || {
             let mut cmd = no_window_command("bash");
             cmd.args(["-c", &command]);
 

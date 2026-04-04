@@ -98,10 +98,12 @@ impl OperationPool {
             return rx;
         }
 
-        // Tier 1 base must exceed Tier 2 base + age_cap so Tier 2 can never age past Tier 1
+        // Each tier's base must exceed the next tier's base + age_cap (20)
+        // so lower tiers can never age past higher tiers
         let base_priority = match tier {
-            Tier::User => 100,
-            Tier::Subagent => 0,
+            Tier::App => 200,      // Buildor UI operations — always first
+            Tier::User => 100,     // Primary Claude session tool calls
+            Tier::Subagent => 0,   // Sub-agent / background work
         };
 
         let op = PendingOp {
