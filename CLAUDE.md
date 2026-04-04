@@ -13,6 +13,17 @@ See `APP_BUILD_DESCRIPTION.md` for the full feature specification.
 3. After writing code or discovering anything worth persisting, run the `/document` skill
 4. To debug issues or review operations, run the `/read-logs` skill
 
+## Version Locations
+
+When bumping the app version, update **all four** of these:
+
+1. `package.json` — `"version"` field (line ~3)
+2. `src-tauri/Cargo.toml` — `version` field (line ~3)
+3. `src-tauri/tauri.conf.json` — `"version"` field (line ~4)
+4. `src-tauri/tauri.conf.json` — `"title"` in `app.windows` (line ~33, includes `v` prefix)
+
+`Cargo.lock` updates automatically on build.
+
 ## Tech Stack
 
 - **Framework**: Tauri v2 (Rust backend + webview frontend)
