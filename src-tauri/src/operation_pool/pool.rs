@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
@@ -32,6 +32,7 @@ pub struct OperationPool {
     config: RwLock<PoolConfig>,
     completions: Mutex<Vec<(String, bool)>>,
     shutdown: AtomicBool,
+    persisted: RwLock<PersistedLimits>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -73,6 +74,7 @@ impl OperationPool {
             config: RwLock::new(config),
             completions: Mutex::new(Vec::new()),
             shutdown: AtomicBool::new(false),
+            persisted: RwLock::new(persisted),
         }
     }
 
@@ -103,11 +105,14 @@ impl OperationPool {
             response_tx: Some(tx),
         };
 
+        let max_queue_depth = self.config.read().max_queue_depth;
+
         // Try read-lock first (fast path: lane already exists)
         {
             let lanes = self.lanes.read();
             if let Some(lane_lock) = lanes.get(&resource_key) {
-                lane_lock.write().enqueue(op);
+                let mut lane = lane_lock.write();
+                let _ = lane.enqueue(op, max_queue_depth);
                 return rx;
             }
         }
@@ -117,7 +122,8 @@ impl OperationPool {
             let mut lanes = self.lanes.write();
             // Double-check after acquiring write lock
             if let Some(lane_lock) = lanes.get(&resource_key) {
-                lane_lock.write().enqueue(op);
+                let mut lane = lane_lock.write();
+                let _ = lane.enqueue(op, max_queue_depth);
             } else {
                 let config = self.config.read();
                 let override_max = config
@@ -132,7 +138,16 @@ impl OperationPool {
                     override_max,
                     config.probe_threshold,
                 );
-                lane.enqueue(op);
+
+                // Finding #1: restore persisted lane limits
+                {
+                    let persisted = self.persisted.read();
+                    if let Some(persisted_lane) = persisted.lanes.get(&resource_key) {
+                        lane.concurrency.restore_from_persisted(persisted_lane.max_seen_healthy);
+                    }
+                }
+
+                let _ = lane.enqueue(op, max_queue_depth);
                 lanes.insert(resource_key, RwLock::new(lane));
             }
         }
@@ -160,7 +175,7 @@ impl OperationPool {
                 }
 
                 let selected = pool_ref.tick_phase1();
-                pool_ref.tick_phase2(selected);
+                pool_ref.tick_phase2(selected).await;
 
                 tick_count += 1;
                 if tick_count % 600 == 0 {
@@ -181,6 +196,15 @@ impl OperationPool {
         };
 
         let age_cap = self.config.read().age_cap;
+
+        // Finding #6: Remove empty lanes before processing
+        {
+            let mut lanes = self.lanes.write();
+            lanes.retain(|_, lane_lock| {
+                let lane = lane_lock.read();
+                !lane.is_empty()
+            });
+        }
 
         let lanes = self.lanes.read();
 
@@ -240,7 +264,8 @@ impl OperationPool {
                     let mut lane = lane_lock.write();
                     // Decrement active_count since select_candidates incremented it
                     lane.active_count = lane.active_count.saturating_sub(1);
-                    lane.enqueue(op);
+                    // Use usize::MAX since these are being returned, not new submissions
+                    let _ = lane.enqueue(op, usize::MAX);
                 }
             }
 
@@ -251,28 +276,68 @@ impl OperationPool {
         selected
     }
 
-    /// Phase 2: execute selected ops
-    fn tick_phase2(&self, selected: Vec<PendingOp>) {
+    /// Phase 2: execute selected ops, await all completions
+    async fn tick_phase2(&self, selected: Vec<PendingOp>) {
         if selected.is_empty() {
             return;
         }
 
+        let tick_start = Instant::now();
+        let config = self.config.read().clone();
+        let op_timeout = Duration::from_secs(config.op_timeout_secs);
+
         self.state.store(1, Ordering::Relaxed);
+
+        let mut handles = Vec::with_capacity(selected.len());
 
         for mut op in selected {
             let operation = op.operation.take();
             let response_tx = op.response_tx.take();
             let lane_key = op.resource_key.clone();
-            let completions = self.completions_ref();
 
             if let (Some(func), Some(tx)) = (operation, response_tx) {
-                tauri::async_runtime::spawn_blocking(move || {
+                let fallback_key = lane_key.clone();
+                let handle = tauri::async_runtime::spawn_blocking(move || {
                     let result = func();
                     let success = result.is_ok();
                     let _ = tx.send(result);
-                    completions.lock().push((lane_key, success));
+                    (lane_key, success)
                 });
+                handles.push((handle, fallback_key, op_timeout));
             }
+        }
+
+        // Finding #3 & #4: Await all handles with per-op timeout
+        let mut any_failure = false;
+        for (handle, lane_key, timeout_dur) in handles {
+            match tokio::time::timeout(timeout_dur, handle).await {
+                Ok(Ok((lane_key, success))) => {
+                    if !success {
+                        any_failure = true;
+                    }
+                    self.completions.lock().push((lane_key, success));
+                }
+                Ok(Err(_join_err)) => {
+                    // spawn_blocking task panicked
+                    any_failure = true;
+                    self.completions.lock().push((lane_key, false));
+                }
+                Err(_timeout) => {
+                    // Finding #4: timeout elapsed — record failure
+                    any_failure = true;
+                    self.completions.lock().push((lane_key, false));
+                }
+            }
+        }
+
+        // Finding #2: Adapt global pool size based on tick outcome
+        let tick_duration = tick_start.elapsed();
+        let tick_timed_out = tick_duration.as_secs() > config.tick_timeout_secs;
+
+        if any_failure || tick_timed_out {
+            self.pool_size.write().record_failure();
+        } else {
+            self.pool_size.write().record_success();
         }
 
         self.state.store(-1, Ordering::Relaxed);
@@ -340,5 +405,45 @@ impl OperationPool {
     pub fn shutdown(&self) {
         self.persist_limits();
         self.shutdown.store(true, Ordering::Relaxed);
+
+        // Finding #7: Graceful shutdown
+        // Step 1: Drop all Tier 2 ops (their oneshot senders drop, callers get RecvError)
+        {
+            let lanes = self.lanes.read();
+            for (_key, lane_lock) in lanes.iter() {
+                let mut lane = lane_lock.write();
+                let tier2_ids: Vec<Uuid> = {
+                    let q = lane.tier2_queue.lock();
+                    q.iter().map(|(id, _)| *id).collect()
+                };
+                lane.tier2_queue.lock().clear();
+                let mut ops = lane.ops.lock();
+                for id in tier2_ids {
+                    ops.remove(&id); // drops PendingOp including oneshot sender
+                }
+            }
+        }
+
+        // Step 2: Wait for in-flight Tier 1 ops (poll completions with timeout)
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let has_active = {
+                let lanes = self.lanes.read();
+                lanes.iter().any(|(_, lane_lock)| {
+                    let lane = lane_lock.read();
+                    lane.active_count > 0
+                })
+            };
+            if !has_active || Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+
+        // Step 3: Drop remaining ops
+        {
+            let mut lanes = self.lanes.write();
+            lanes.clear();
+        }
     }
 }

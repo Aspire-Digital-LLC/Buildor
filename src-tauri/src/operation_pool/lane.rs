@@ -54,7 +54,20 @@ impl Lane {
         }
     }
 
-    pub fn enqueue(&mut self, op: PendingOp) {
+    pub fn enqueue(&mut self, mut op: PendingOp, max_queue_depth: usize) -> Result<(), String> {
+        let total_depth = self.tier1_queue.lock().len() + self.tier2_queue.lock().len();
+        if total_depth >= max_queue_depth {
+            let err_msg = format!(
+                "Queue overflow: lane '{}' has {} queued ops (max {})",
+                self.key, total_depth, max_queue_depth
+            );
+            // Send error through the oneshot channel before dropping op
+            if let Some(tx) = op.response_tx.take() {
+                let _ = tx.send(Err(err_msg.clone()));
+            }
+            return Err(err_msg);
+        }
+
         let priority = OpPriority {
             effective_priority: op.effective_priority(),
             insertion_order: Reverse(op.insertion_order),
@@ -68,6 +81,7 @@ impl Lane {
             Tier::User => { self.tier1_queue.lock().push(id, priority); },
             Tier::Subagent => { self.tier2_queue.lock().push(id, priority); },
         }
+        Ok(())
     }
 
     pub fn available_slots(&self) -> u32 {
