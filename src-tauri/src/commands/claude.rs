@@ -181,7 +181,7 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
 
     let rx = pool.submit(
         format!("llm/{}", session_id),
-        crate::operation_pool::Tier::User,
+        crate::operation_pool::Tier::App,
         move || {
             let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
             let child = crate::no_window_command("claude")
