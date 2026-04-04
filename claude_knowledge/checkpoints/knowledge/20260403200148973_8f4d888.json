@@ -1,0 +1,7 @@
+{
+  "commit": "8f4d888",
+  "date": "2026-04-04T01:01:48.973Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Documented checkpoint-based delta scanning pattern, forked agent skill decision, updated mind-map keywords"
+}

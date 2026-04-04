@@ -199,3 +199,21 @@ Architectural and design decisions with rationale. Each entry explains why X was
 **Rejected**: Hardcoded strings scattered in `buildAwareContext.ts`
 
 **Why**: History injection instructions are the kind of text that evolves — adding image handling guidance, tweaking partial-mode language, etc. Having them in one file makes them auditable, diffable, and easy to update without hunting through utility functions. Also establishes the pattern for future prompt centralization (flow prompts, skill prompts).
+
+---
+
+## Checkpoint-Based Delta Scanning over Full Scans
+
+**Choice**: Skills that analyze the repo (like `/document`) use checkpoint files to track last-processed commit and only scan new commits
+**Rejected**: Full-repo scan every time, git-notes-based tracking, in-memory state
+
+**Why**: A full scan of 80+ commits requires reading dozens of files and produces duplicate documentation. Git notes pollute the repo's ref namespace and don't survive clone. In-memory state doesn't persist across sessions. File-based checkpoints in `claude_knowledge/checkpoints/` are version-controlled, auditable, and trivially parseable. The context-engine skill abstracts checkpoint CRUD so any skill can adopt delta scanning with two calls (get range, write checkpoint).
+
+---
+
+## Skills as Forked Agents over Inline Injection for Heavy Work
+
+**Choice**: `/document`, `/read-logs`, and other heavy skills use `context: "fork"` to run as separate agent processes
+**Rejected**: Injecting skill prompts into the active chat session
+
+**Why**: Heavy skills (documentation scans, log analysis) can take minutes and produce large outputs. Running them inline blocks the user's chat session — they can't ask questions or do other work while the skill runs. Forking as an agent gives the skill its own Claude process with independent context window, lets the user continue chatting, and produces a clean result that's injected back when done. The agent pool infrastructure (health monitoring, mailbox, transcript persistence) applies automatically.

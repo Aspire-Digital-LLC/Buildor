@@ -97,6 +97,15 @@ Established code patterns, conventions, and reusable approaches in this project.
 
 ---
 
+### Checkpoint-Based Delta Scanning
+
+**When to use**: Any skill or automation that processes the full repo but only needs to analyze what changed since the last run
+**Implementation**: The context-engine skill manages checkpoint files in `claude_knowledge/checkpoints/{command}/`. Each checkpoint is a JSON file (`{timestamp}_{commitHash}.json`) recording the last-processed commit, scan type, and notes. Before scanning, call `/context-engine` to get the base commit and list of commits/files to process. After scanning, call `/context-engine write {command} {hash} {type} "{notes}"` to record the new checkpoint.
+**Example**: `/document` calls context-engine to get the delta range, processes only changed commits, then writes a checkpoint. Next run skips already-processed commits.
+**Why**: Full-repo scans are expensive (80+ commits = many file reads). Delta scanning processes only new commits since the last checkpoint. The file-based approach survives across sessions and is auditable via `git log`.
+
+---
+
 ### Shared DB Accessor Pattern
 
 **When to use**: Any Rust module that needs the logging/chat history SQLite database

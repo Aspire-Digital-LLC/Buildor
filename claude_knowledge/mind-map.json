@@ -21,7 +21,7 @@
     {
       "file": "decisions.md",
       "description": "Architecture and design decisions with rationale (why X over Y)",
-      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected"]
+      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected", "checkpoint", "fork", "forked agent"]
     },
     {
       "file": "gotchas.md",
@@ -31,7 +31,7 @@
     {
       "file": "patterns.md",
       "description": "Established code patterns, conventions, and reusable approaches in this project",
-      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template"]
+      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template", "checkpoint", "delta scan", "context-engine"]
     },
     {
       "file": "local_learnings.md",
