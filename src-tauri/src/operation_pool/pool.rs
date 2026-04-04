@@ -346,11 +346,6 @@ impl OperationPool {
 
     /// Get a reference to completions that can be moved into spawned tasks.
     /// SAFETY: OperationPool lives in a static OnceLock, so this pointer is always valid.
-    fn completions_ref(&self) -> &'static Mutex<Vec<(String, bool)>> {
-        let ptr = &self.completions as *const Mutex<Vec<(String, bool)>>;
-        unsafe { &*ptr }
-    }
-
     pub fn persist_limits(&self) {
         let lanes = self.lanes.read();
         let mut persisted = PersistedLimits {

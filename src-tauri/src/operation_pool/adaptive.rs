@@ -38,7 +38,7 @@ impl AdaptiveLimit {
     }
 
     pub fn restore_from_persisted(&mut self, max_seen: u32) {
-        self.current = max_seen;
-        self.max_seen_healthy = max_seen;
+        self.current = max_seen.min(self.absolute_max);
+        self.max_seen_healthy = max_seen.min(self.absolute_max);
     }
 }
