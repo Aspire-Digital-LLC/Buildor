@@ -184,17 +184,31 @@ impl OperationPool {
                     break;
                 }
 
-                // Wrap tick in catch_unwind to prevent panic from killing the pool
+                // Wrap tick phases in catch_unwind to prevent panic from killing the pool
                 let selected = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     pool_ref.tick_phase1()
                 })) {
                     Ok(s) => s,
                     Err(_) => {
                         eprintln!("[operation_pool] tick_phase1 panicked, recovering");
+                        // Reset active_count on all lanes to prevent stuck slots
+                        // from candidates that were selected but never executed
+                        let lanes = pool_ref.lanes.read();
+                        for (_, lane_lock) in lanes.iter() {
+                            let mut lane = lane_lock.write();
+                            lane.active_count = 0;
+                        }
                         continue;
                     }
                 };
-                pool_ref.tick_phase2(selected).await;
+
+                // Phase2 is async — wrap in a spawned task to catch panics
+                let handle = tauri::async_runtime::spawn(async move {
+                    pool_ref.tick_phase2(selected).await;
+                });
+                if let Err(_) = handle.await {
+                    eprintln!("[operation_pool] tick_phase2 panicked, recovering");
+                }
 
                 tick_count += 1;
                 if tick_count % 600 == 0 {
@@ -462,10 +476,17 @@ impl OperationPool {
                 }
                 for mut op in extracted_ops {
                     if let (Some(func), Some(tx)) = (op.operation.take(), op.response_tx.take()) {
-                        let result = func();
-                        let success = result.is_ok();
-                        let _ = tx.send(result);
-                        lane.record_completion(success);
+                        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(func)) {
+                            Ok(result) => {
+                                let success = result.is_ok();
+                                let _ = tx.send(result);
+                                lane.record_completion(success);
+                            }
+                            Err(_) => {
+                                let _ = tx.send(Err("Operation panicked during shutdown drain".to_string()));
+                                lane.record_completion(false);
+                            }
+                        }
                     }
                 }
             }
