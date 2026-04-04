@@ -1,0 +1,7 @@
+{
+  "commit": "4e4e010",
+  "date": "2026-04-04T00:35:11.014Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Post-Phase-8 agent hardening: gotchas (result event no exit, permission routing, prompt timing, false distress), architecture (health monitor hardening, agent autonomy, completion detection, mailbox drafts, transcript persistence, pool cleanup, nested agents), patterns (raw JSON agent output listener), project status updated"
+}

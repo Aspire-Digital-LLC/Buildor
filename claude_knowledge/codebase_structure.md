@@ -7,6 +7,16 @@ Buildor/
 ├── CLAUDE.md                    # Claude Code project instructions
 ├── APP_BUILD_DESCRIPTION.md     # Full feature specification
 ├── buildor_context.md           # Buildor self-identity context (injected into Claude chats)
+├── .claude/skills/              # Claude Code skills (project-scoped)
+│   ├── document/SKILL.md            # /document — update knowledge base after work
+│   ├── read-logs/                   # /read-logs — query SQLite logs
+│   │   ├── SKILL.md
+│   │   └── scripts/                 # Helper scripts for log queries
+│   ├── context-engine/              # Checkpoint manager for knowledge scans (called by /document)
+│   │   ├── SKILL.md
+│   │   └── scripts/checkpoints.ts   # CLI: get-latest, write, list, prune
+│   ├── skill-builder/SKILL.md       # /skill-builder — scaffold new skills
+│   └── simplify/SKILL.md            # /simplify — review code for reuse/quality
 ├── claude_knowledge/            # Persistent knowledge base
 │   ├── mind-map.json            # Knowledge file index (read first)
 │   ├── codebase_structure.md    # This file
@@ -15,9 +25,13 @@ Buildor/
 │   ├── decisions.md             # Design decisions with rationale
 │   ├── gotchas.md               # Pitfalls and workarounds
 │   ├── patterns.md              # Code conventions and patterns
+│   ├── events.md                # Event bus system and event types
+│   ├── project_status.md        # Current phase, progress, known issues
+│   ├── personality_and_worktree_config.md  # Personality + worktree dep setup
+│   ├── buildor_skills_guide.md  # Skill authoring reference
+│   ├── operation_pool_spec.md   # Operation pool design spec (not yet implemented)
+│   ├── checkpoints/             # Context-engine scan checkpoints (per-command subdirs)
 │   └── local_learnings.md       # Machine-specific notes (gitignored)
-├── documentor/                  # Documentation skill
-│   └── SKILL.md                 # /document skill definition
 ├── src/                         # React frontend (TypeScript)
 │   ├── components/              # React components
 │   │   ├── claude-chat/         # Chat UI, panels, agent UI
@@ -90,7 +104,7 @@ Buildor/
 | **Knowledge** | `claude_knowledge/` | Persistent project learnings for Claude |
 | **Buildor Skills** | `~/.buildor/skills/` | Buildor-managed skills (shared repo synced here) |
 | **Project Skills** | `.claude/skills/`, `~/.claude/skills/` | Native Claude Code skills (read-only in palette) |
-| **Documentor** | `documentor/` | /document skill definition |
+| **Skills** | `.claude/skills/` | Project-scoped Claude Code skills (document, read-logs, context-engine, skill-builder, simplify) |
 
 ## Key Conventions
 

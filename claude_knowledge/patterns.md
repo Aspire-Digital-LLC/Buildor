@@ -88,6 +88,15 @@ Established code patterns, conventions, and reusable approaches in this project.
 
 ---
 
+### Raw JSON Agent Output Listener
+
+**When to use**: When an agent subprocess needs event-level parsing beyond what `parseStreamEvent` provides
+**Implementation**: In `useAgentPool`, the per-agent Tauri listener receives raw JSON lines from `claude-output-{sid}`. Parse each line with `JSON.parse()` to extract `content_block_start`, `content_block_delta`, `result`, and `control_request/permission` events. `parseStreamEvent` handles structured messages, but raw JSON catches streaming deltas (for health keepalive), result events (for completion), and permission requests (for auto-accept).
+**Example**: `src/hooks/useAgentPool.ts` — the `listen()` callback processes raw JSON, emits `message-received` for deltas, detects `result` for completion, and auto-responds to permissions
+**Why**: `parseStreamEvent` returns null for partial events like `content_block_delta`. The health monitor needs these to avoid false distress. Completion detection needs the `result` event which has no `parseStreamEvent` equivalent. Permission auto-accept needs the raw `control_request` before it reaches the UI layer.
+
+---
+
 ### Shared DB Accessor Pattern
 
 **When to use**: Any Rust module that needs the logging/chat history SQLite database

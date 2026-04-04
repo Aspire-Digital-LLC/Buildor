@@ -271,11 +271,11 @@ AgentHealthMonitor (singleton class, one instance per agent)
   → Subscribes to tool-executing, tool-completed, message-received events for its agent
   → Tracks: lastActivityAt, lastActivityType, recentToolCalls (rolling window), consecutiveErrors
   → State machine:
-      healthy → idle       (text output, no activity for idleSeconds, default 30)
-      healthy → stalling   (mid-tool, no activity for stallSeconds, default 30)
+      healthy → idle       (text output, no activity for idleSeconds, default 60)
+      healthy → stalling   (mid-tool, no activity for stallSeconds, default 60)
       healthy → looping    (same tool+input appears loopThreshold times, default 3)
       healthy → erroring   (errorThreshold consecutive errors, default 3)
-      any unhealthy → distressed (persists for distressSeconds, default 45)
+      any unhealthy → distressed (persists for distressSeconds, default 90)
   → Escalation:
       Has parent → inject [BUILDOR_ALERT] into parent stdin with marker options (kill/extend/takeover)
       No parent → emit user-attention-needed event
@@ -284,6 +284,41 @@ AgentHealthMonitor (singleton class, one instance per agent)
 ```
 
 Rust commands: `extend_agent` (resets health timers), `takeover_agent` (kills agent, generates summary, injects into parent)
+
+### Health Monitor Hardening (Post-Phase-6)
+
+After initial deployment, several false-positive scenarios were discovered and fixed:
+
+- **Bumped default thresholds**: idle 30→60s, stall 30→60s, distress 45→90s — agents doing heavy analysis have natural gaps between outputs
+- **Text output recovers ALL unhealthy states**: `onMessageReceived` now transitions from any unhealthy state back to healthy (was only stalling/looping)
+- **Tool-in-flight tracking**: agents mid-tool-execution are alive — the monitor doesn't escalate while `toolInFlight` is true
+- **Max tool in-flight timeout**: 120s ceiling prevents stuck `toolInFlight` flag from permanently suppressing health checks
+- **Max silence ceiling**: 180s absolute — catches agents blocked on unhandled stdin that produce no events at all
+- **PID liveness check**: `check_agent_alive` Rust command (Windows `tasklist` / Unix `kill -0`) verifies the process exists when unhealthy
+- **content_block_delta events**: raw JSON parser in `useAgentPool` emits `message-received` for streaming text deltas, keeping `lastActivityAt` current during generation
+
+## Agent Autonomy & Completion (Post-Phase-8)
+
+### Auto-Accept Permissions
+Agents are autonomous workers — they auto-approve all permission requests. `useAgentPool` intercepts `control_request/permission` events in the raw JSON parser and immediately responds via `respondToPermission` with the agent's own session ID. No permission cards are surfaced to the user for agent actions.
+
+### Completion Detection via Result Event
+In `--print stream-json` mode, Claude emits a `result` event (`success`/`failure`) but does NOT exit the process. Agent completion is detected by parsing the `result` event in the raw JSON listener, calling `markAgentExited()`, then stopping the orphaned process.
+
+### Result-to-Caller Injection
+When an agent completes, `useAgentPool` injects the result summary back into the parent session via `sendClaudeMessage()`. This closes the agent→parent handoff loop — the parent Claude session receives the agent's output as a new message and can continue its work.
+
+### Nested Agent Support
+Agents CAN spawn sub-agents via the marker protocol (`-<*{...}*>-`). The pool is flat — all agents regardless of nesting depth are in one HashMap. `AgentStatusCard` renders the full tree with no depth cap.
+
+### Mailbox Draft Streaming
+`update_agent_draft` Rust command writes incremental agent output to the mailbox every 10 seconds. If an agent crashes, the parent can read partial work from the draft. Draft timer is cleaned up on agent completion.
+
+### Agent Transcript Persistence
+Each agent gets a SQLite `chat_session` record on spawn. Parsed messages are saved to `chat_messages` via `saveChatMessage`. The "View transcript" action in `AgentsPanel` reads from the DB.
+
+### Pool Cleanup
+`clear_agents_for_parent` Rust command removes all pool entries for a parent session. Called when the main chat session exits (both in-app and breakout windows) to prevent stale agents appearing in subsequent sessions.
 
 ## Agent UI (Phase 7)
 

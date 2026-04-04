@@ -62,6 +62,11 @@
       "file": "buildor_skills_guide.md",
       "description": "Authoring guide for Buildor skills — skill.json schema, prompt.md syntax, param types, execution modes, and full demo examples",
       "keywords": ["skill", "skills", "skill.json", "prompt.md", "params", "modal", "fork", "agent", "eyeball", "activate", "action", "authoring", "create skill"]
+    },
+    {
+      "file": "operation_pool_spec.md",
+      "description": "Design specification for the app-global self-tuning operation scheduler — resource lanes, adaptive concurrency (TCP slow start), two-tier scheduling, permission pipeline integration",
+      "keywords": ["operation pool", "scheduler", "concurrency", "resource key", "lane", "adaptive", "slow start", "tier", "throttle", "rate limit", "process spawn", "pool_limits.json", "pool_config.json", "ResourceKeyed", "PendingOp"]
     }
   ]
 }

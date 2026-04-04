@@ -136,6 +136,42 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Claude --print Mode: Result Event Fires but Process Never Exits
+
+**Context**: Agent sessions use `--print` with `stream-json` protocol. When the agent finishes, a `result` event with `success`/`failure` is emitted.
+**Surprise**: In `--print stream-json` mode, Claude sends the result event but does NOT exit the process — stdout stays open indefinitely. The `claude-exit` Tauri event never fires.
+**Impact**: Agents appeared stuck forever after completing their work. No cleanup, no result injection, health monitor eventually escalated to distressed.
+**Workaround**: Detect the `result` event in the agent output listener (raw JSON parsing), call `markAgentExited()` immediately, then stop the orphaned Claude process via `killAgent()`. Do not rely on process exit for completion detection in `--print` mode.
+
+---
+
+### Agent Permissions Route to Wrong Process Without Session ID Tracking
+
+**Context**: Agents request tool permissions via `control_request` events. The permission card needs to respond to the correct process stdin.
+**Surprise**: The permission card was using the parent session's `sessionId` to respond (via `respondToPermission`), not the agent's session ID. The response went to the main chat process instead of the agent's process.
+**Impact**: Agent hangs indefinitely — it's waiting for permission approval that never arrives at its stdin. Main chat gets a spurious response it didn't ask for.
+**Workaround**: Add `agentSessionId` field to `ChatContent` for `permission_request` blocks. When creating permission messages for agents, preserve the agent's session ID. In `PermissionCard`, use `agentSessionId` (when present) instead of the parent `sessionId`.
+
+---
+
+### Agent Initial Prompt Must Wait for Frontend Listeners
+
+**Context**: `spawn_agent` in Rust creates the Claude subprocess. The initial prompt (user message) needs to be sent to the agent's stdin.
+**Surprise**: If the Rust backend sends the initial prompt immediately after spawning, output events fire before the frontend's `listen()` calls are set up. The frontend misses the first output — sometimes the entire result.
+**Impact**: Agents spawned with only the system prompt and never received a user message to act on, or received it but output was lost.
+**Workaround**: Rust `spawn_agent` deliberately skips sending the initial prompt. The frontend includes the prompt in the `agent-registered` event, then `useAgentPool` sends it via `injectIntoAgent()` after Tauri output listeners are established.
+
+---
+
+### False Distress from Missing content_block_delta Events
+
+**Context**: The health monitor tracks agent activity via `message-received` events from the event bus. `parseStreamEvent` only handles complete assistant messages.
+**Surprise**: During text generation, agents stream output via `content_block_delta` events. These are not full messages — `parseStreamEvent` returns null for them. The health monitor sees no activity for minutes while the agent is actively producing visible output in the status card.
+**Impact**: Health monitor escalated to distressed and injected `[BUILDOR_ALERT]` into the parent — while the agent was working normally. False escalation interrupts the parent's work.
+**Workaround**: Emit `message-received` events directly from the raw JSON parser in `useAgentPool` when `content_block_delta` (type: text) or `content_block_start` (type: text) events arrive. This keeps the health monitor's `lastActivityAt` current during text generation. Also: text output now recovers from ANY unhealthy state (not just stalling/looping), and thresholds were bumped (idle: 60s, stall: 60s, distress: 90s).
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

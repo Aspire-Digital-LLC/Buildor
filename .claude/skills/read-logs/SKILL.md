@@ -1,5 +1,9 @@
 ---
+name: read-logs
 description: Query and analyze Buildor application logs from the SQLite database. Use to debug errors, analyze performance, review session timelines, and audit operations.
+allowed-tools: Read Bash
+context: fork
+agent: general-purpose
 ---
 
 # /read-logs — Retrieve and Read Buildor Application Logs
@@ -18,14 +22,14 @@ The database is at the OS-standard app data directory:
 
 ```bash
 # Use the CLI script (auto-detects DB location)
-bash scripts/read-logs.sh                    # Recent 30 logs
-bash scripts/read-logs.sh --errors           # Errors only
-bash scripts/read-logs.sh --session <GUID>   # Full session timeline
-bash scripts/read-logs.sh --repo <name>      # Filter by repo
-bash scripts/read-logs.sh --slow             # Slowest operations
-bash scripts/read-logs.sh --stats            # Operation statistics
-bash scripts/read-logs.sh --sessions         # List all sessions
-bash scripts/read-logs.sh --since "1 hour"   # Recent timeframe
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh                    # Recent 30 logs
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --errors           # Errors only
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --session <GUID>   # Full session timeline
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --repo <name>      # Filter by repo
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --slow             # Slowest operations
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --stats            # Operation statistics
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --sessions         # List all sessions
+bash ${CLAUDE_SKILL_DIR}/scripts/read-logs.sh --since "1 hour"   # Recent timeframe
 
 # Or query directly
 sqlite3 -header -column "$APPDATA/Buildor/logs.db" "SELECT timestamp, level, function_area, operation, message FROM logs ORDER BY timestamp DESC LIMIT 20;"

@@ -52,11 +52,23 @@
 
 - [x] **Agent Result Mailbox**: File-backed inter-agent communication system — `mailbox.rs` (deposit/query/purge/dependency resolution), `~/.buildor/agent-results/{sessionId}.json` storage, in-memory cache, pending spawn queue for unmet dependencies, dependency context injection into spawned agent prompts, output capture via `useAgentPool` hook, cleanup on parent session end. This is the **defacto agent communication technique** — all inter-agent data sharing uses this system.
 - [x] **Agent spawn race condition fix**: `agent-spawned` event fired before backend registration, causing `listAgents()` to return empty. Fixed by adding `agent-registered` event that fires after `spawnAgent()` resolves.
+- [x] **Agent autonomy**: Auto-accept permissions for agents (intercept raw JSON, respond immediately), auto-detect completion via `result` event (not process exit), result injection back into parent via `sendClaudeMessage()`, nested agent support (agents can spawn sub-agents)
+- [x] **Agent health monitor hardening**: Bumped thresholds (idle/stall 60s, distress 90s), text output recovers all unhealthy states, tool-in-flight tracking, max silence ceiling (180s), PID liveness check, content_block_delta keepalive for health
+- [x] **Agent initial prompt timing**: Rust skips sending initial prompt; frontend sends via `injectIntoAgent()` after listeners are ready
+- [x] **Agent permission routing fix**: `agentSessionId` field on permission blocks ensures responses go to the correct agent subprocess
+- [x] **Mailbox draft streaming**: Incremental output written every 10s so parent can read partial work if agent crashes
+- [x] **Agent transcript persistence**: SQLite `chat_session` + `chat_messages` per agent, viewable in AgentsPanel
+- [x] **Agent pool cleanup**: `clear_agents_for_parent` removes stale entries on session exit
+- [x] **False distress fixes**: Emit `message-received` for `content_block_delta` events in raw JSON parser; text output recovers from any unhealthy state
+- [x] **Auto-dismiss task tracker**: Completed task list clears on next Claude `message-received` event
+- [x] **Skills infrastructure**: context-engine (checkpoint manager for delta scans), skill-builder (scaffold new skills from prompts), skills moved from `documentor/` to `.claude/skills/`
+- [x] **Operation Pool design spec**: Full design specification for app-global adaptive operation scheduler (`claude_knowledge/operation_pool_spec.md`) — resource lanes, TCP slow-start concurrency, two-tier scheduling, unified permission pipeline, persisted learned limits
 
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
 
 ### Not Started
+- [ ] **Operation Pool** — app-global self-tuning operation scheduler (design spec complete in `operation_pool_spec.md`). Adaptive per-lane concurrency via TCP slow start, two-tier scheduling (user vs subagent), unified permission pipeline integration, persisted learned limits
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)
 - [ ] Command Palette (skill browser with auto-generated parameter forms — component is placeholder only)
 - [ ] App-as-Orchestrator (flow execution engine — backend stubs exist but return empty)
