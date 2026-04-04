@@ -1,9 +1,13 @@
 // LOCK ORDERING (must always acquire in this order to prevent deadlocks):
 //   1. self.lanes (outer RwLock on HashMap)
 //   2. individual lane RwLock (inner, per-lane)
-//   3. self.pool_size
-//   4. self.completions
+//   3. self.config (read-only at runtime)
+//   4. self.persisted (read-only at runtime, except persist_limits)
+//   5. self.pool_size
+//   6. self.completions
 // Never acquire a lower-numbered lock while holding a higher-numbered one.
+// config and persisted are currently only read-locked during normal operation,
+// but must be included in the ordering for future-proofing.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
@@ -89,6 +93,11 @@ impl OperationPool {
     {
         let (tx, rx) = oneshot::channel();
 
+        if self.shutdown.load(Ordering::Acquire) {
+            let _ = tx.send(Err("Operation pool is shutting down".to_string()));
+            return rx;
+        }
+
         // Tier 1 base must exceed Tier 2 base + age_cap so Tier 2 can never age past Tier 1
         let base_priority = match tier {
             Tier::User => 100,
@@ -171,11 +180,20 @@ impl OperationPool {
             loop {
                 interval.tick().await;
 
-                if pool_ref.shutdown.load(Ordering::Relaxed) {
+                if pool_ref.shutdown.load(Ordering::Acquire) {
                     break;
                 }
 
-                let selected = pool_ref.tick_phase1();
+                // Wrap tick in catch_unwind to prevent panic from killing the pool
+                let selected = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    pool_ref.tick_phase1()
+                })) {
+                    Ok(s) => s,
+                    Err(_) => {
+                        eprintln!("[operation_pool] tick_phase1 panicked, recovering");
+                        continue;
+                    }
+                };
                 pool_ref.tick_phase2(selected).await;
 
                 tick_count += 1;
@@ -368,8 +386,8 @@ impl OperationPool {
 
     pub fn status(&self) -> PoolStatus {
         let state = self.state.load(Ordering::Relaxed);
-        let pool_size = self.pool_size.read();
         let lanes = self.lanes.read();
+        let pool_size = self.pool_size.read();
 
         let lane_statuses: Vec<LaneStatus> = lanes
             .iter()
@@ -400,7 +418,7 @@ impl OperationPool {
 
     pub fn shutdown(&self) {
         self.persist_limits();
-        self.shutdown.store(true, Ordering::Relaxed);
+        self.shutdown.store(true, Ordering::Release);
 
         // Finding #7: Graceful shutdown
         // Step 1: Drop all Tier 2 ops (their oneshot senders drop, callers get RecvError)

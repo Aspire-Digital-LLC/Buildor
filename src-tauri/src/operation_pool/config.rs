@@ -30,7 +30,7 @@ impl Default for PoolConfig {
         let physical = num_cpus::get_physical() as u32;
         PoolConfig {
             pool_size_start: (physical / 2).max(1),
-            pool_absolute_max: physical,
+            pool_absolute_max: physical.max(1),
             lane_start_concurrency: 1,
             lane_absolute_max: 10,
             probe_threshold: 5,
