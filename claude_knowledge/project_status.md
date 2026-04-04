@@ -9,7 +9,7 @@
 - [x] App launches with `npx tauri dev`, window auto-centers on screen
 - [x] Git repo: Aspire-Digital-LLC/Buildor on main
 - [x] Dark UI with SVG line icons in sidebar
-- [x] Native window title bar: "Buildor v0.0.4"
+- [x] Native window title bar: "Buildor v0.0.5"
 - [x] **Tab system**: VS Code-style tabs with panel-type SVG icons (SC, CV, Chat, Worktrees, Settings), sidebar icons are project-aware launchers with grouped dropdowns, multiple tabs open simultaneously, TabContext provides project+browsePath+browseBranch scoping
 - [x] **Project Manager**: add/remove projects, GitHub-style language bars, safety modal warns about uncommitted/unpushed worktree work before removal, auto-cleanup of worktrees+sessions on removal
 - [x] **Code Viewer**: file tree, Monaco syntax highlighting, Edit/Save/Cancel, multi-source browsing (main repo + worktrees), branch status bar with "CHECKED OUT"/"WORKTREE" label, no change count badges in dropdown
@@ -63,12 +63,11 @@
 - [x] **Auto-dismiss task tracker**: Completed task list clears on next Claude `message-received` event
 - [x] **Skills infrastructure**: context-engine (checkpoint manager for delta scans), skill-builder (scaffold new skills from prompts), skills moved from `documentor/` to `.claude/skills/`
 - [x] **Operation Pool design spec**: Full design specification for app-global adaptive operation scheduler (`claude_knowledge/operation_pool_spec.md`) — resource lanes, TCP slow-start concurrency, two-tier scheduling, unified permission pipeline, persisted learned limits
+- [x] **Operation Pool implementation**: App-global self-tuning operation scheduler in `src-tauri/src/operation_pool/` (7 modules, ~1140 lines). Resource-keyed lanes, two-tier scheduling (User/Subagent), adaptive concurrency (TCP slow start), persisted learned limits (`pool_limits.json`), configurable via `pool_config.json`. Integrated into git, shell, claude, agent, and worktree commands. Hardened through 5 rounds of review: panic recovery, lock ordering, shutdown drain, timeout handling, active_count leak prevention.
+- [x] **Version 0.0.5**: Bumped all version locations (package.json, Cargo.toml, tauri.conf.json x2)
 
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
-
-### Not Started
-- [ ] **Operation Pool** — app-global self-tuning operation scheduler (design spec complete in `operation_pool_spec.md`). Adaptive per-lane concurrency via TCP slow start, two-tier scheduling (user vs subagent), unified permission pipeline integration, persisted learned limits
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)
 - [ ] Command Palette (skill browser with auto-generated parameter forms — component is placeholder only)
 - [ ] App-as-Orchestrator (flow execution engine — backend stubs exist but return empty)

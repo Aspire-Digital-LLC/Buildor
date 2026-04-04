@@ -88,7 +88,16 @@ Buildor/
 │   │   ├── git/                 # Git CLI wrapper
 │   │   ├── orchestrator/        # Flow execution engine
 │   │   ├── claude/              # Claude Code process management
-│   │   └── config/              # App configuration management
+│   │   ├── config/              # App configuration management
+│   │   └── operation_pool/      # App-global adaptive operation scheduler
+│   │       ├── mod.rs           # Public exports
+│   │       ├── pool.rs          # OperationPool singleton, tick loop, submit/shutdown
+│   │       ├── lane.rs          # Per-resource-key Lane with two-tier priority queues
+│   │       ├── pending_op.rs    # PendingOp struct, Tier enum, priority ordering
+│   │       ├── adaptive.rs      # AdaptiveLimit (TCP slow-start concurrency)
+│   │       ├── config.rs        # PoolConfig (pool_config.json, defaults from num_cpus)
+│   │       ├── persistence.rs   # PersistedLimits (pool_limits.json, learned concurrency)
+│   │       └── resource_key.rs  # ResourceKeyed trait, derive_resource_key() (tool→lane mapping)
 │   ├── Cargo.toml               # Rust dependencies
 │   └── tauri.conf.json          # Tauri app configuration
 ├── package.json                 # Node dependencies

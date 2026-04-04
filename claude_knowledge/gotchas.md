@@ -172,6 +172,33 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Operation Pool: Lock Ordering Matters for Deadlock Prevention
+
+**Context**: The operation pool uses multiple locks (lanes HashMap RwLock, per-lane RwLock, config, persisted, pool_size, completions). The tick loop acquires several locks per cycle.
+**Surprise**: During development, tick_phase1 held the lanes write-lock while trying to read config — but config was read-locked elsewhere first. Different acquisition order in different code paths caused intermittent deadlocks.
+**Impact**: Pool freezes — all operations hang, app becomes unresponsive.
+**Workaround**: Strict lock ordering documented at the top of `pool.rs`: lanes → individual lane → config → persisted → pool_size → completions. Never acquire a lower-numbered lock while holding a higher one. Config and persisted are read-only during normal operation.
+
+---
+
+### Operation Pool: Panic in tick_phase1 Can Leak active_count Slots
+
+**Context**: `select_candidates()` increments `active_count` when pulling ops from the queue. If `tick_phase1` panics after selection but before `tick_phase2` executes and records completions, those slots are permanently "occupied."
+**Surprise**: After a panic, the lane thinks it has N active ops but none are running. No new ops can be scheduled for that lane.
+**Impact**: Lane starvation — operations queue up forever in the affected lane.
+**Workaround**: `catch_unwind` wraps `tick_phase1`. On panic recovery, all lane `active_count` values are reset to 0. This is conservative (may allow brief over-concurrency on the next tick) but prevents permanent starvation.
+
+---
+
+### Operation Pool: Persisted Limits Must Be Capped at absolute_max
+
+**Context**: `restore_from_persisted()` loads `max_seen_healthy` from `pool_limits.json` and sets it as the current concurrency.
+**Surprise**: If the config's `absolute_max` is lowered between runs (e.g., user reduces pool_config.json), restoring an old `max_seen_healthy` that exceeds the new cap causes over-concurrency.
+**Impact**: Pool spawns more threads than the configured maximum allows.
+**Workaround**: `restore_from_persisted()` caps both `current` and `max_seen_healthy` at `absolute_max` using `.min()`.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

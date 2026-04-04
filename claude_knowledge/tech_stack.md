@@ -26,6 +26,9 @@
 | serde / serde_json | Serialization for config, flows, IPC | Standard Rust serialization |
 | tokio | Async runtime for subprocess management | Git CLI, Claude Code process spawning |
 | portable-pty (or similar) | PTY for embedded terminal | Powers xterm.js backend |
+| parking_lot 0.12 | Non-poisoning Mutex/RwLock | Used by operation pool — faster uncontended, no unwrap after panics |
+| priority-queue 2 | Priority queue with `change_priority()` | Per-tier scheduling in operation pool lanes |
+| num_cpus 1 | Physical CPU count detection | Operation pool defaults (pool_size_start = num_cpus/2) |
 
 ## Claude Integration
 

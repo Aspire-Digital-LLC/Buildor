@@ -202,6 +202,24 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
+## parking_lot + priority-queue over std::sync + BinaryHeap
+
+**Choice**: `parking_lot::Mutex`/`RwLock` for synchronization, `priority_queue::PriorityQueue` for per-tier scheduling
+**Rejected**: `std::sync::Mutex`, `BinaryHeap`
+
+**Why**: The operation pool tick loop runs every 100ms and acquires multiple locks per tick. `parking_lot` provides non-poisoning mutexes (no `.unwrap()` chains after panic recovery) and faster uncontended acquisition. `PriorityQueue` supports `change_priority()` for aging ops in-place without drain-and-rebuild — `BinaryHeap` has no priority update API.
+
+---
+
+## Tick-Based Scheduler over Work-Stealing or Immediate Dispatch
+
+**Choice**: Fixed 100ms tick loop that selects and dispatches candidates in batches
+**Rejected**: Work-stealing thread pool (rayon), immediate dispatch on submit
+
+**Why**: The pool needs cross-lane arbitration (global thread cap, Tier 1 priority, age fairness). Immediate dispatch can't enforce a global cap without blocking the submitter. Work-stealing pools don't support per-lane concurrency limits or two-tier priority. A tick loop naturally batches: collect candidates from all lanes → sort by priority → trim to pool cap → execute. The 100ms interval is fast enough for interactive feel while avoiding busy-spin overhead.
+
+---
+
 ## Checkpoint-Based Delta Scanning over Full Scans
 
 **Choice**: Skills that analyze the repo (like `/document`) use checkpoint files to track last-processed commit and only scan new commits

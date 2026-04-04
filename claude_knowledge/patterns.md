@@ -106,6 +106,24 @@ Established code patterns, conventions, and reusable approaches in this project.
 
 ---
 
+### Operation Pool Submission Pattern
+
+**When to use**: Any Rust command that shells out to an external process (git, npm, cargo, curl) or performs I/O that could contend with concurrent operations
+**Implementation**: Get the pool from `OPERATION_POOL`, call `pool.submit(resource_key, tier, closure)`, `.await` the returned oneshot receiver. The closure runs on a blocking thread; the caller awaits the result.
+**Example**: `commands/git.rs`:
+```rust
+async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
+    let pool = crate::operation_pool::OPERATION_POOL.get()
+        .ok_or("Operation pool not initialized")?;
+    let key = format!("process/git/{}", repo_path);
+    let rx = pool.submit(key, Tier::User, move || { /* git command */ }).await;
+    rx.await.map_err(|_| "cancelled")?.map_err(|e| e)
+}
+```
+**Why**: Prevents resource saturation when multiple agents or UI actions hit the same resource. Tier determines scheduling priority (User > Subagent). The pool handles concurrency limits, backpressure, and adaptive sizing automatically.
+
+---
+
 ### Shared DB Accessor Pattern
 
 **When to use**: Any Rust module that needs the logging/chat history SQLite database

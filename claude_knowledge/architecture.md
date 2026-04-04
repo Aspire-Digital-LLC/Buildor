@@ -264,6 +264,44 @@ Your task:
 - Name-based deps scoped to parent — prevents cross-session collisions
 - Failed deps abandon pending spawns — no infinite waits
 
+## Operation Pool (App-Global Scheduler)
+
+Buildor routes all external-resource operations (git CLI, process spawns, shell commands, Claude sessions) through a single adaptive operation pool. This prevents resource saturation when multiple agents or UI actions hit the same resource concurrently.
+
+```
+Caller (git command, shell exec, agent spawn, etc.)
+  → submit(resource_key, tier, operation) → oneshot::Receiver
+  → Pool tick loop (100ms interval):
+      Phase 1: drain completions → age queued ops → select candidates per lane → cross-lane pool cap
+      Phase 2: spawn_blocking each selected op → await with timeout → record success/failure
+  → Lane concurrency adapts (TCP slow start: +1 after N successes, halve on failure)
+  → Pool size adapts similarly (global thread cap)
+  → Limits persisted to pool_limits.json every 600 ticks (~60s)
+```
+
+**Resource keys** group operations into lanes. Derived automatically from tool name + context:
+- `process/git/{cwd}` — git operations scoped by repo
+- `process/npm/{cwd}`, `process/cargo/{cwd}` — package managers by project
+- `api/{host}` — HTTP calls by domain (curl/wget/WebFetch)
+- `fs/{parent_dir}` — file operations by directory
+- `tool/{name}` — fallback for unknown tools
+
+**Two-tier scheduling**: Tier 1 (User) base priority 100, Tier 2 (Subagent) base priority 0. Age cap prevents Tier 2 from ever exceeding Tier 1 priority. Within a lane, Tier 1 queue drains before Tier 2.
+
+**Adaptive concurrency** (both pool-global and per-lane):
+- Starts at `num_cpus/2` (pool) or 1 (lane)
+- After `probe_threshold` (5) consecutive successes → increment by 1
+- On any failure → halve (minimum 1)
+- `max_seen_healthy` persisted and restored on restart (capped at `absolute_max`)
+
+**Shutdown protocol**: persist limits → set shutdown flag → drop all Tier 2 queued ops → execute remaining Tier 1 inline (with panic recovery) → poll active ops for 10s → clear all lanes.
+
+**Panic recovery**: `tick_phase1` wrapped in `catch_unwind` — on panic, all lane `active_count` reset to 0. `tick_phase2` spawned as a task — panics caught via `JoinHandle`. Shutdown drain uses `catch_unwind` per-op.
+
+**Lock ordering** (deadlock prevention): lanes HashMap → individual lane → config → persisted → pool_size → completions. Never acquire a lower-numbered lock while holding a higher one.
+
+**Integration**: `run_git()`, `execute_shell_command()`, `spawn_agent()`, `generate_slug()`, `start_session()`, `create_worktree()` all submit through the pool. Callers await the oneshot receiver transparently.
+
 ## Agent Health Monitoring (Phase 6)
 
 ```

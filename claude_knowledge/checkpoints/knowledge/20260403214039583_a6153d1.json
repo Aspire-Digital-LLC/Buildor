@@ -1,0 +1,7 @@
+{
+  "commit": "a6153d1",
+  "date": "2026-04-04T02:40:39.583Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Operation pool implementation: architecture, codebase structure, decisions (parking_lot/tick-based), gotchas (lock ordering, panic recovery, persisted cap), patterns (pool submission), tech stack (3 new crates), project status (pool done, v0.0.5)"
+}

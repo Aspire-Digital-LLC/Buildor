@@ -15,23 +15,23 @@
     },
     {
       "file": "architecture.md",
-      "description": "System architecture, data flow, component relationships, design patterns, agent pool, health monitoring, shared skills sync",
-      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn"]
+      "description": "System architecture, data flow, component relationships, design patterns, agent pool, health monitoring, shared skills sync, operation pool",
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle"]
     },
     {
       "file": "decisions.md",
       "description": "Architecture and design decisions with rationale (why X over Y)",
-      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected", "checkpoint", "fork", "forked agent"]
+      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected", "checkpoint", "fork", "forked agent", "parking_lot", "priority-queue", "tick-based"]
     },
     {
       "file": "gotchas.md",
       "description": "Surprising behaviors, bugs encountered, and non-obvious pitfalls",
-      "keywords": ["gotcha", "bug", "surprising", "pitfall", "workaround", "issue", "broken", "unexpected"]
+      "keywords": ["gotcha", "bug", "surprising", "pitfall", "workaround", "issue", "broken", "unexpected", "lock ordering", "deadlock", "active_count", "panic recovery"]
     },
     {
       "file": "patterns.md",
       "description": "Established code patterns, conventions, and reusable approaches in this project",
-      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template", "checkpoint", "delta scan", "context-engine"]
+      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template", "checkpoint", "delta scan", "context-engine", "submit", "OPERATION_POOL", "pool submission"]
     },
     {
       "file": "local_learnings.md",
