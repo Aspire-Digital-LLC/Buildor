@@ -53,6 +53,10 @@ pub struct ChatMessageRecord {
     pub duration_ms: Option<i64>,
     pub is_result: bool,
     pub created_at: String,
+    /// If this message originated from an agent, the agent's session ID (enables hierarchy: 1 -> 1.1 -> 1.1.1)
+    pub source_agent_id: Option<String>,
+    /// Human-readable name of the source agent (e.g. "researcher", "code-reviewer")
+    pub agent_name: Option<String>,
 }
 
 pub struct LogDb {
@@ -139,6 +143,9 @@ impl LogDb {
         // Migration: add agent/skill columns to chat_sessions for existing installs
         Self::migrate_chat_sessions_agent_columns(&conn)?;
 
+        // Migration: add agent hierarchy columns to chat_messages
+        Self::migrate_chat_messages_agent_columns(&conn)?;
+
         // Cull logs older than 30 days on startup
         let _ = conn.execute(
             "DELETE FROM logs WHERE timestamp < datetime('now', '-30 days')",
@@ -176,6 +183,21 @@ impl LogDb {
                 conn.execute(stmt, [])
                     .map_err(|e| format!("Migration failed ({}): {}", stmt, e))?;
             }
+        }
+
+        Ok(())
+    }
+
+    fn migrate_chat_messages_agent_columns(conn: &Connection) -> Result<(), String> {
+        let has_source_agent = conn
+            .prepare("SELECT source_agent_id FROM chat_messages LIMIT 0")
+            .is_ok();
+
+        if !has_source_agent {
+            conn.execute("ALTER TABLE chat_messages ADD COLUMN source_agent_id TEXT", [])
+                .map_err(|e| format!("Migration failed (source_agent_id): {}", e))?;
+            conn.execute("ALTER TABLE chat_messages ADD COLUMN agent_name TEXT", [])
+                .map_err(|e| format!("Migration failed (agent_name): {}", e))?;
         }
 
         Ok(())
@@ -331,8 +353,8 @@ impl LogDb {
     pub fn insert_chat_message(&self, msg: &ChatMessageRecord) -> Result<i64, String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
         conn.execute(
-            "INSERT INTO chat_messages (session_id, seq, role, content_json, model, cost_usd, duration_ms, is_result, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO chat_messages (session_id, seq, role, content_json, model, cost_usd, duration_ms, is_result, created_at, source_agent_id, agent_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 msg.session_id,
                 msg.seq,
@@ -343,6 +365,8 @@ impl LogDb {
                 msg.duration_ms,
                 msg.is_result as i32,
                 msg.created_at,
+                msg.source_agent_id,
+                msg.agent_name,
             ],
         ).map_err(|e| format!("Failed to insert chat message: {}", e))?;
 
@@ -396,7 +420,7 @@ impl LogDb {
     ) -> Result<Vec<ChatMessageRecord>, String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
         let mut stmt = conn.prepare(
-            "SELECT id, session_id, seq, role, content_json, model, cost_usd, duration_ms, is_result, created_at
+            "SELECT id, session_id, seq, role, content_json, model, cost_usd, duration_ms, is_result, created_at, source_agent_id, agent_name
              FROM chat_messages WHERE session_id = ?1 ORDER BY seq ASC LIMIT ?2 OFFSET ?3"
         ).map_err(|e| format!("Query error: {}", e))?;
 
@@ -412,6 +436,8 @@ impl LogDb {
                 duration_ms: row.get(7)?,
                 is_result: row.get::<_, i32>(8)? != 0,
                 created_at: row.get(9)?,
+                source_agent_id: row.get(10)?,
+                agent_name: row.get(11)?,
             })
         }).map_err(|e| format!("Query error: {}", e))?;
 

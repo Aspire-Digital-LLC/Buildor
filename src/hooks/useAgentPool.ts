@@ -80,6 +80,8 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
   const agentListenersRef = useRef<Map<string, () => void>>(new Map());
   const agentSeqRef = useRef<Map<string, number>>(new Map()); // message sequence counters
   const agentDraftTimerRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map()); // debounce timers
+  // Track agent metadata for dual-writing to root parent session
+  const agentMetaRef = useRef<Map<string, { rootSessionId: string; agentName: string }>>(new Map());
 
   // Initial load from backend
   useEffect(() => {
@@ -98,6 +100,7 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
       }
       agentListenersRef.current.clear();
       agentOutputRef.current.clear();
+      agentMetaRef.current.clear();
     };
   }, []);
 
@@ -119,6 +122,16 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
       if (agentSid) {
         agentOutputRef.current.set(agentSid, '');
         agentSeqRef.current.set(agentSid, 0);
+
+        // Resolve root parent session (walk up the agent chain)
+        // event.sessionId is the direct parent — which may itself be an agent
+        const directParent = event.sessionId || null;
+        const agentName = data.name || 'agent';
+        if (directParent) {
+          const parentMeta = agentMetaRef.current.get(directParent);
+          const rootSessionId = parentMeta ? parentMeta.rootSessionId : directParent;
+          agentMetaRef.current.set(agentSid, { rootSessionId, agentName });
+        }
 
         // Create a chat session record for this agent (enables transcript viewer)
         createChatSession(
@@ -234,7 +247,7 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
             // Still call parseStreamEvent for event emission + output accumulation
             const parsed = parseStreamEvent(evt.payload, agentSid);
             if (parsed) {
-              // Persist to SQLite for transcript viewer
+              // Persist to SQLite for transcript viewer (agent's own session)
               const seq = (agentSeqRef.current.get(agentSid) || 0) + 1;
               agentSeqRef.current.set(agentSid, seq);
               saveChatMessage(
@@ -242,6 +255,23 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
                 JSON.stringify(parsed.content),
                 parsed.model || null,
               ).catch(() => {});
+
+              // Dual-write to root parent session with hierarchy metadata
+              // Uses Date.now() as seq — always higher than parent's sequential ints (1,2,3...)
+              // so agent messages interleave correctly by temporal order
+              const meta = agentMetaRef.current.get(agentSid);
+              if (meta) {
+                saveChatMessage(
+                  meta.rootSessionId, Date.now(), parsed.role,
+                  JSON.stringify(parsed.content),
+                  parsed.model || null,
+                  null, // costUsd
+                  null, // durationMs
+                  false, // isResult
+                  agentSid, // sourceAgentId — enables hierarchy reconstruction
+                  meta.agentName, // agentName
+                ).catch(() => {});
+              }
 
               // Accumulate text output for mailbox
               if (parsed.role === 'assistant') {

@@ -30,6 +30,10 @@ export interface ChatMessageRecord {
   durationMs: number | null;
   isResult: boolean;
   createdAt: string;
+  /** Agent session ID if this message originated from a sub-agent (hierarchy: 1 -> 1.1 -> 1.1.1) */
+  sourceAgentId: string | null;
+  /** Human-readable name of the source agent */
+  agentName: string | null;
 }
 
 export async function createChatSession(
@@ -71,6 +75,8 @@ export async function saveChatMessage(
   costUsd?: number | null,
   durationMs?: number | null,
   isResult?: boolean,
+  sourceAgentId?: string | null,
+  agentName?: string | null,
 ): Promise<number> {
   return invoke('save_chat_message', {
     sessionId,
@@ -81,6 +87,8 @@ export async function saveChatMessage(
     costUsd: costUsd || null,
     durationMs: durationMs || null,
     isResult: isResult || null,
+    sourceAgentId: sourceAgentId || null,
+    agentName: agentName || null,
   });
 }
 

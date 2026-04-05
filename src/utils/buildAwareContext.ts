@@ -45,6 +45,11 @@ function formatMessageForContext(msg: ChatMessageRecord): string | null {
     parts.push(msg.contentJson);
   }
   if (parts.length === 0) return null;
+
+  // Prefix with agent hierarchy label if this message came from a sub-agent
+  if (msg.sourceAgentId && msg.agentName) {
+    return `[Agent: ${msg.agentName}] ${role}: ${parts.join('\n')}`;
+  }
   return `${role}: ${parts.join('\n')}`;
 }
 

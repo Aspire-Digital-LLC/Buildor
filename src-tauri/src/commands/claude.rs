@@ -220,15 +220,60 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
     let sid_out = sid.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        let event_name = format!("claude-output-{}", sid_out);
+        let mut slow_emit_count: u64 = 0;
+        let mut total_emit_ms: u64 = 0;
+        let mut line_count: u64 = 0;
         for line in reader.lines() {
             match line {
                 Ok(text) => {
                     if !text.trim().is_empty() {
-                        let _ = app_handle.emit(&format!("claude-output-{}", sid_out), &text);
+                        let t0 = std::time::Instant::now();
+                        let _ = app_handle.emit(&event_name, &text);
+                        let elapsed_ms = t0.elapsed().as_millis() as u64;
+                        line_count += 1;
+                        total_emit_ms += elapsed_ms;
+                        if elapsed_ms > 50 {
+                            slow_emit_count += 1;
+                            // Log slow emits to SQLite (queryable via /read-logs)
+                            if let Ok(db) = crate::logging::get_log_db() {
+                                let _ = db.insert(&crate::logging::db::LogEntry {
+                                    id: None,
+                                    session_id: Some(sid_out.clone()),
+                                    timestamp: chrono::Utc::now().to_rfc3339(),
+                                    end_timestamp: None,
+                                    duration_ms: Some(elapsed_ms as i64),
+                                    repo: None,
+                                    function_area: "claude-chat".to_string(),
+                                    level: "warn".to_string(),
+                                    operation: "stdout-emit-slow".to_string(),
+                                    message: format!("emit took {}ms (line #{}, slow #{})", elapsed_ms, line_count, slow_emit_count),
+                                    details: None,
+                                });
+                            }
+                        }
                     }
                 }
                 Err(_) => break,
             }
+        }
+        // Log session summary
+        if let Ok(db) = crate::logging::get_log_db() {
+            let _ = db.insert(&crate::logging::db::LogEntry {
+                id: None,
+                session_id: Some(sid_out.clone()),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                end_timestamp: None,
+                duration_ms: Some(total_emit_ms as i64),
+                repo: None,
+                function_area: "claude-chat".to_string(),
+                level: "info".to_string(),
+                operation: "stdout-emit-summary".to_string(),
+                message: format!("{} lines, {} slow emits (>50ms), total emit time: {}ms, avg: {:.1}ms",
+                    line_count, slow_emit_count, total_emit_ms,
+                    if line_count > 0 { total_emit_ms as f64 / line_count as f64 } else { 0.0 }),
+                details: None,
+            });
         }
         let _ = app_handle.emit(&format!("claude-exit-{}", sid_out), "exited");
     });
@@ -557,15 +602,58 @@ pub fn start_agent_session_sync(
     let sid_out = sid.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        let event_name = format!("claude-output-{}", sid_out);
+        let mut slow_emit_count: u64 = 0;
+        let mut total_emit_ms: u64 = 0;
+        let mut line_count: u64 = 0;
         for line in reader.lines() {
             match line {
                 Ok(text) => {
                     if !text.trim().is_empty() {
-                        let _ = app_handle.emit(&format!("claude-output-{}", sid_out), &text);
+                        let t0 = std::time::Instant::now();
+                        let _ = app_handle.emit(&event_name, &text);
+                        let elapsed_ms = t0.elapsed().as_millis() as u64;
+                        line_count += 1;
+                        total_emit_ms += elapsed_ms;
+                        if elapsed_ms > 50 {
+                            slow_emit_count += 1;
+                            if let Ok(db) = crate::logging::get_log_db() {
+                                let _ = db.insert(&crate::logging::db::LogEntry {
+                                    id: None,
+                                    session_id: Some(sid_out.clone()),
+                                    timestamp: chrono::Utc::now().to_rfc3339(),
+                                    end_timestamp: None,
+                                    duration_ms: Some(elapsed_ms as i64),
+                                    repo: None,
+                                    function_area: "claude-chat".to_string(),
+                                    level: "warn".to_string(),
+                                    operation: "agent-stdout-emit-slow".to_string(),
+                                    message: format!("emit took {}ms (line #{}, slow #{})", elapsed_ms, line_count, slow_emit_count),
+                                    details: None,
+                                });
+                            }
+                        }
                     }
                 }
                 Err(_) => break,
             }
+        }
+        if let Ok(db) = crate::logging::get_log_db() {
+            let _ = db.insert(&crate::logging::db::LogEntry {
+                id: None,
+                session_id: Some(sid_out.clone()),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                end_timestamp: None,
+                duration_ms: Some(total_emit_ms as i64),
+                repo: None,
+                function_area: "claude-chat".to_string(),
+                level: "info".to_string(),
+                operation: "agent-stdout-emit-summary".to_string(),
+                message: format!("{} lines, {} slow emits (>50ms), total emit time: {}ms, avg: {:.1}ms",
+                    line_count, slow_emit_count, total_emit_ms,
+                    if line_count > 0 { total_emit_ms as f64 / line_count as f64 } else { 0.0 }),
+                details: None,
+            });
         }
         let _ = app_handle.emit(&format!("claude-exit-{}", sid_out), "exited");
     });

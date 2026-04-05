@@ -53,6 +53,8 @@ pub async fn save_chat_message(
     cost_usd: Option<f64>,
     duration_ms: Option<i64>,
     is_result: Option<bool>,
+    source_agent_id: Option<String>,
+    agent_name: Option<String>,
 ) -> Result<i64, String> {
     let db = get_log_db()?;
     let now = chrono::Utc::now().to_rfc3339();
@@ -67,6 +69,8 @@ pub async fn save_chat_message(
         duration_ms,
         is_result: is_result.unwrap_or(false),
         created_at: now,
+        source_agent_id,
+        agent_name,
     };
     db.insert_chat_message(&msg)
 }
