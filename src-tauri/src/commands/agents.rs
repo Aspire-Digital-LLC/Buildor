@@ -390,7 +390,7 @@ pub async fn check_agent_alive(session_id: String) -> Result<bool, String> {
             // Check if process exists — platform-specific
             #[cfg(target_os = "windows")]
             {
-                let output = std::process::Command::new("tasklist")
+                let output = crate::no_window_command("tasklist")
                     .args(["/FI", &format!("PID eq {}", pid), "/NH"])
                     .output();
                 match output {

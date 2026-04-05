@@ -30,6 +30,7 @@ import type { ProjectSkill } from '@/types/skill';
 import { useAgentPool } from '@/hooks/useAgentPool';
 import { purgeResults } from '@/utils/commands/mailbox';
 import { clearAgentsForParent } from '@/utils/commands/agents';
+import { cleanupAgentSessions } from '@/utils/commands/chatHistory';
 import { AgentStatusCard } from './AgentStatusCard';
 import { AgentsPanel } from './AgentsPanel';
 // AgentOutputBlock is rendered via ChatMessage for system-event messages
@@ -88,7 +89,7 @@ export function ClaudeChat() {
   const { images, addImageFromFile, removeImage, clearImages, getAttachments, hasImages } = useImageAttachments(sessionId || undefined);
   const [awareSessions, setAwareSessions] = useState<Set<string>>(new Set());
   const skills = useSkills({ repoPath, projectName: projectName || undefined });
-  const agentPool = useAgentPool();
+  const agentPool = useAgentPool(sessionId);
   const branchLabel = isBuildorChat ? '' : (browseBranch || activeProject?.currentBranch || 'main');
   const { startSession: startChatSession, endSession: endChatSession, saveMessage, saveUserMessage, saveSystemEvent } = useChatHistory({
     projectName: projectName || '',
@@ -164,9 +165,10 @@ export function ClaudeChat() {
     const unlistenExit = listen<string>(`claude-exit-${sessionId}`, () => {
       setMessages((prev) => [...prev, { role: 'system', content: [{ type: 'text', text: '--- Session ended ---' }] }]);
       endChatSession();
-      // Clean up agents for this parent session (pool + mailbox)
+      // Clean up agents for this parent session (pool + mailbox + chat history)
       purgeResults(sessionId!).catch(() => {});
       clearAgentsForParent(sessionId!).catch(() => {});
+      cleanupAgentSessions(sessionId!).catch(() => {});
       setSessionId(null);
       setIsSending(false);
     });
@@ -458,7 +460,13 @@ export function ClaudeChat() {
     }
     if (command === '/clear') {
       endChatSession();
-      if (sessionId) await stopSession(sessionId);
+      if (sessionId) {
+        await stopSession(sessionId);
+        // Clean up agent data from this session
+        purgeResults(sessionId).catch(() => {});
+        clearAgentsForParent(sessionId).catch(() => {});
+        cleanupAgentSessions(sessionId).catch(() => {});
+      }
       setMessages([]);
       setSessionId(null);
       setIsSending(false);

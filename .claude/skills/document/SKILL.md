@@ -32,6 +32,19 @@ Buildor's knowledge base lives in `claude_knowledge/`:
 
 ## Methodology
 
+### 0. Commit Uncommitted Work
+
+Before scanning, ensure all work is captured in git history — the delta scan operates on commits, so uncommitted changes are invisible to it.
+
+1. Run `git status --short` to check for staged, unstaged, or untracked changes
+2. If there are changes:
+   - Stage all modified and new files relevant to the project (use `git add -A`)
+   - Create a commit with a message summarizing the work (use standard commit conventions for this repo)
+   - Do NOT push — just commit locally
+3. If there are no changes, skip to step 1
+
+This ensures the context engine's `git log base..HEAD` captures everything that was done in the session.
+
 ### 1. Get the Delta Range from Context Engine
 
 Before doing any analysis, determine what needs documenting:

@@ -229,6 +229,15 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
+## Three-Tier Priority over Two-Tier (App / User / Subagent)
+
+**Choice**: Three priority tiers — App (200), User (100), Subagent (0) — with App and User sharing the Tier 1 queue
+**Rejected**: Two-tier (User/Subagent) where all Buildor UI operations shared the User tier
+
+**Why**: `Tier::User` was originally used for both Buildor UI actions (git, shell, worktree) and Claude session operations. This conflated two semantically different callers. When the permission pipeline is implemented (routing Claude tool calls through the pool), User needs to mean "Claude's own tool calls" — not "the app's UI-driven operations." Adding `Tier::App` at base priority 200 ensures Buildor's own operations (git status, shell commands, session spawning) always preempt Claude tool calls, which in turn preempt sub-agent background work. The three tiers map cleanly to the caller hierarchy: Buildor app > primary Claude session > sub-agents.
+
+---
+
 ## Skills as Forked Agents over Inline Injection for Heavy Work
 
 **Choice**: `/document`, `/read-logs`, and other heavy skills use `context: "fork"` to run as separate agent processes

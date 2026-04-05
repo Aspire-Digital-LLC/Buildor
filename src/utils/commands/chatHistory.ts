@@ -133,3 +133,7 @@ export async function deleteChatHistoryForWorktree(worktreeSessionId: string): P
 export async function deleteChatHistoryForProject(projectName: string): Promise<void> {
   return invoke('delete_chat_history_for_project', { projectName });
 }
+
+export async function cleanupAgentSessions(parentSessionId: string): Promise<number> {
+  return invoke('cleanup_agent_sessions', { parentSessionId });
+}

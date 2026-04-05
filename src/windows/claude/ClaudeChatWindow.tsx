@@ -12,6 +12,7 @@ import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { buildSystemPrompt } from '@/utils/buildSystemPrompt';
 import { purgeResults } from '@/utils/commands/mailbox';
 import { clearAgentsForParent } from '@/utils/commands/agents';
+import { cleanupAgentSessions } from '@/utils/commands/chatHistory';
 import { logEvent } from '@/utils/commands/logging';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { ChatMessage, type ParsedMessage } from '@/components/claude-chat/ChatMessage';
@@ -148,6 +149,7 @@ export function ClaudeChatWindow() {
       endChatSession();
       purgeResults(sessionId!).catch(() => {});
       clearAgentsForParent(sessionId!).catch(() => {});
+      cleanupAgentSessions(sessionId!).catch(() => {});
       setSessionId(null);
       setIsSending(false);
     });

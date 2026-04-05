@@ -113,6 +113,7 @@ pub fn run() {
             commands::chat_history::delete_chat_session,
             commands::chat_history::delete_chat_history_for_worktree,
             commands::chat_history::delete_chat_history_for_project,
+            commands::chat_history::cleanup_agent_sessions,
             commands::account::open_login_window,
             commands::account::fetch_claude_usage,
             commands::account::has_claude_session,

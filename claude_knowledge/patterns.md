@@ -116,11 +116,11 @@ async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
     let pool = crate::operation_pool::OPERATION_POOL.get()
         .ok_or("Operation pool not initialized")?;
     let key = format!("process/git/{}", repo_path);
-    let rx = pool.submit(key, Tier::User, move || { /* git command */ }).await;
+    let rx = pool.submit(key, Tier::App, move || { /* git command */ }).await;
     rx.await.map_err(|_| "cancelled")?.map_err(|e| e)
 }
 ```
-**Why**: Prevents resource saturation when multiple agents or UI actions hit the same resource. Tier determines scheduling priority (User > Subagent). The pool handles concurrency limits, backpressure, and adaptive sizing automatically.
+**Why**: Prevents resource saturation when multiple agents or UI actions hit the same resource. Tier determines scheduling priority (App > User > Subagent). Use `Tier::App` for Buildor UI-driven operations, `Tier::User` for Claude tool calls (future permission pipeline), `Tier::Subagent` for background/sub-agent work. The pool handles concurrency limits, backpressure, and adaptive sizing automatically.
 
 ---
 

@@ -70,7 +70,7 @@ function healthIcon(state: AgentHealthState): string {
 export { healthIcon };
 
 
-export function useAgentPool(): UseAgentPoolResult {
+export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResult {
   const [pool, setPool] = useState<Map<string, AgentPoolEntry>>(new Map());
   const [statusLines, setStatusLines] = useState<Map<string, string>>(new Map());
   const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
@@ -470,10 +470,9 @@ export function useAgentPool(): UseAgentPoolResult {
     };
   }, []);
 
-  // Build hierarchical agent list
+  // Build hierarchical agent list, scoped to parentSessionId
   const { agents, completedAgents, activeCount } = useMemo(() => {
     const entries = Array.from(pool.values());
-    const topLevel: AgentPoolAgent[] = [];
 
     // First pass: create AgentPoolAgent objects
     const agentMap = new Map<string, AgentPoolAgent>();
@@ -491,20 +490,47 @@ export function useAgentPool(): UseAgentPoolResult {
       if (agent.parentSessionId && agentMap.has(agent.parentSessionId)) {
         const parent = agentMap.get(agent.parentSessionId)!;
         parent.children.push(agent);
+      }
+    }
+
+    // Collect top-level agents scoped to this session
+    // If parentSessionId is provided, only show agents whose parentSessionId matches
+    // (direct children of this session). Sub-agents appear as children of those.
+    // If no parentSessionId, show all top-level agents (backward compat).
+    const topLevel: AgentPoolAgent[] = [];
+    for (const agent of agentMap.values()) {
+      if (parentSessionId) {
+        // Show agents directly spawned by this session (top-level for this view)
+        if (agent.parentSessionId === parentSessionId) {
+          topLevel.push(agent);
+        }
       } else {
-        topLevel.push(agent);
+        // No session filter — show agents without a parent in the pool
+        if (!agent.parentSessionId || !agentMap.has(agent.parentSessionId)) {
+          topLevel.push(agent);
+        }
       }
     }
 
     const active = topLevel.filter((a) => a.status === 'running');
     const completed = topLevel.filter((a) => a.status !== 'running');
 
+    // Count all running agents in the scoped tree (including sub-agents)
+    function countRunning(list: AgentPoolAgent[]): number {
+      let n = 0;
+      for (const a of list) {
+        if (a.status === 'running') n++;
+        n += countRunning(a.children);
+      }
+      return n;
+    }
+
     return {
       agents: active,
       completedAgents: completed,
-      activeCount: entries.filter((a) => a.status === 'running').length,
+      activeCount: countRunning(topLevel),
     };
-  }, [pool, statusLines]);
+  }, [pool, statusLines, parentSessionId]);
 
   const getAgentMessages = useCallback(async (sessionId: string): Promise<ChatMessageRecord[]> => {
     return getChatMessages(sessionId);

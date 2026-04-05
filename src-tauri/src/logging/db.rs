@@ -365,13 +365,13 @@ impl LogDb {
         let (sql, param_values): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(wt_id) = worktree_session_id {
             (
                 "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
-                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id = ?2 ORDER BY started_at DESC".to_string(),
+                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id = ?2 AND (session_type IS NULL OR session_type != 'agent') ORDER BY started_at DESC".to_string(),
                 vec![Box::new(project_name.to_string()), Box::new(wt_id.to_string())],
             )
         } else {
             (
                 "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
-                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id IS NULL ORDER BY started_at DESC".to_string(),
+                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id IS NULL AND (session_type IS NULL OR session_type != 'agent') ORDER BY started_at DESC".to_string(),
                 vec![Box::new(project_name.to_string())],
             )
         };
@@ -510,5 +510,44 @@ impl LogDb {
             params![project_name],
         ).map_err(|e| format!("Failed to delete project chat sessions: {}", e))?;
         Ok(())
+    }
+
+    /// Delete all agent chat sessions (and their messages via CASCADE) whose parent_session_id matches.
+    pub fn delete_agent_sessions_by_parent(&self, parent_session_id: &str) -> Result<u32, String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let count = conn.execute(
+            "DELETE FROM chat_sessions WHERE parent_session_id = ?1 AND session_type = 'agent'",
+            params![parent_session_id],
+        ).map_err(|e| format!("Failed to delete agent chat sessions: {}", e))?;
+        Ok(count as u32)
+    }
+
+    /// Get IDs of all agent sessions under a parent (for image cleanup).
+    pub fn get_agent_session_ids_by_parent(&self, parent_session_id: &str) -> Result<Vec<String>, String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let mut stmt = conn.prepare(
+            "SELECT id FROM chat_sessions WHERE parent_session_id = ?1 AND session_type = 'agent'"
+        ).map_err(|e| format!("Query error: {}", e))?;
+        let ids = stmt.query_map(params![parent_session_id], |row| row.get(0))
+            .map_err(|e| format!("Query error: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(ids)
+    }
+
+    /// Query agent sessions under a parent (for transcript tree view in agents panel).
+    pub fn query_agent_sessions_by_parent(&self, parent_session_id: &str) -> Result<Vec<ChatSession>, String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let mut stmt = conn.prepare(
+            "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
+             FROM chat_sessions WHERE parent_session_id = ?1 AND session_type = 'agent' ORDER BY started_at ASC"
+        ).map_err(|e| format!("Query error: {}", e))?;
+        let rows = stmt.query_map(params![parent_session_id], Self::row_to_chat_session)
+            .map_err(|e| format!("Query error: {}", e))?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row.map_err(|e| format!("Row error: {}", e))?);
+        }
+        Ok(sessions)
     }
 }

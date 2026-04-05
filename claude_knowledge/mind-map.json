@@ -21,7 +21,7 @@
     {
       "file": "decisions.md",
       "description": "Architecture and design decisions with rationale (why X over Y)",
-      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected", "checkpoint", "fork", "forked agent", "parking_lot", "priority-queue", "tick-based"]
+      "keywords": ["decision", "why", "rationale", "tradeoff", "choice", "alternative", "rejected", "checkpoint", "fork", "forked agent", "parking_lot", "priority-queue", "tick-based", "three-tier", "App tier", "User tier", "Subagent tier"]
     },
     {
       "file": "gotchas.md",
@@ -65,8 +65,13 @@
     },
     {
       "file": "operation_pool_spec.md",
-      "description": "Design specification for the app-global self-tuning operation scheduler — resource lanes, adaptive concurrency (TCP slow start), two-tier scheduling, permission pipeline integration",
+      "description": "Design specification for the app-global self-tuning operation scheduler — resource lanes, adaptive concurrency (TCP slow start), three-tier scheduling, permission pipeline integration",
       "keywords": ["operation pool", "scheduler", "concurrency", "resource key", "lane", "adaptive", "slow start", "tier", "throttle", "rate limit", "process spawn", "pool_limits.json", "pool_config.json", "ResourceKeyed", "PendingOp"]
+    },
+    {
+      "file": "operation_pool_dev_retrospective.md",
+      "description": "Retrospective from first multi-agent orchestrated development cycle — lessons on phased pipelines, review loops, sub-agent spawning, marker syntax, and recommended flow templates",
+      "keywords": ["retrospective", "multi-agent", "orchestration", "review loop", "adversarial review", "sub-agent", "marker", "flow template", "pipeline", "phased", "lessons learned"]
     }
   ]
 }

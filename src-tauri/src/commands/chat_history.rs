@@ -209,6 +209,19 @@ pub async fn delete_chat_history_for_project(project_name: String) -> Result<(),
     db.delete_sessions_by_project(&project_name)
 }
 
+/// Delete all agent chat sessions (and messages) under a parent session.
+/// Also cleans up associated images.
+#[tauri::command]
+pub async fn cleanup_agent_sessions(parent_session_id: String) -> Result<u32, String> {
+    let db = get_log_db()?;
+    // Get agent session IDs first for image cleanup
+    let agent_ids = db.get_agent_session_ids_by_parent(&parent_session_id)?;
+    if !agent_ids.is_empty() {
+        super::chat_images::delete_images_for_sessions(&agent_ids);
+    }
+    db.delete_agent_sessions_by_parent(&parent_session_id)
+}
+
 // --- Helper functions ---
 
 fn extract_text_from_content(content_json: &str) -> String {

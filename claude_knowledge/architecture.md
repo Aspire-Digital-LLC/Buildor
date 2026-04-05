@@ -286,7 +286,7 @@ Caller (git command, shell exec, agent spawn, etc.)
 - `fs/{parent_dir}` — file operations by directory
 - `tool/{name}` — fallback for unknown tools
 
-**Two-tier scheduling**: Tier 1 (User) base priority 100, Tier 2 (Subagent) base priority 0. Age cap prevents Tier 2 from ever exceeding Tier 1 priority. Within a lane, Tier 1 queue drains before Tier 2.
+**Three-tier scheduling**: Tier App (base 200) for Buildor UI-driven operations (git, shell, worktree management), Tier User (base 100) reserved for primary Claude session tool calls via the future permission pipeline, Tier Subagent (base 0) for sub-agent and background operations. App and User share the Tier 1 queue; Subagent uses the Tier 2 queue. Age cap prevents Tier 2 from ever exceeding Tier 1 priority. Within a lane, Tier 1 queue drains before Tier 2.
 
 **Adaptive concurrency** (both pool-global and per-lane):
 - Starts at `num_cpus/2` (pool) or 1 (lane)
@@ -300,7 +300,12 @@ Caller (git command, shell exec, agent spawn, etc.)
 
 **Lock ordering** (deadlock prevention): lanes HashMap → individual lane → config → persisted → pool_size → completions. Never acquire a lower-numbered lock while holding a higher one.
 
-**Integration**: `run_git()`, `execute_shell_command()`, `spawn_agent()`, `generate_slug()`, `start_session()`, `create_worktree()` all submit through the pool. Callers await the oneshot receiver transparently.
+**Integration**: `run_git()`, `execute_shell_command()`, `spawn_agent()`, `generate_slug()`, `start_session()`, `create_worktree()`, `setup_worktree_deps()` (pnpm/npm install) all submit through the pool. Callers await the oneshot receiver transparently.
+
+**Tier assignments**:
+- `Tier::App` — `run_git()`, `execute_shell_command()`, `start_session()`, `create_worktree()` (Buildor UI actions)
+- `Tier::User` — reserved for Claude tool calls routed through the future permission pipeline
+- `Tier::Subagent` — `spawn_agent()`, `setup_worktree_deps()` (pnpm/npm install), background work
 
 ## Agent Health Monitoring (Phase 6)
 
