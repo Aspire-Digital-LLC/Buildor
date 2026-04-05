@@ -361,7 +361,13 @@ Agents CAN spawn sub-agents via the marker protocol (`-<*{...}*>-`). The pool is
 Each agent gets a SQLite `chat_session` record on spawn. Parsed messages are saved to `chat_messages` via `saveChatMessage`. The "View transcript" action in `AgentsPanel` reads from the DB.
 
 ### Pool Cleanup
-`clear_agents_for_parent` Rust command removes all pool entries for a parent session. Called when the main chat session exits (both in-app and breakout windows) to prevent stale agents appearing in subsequent sessions.
+`clear_agents_for_parent` Rust command removes all pool entries for a parent session. `cleanup_agent_sessions` deletes all agent `chat_session` + `chat_messages` DB records (and associated images) for a parent. Both are called when the main chat session exits or `/clear` is used (in-app and breakout windows). This prevents stale agents appearing in subsequent sessions and avoids orphaned DB records.
+
+### Agent Pool Scoping
+`useAgentPool(parentSessionId)` accepts an optional session ID to filter the agent tree. When provided, only agents whose `parentSessionId` matches are shown as top-level entries (sub-agents appear as children of those). This ensures each chat window only displays its own agents. Without a session ID, all top-level agents are shown (backward compat).
+
+### Agent Sessions Hidden from Chat History
+Agent sessions (`session_type = 'agent'`) are excluded from `get_chat_sessions_for_project` SQL queries so they don't appear in the History sidebar. They remain queryable via `query_agent_sessions_by_parent` for the agent transcript tree view in AgentsPanel.
 
 ## Agent UI (Phase 7)
 
@@ -380,7 +386,7 @@ Each agent gets a SQLite `chat_session` record on spawn. Parsed messages are sav
 └──────────────────────────────────────────┘
 ```
 
-- `useAgentPool` hook: subscribes to agent-spawned/completed/failed/health-changed/permission events, maintains live Map<string, AgentPoolEntry>
+- `useAgentPool(parentSessionId?)` hook: subscribes to agent-spawned/completed/failed/health-changed/permission events, maintains live Map<string, AgentPoolEntry>, scoped to parent session when ID provided
 - `AgentStatusCard`: one row per top-level agent with status icon + name + truncated status line, accordion for children (max 2 levels)
 - `AgentsPanel`: third right-side panel (28px collapsed / 250px expanded), active agents list + completed section, transcript viewer reuses ChatMessage component
 - `AgentOutputBlock`: distinct visual treatment in chat stream (header badge, collapsible)

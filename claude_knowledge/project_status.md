@@ -58,7 +58,10 @@
 - [x] **Agent permission routing fix**: `agentSessionId` field on permission blocks ensures responses go to the correct agent subprocess
 - [x] **Mailbox draft streaming**: Incremental output written every 10s so parent can read partial work if agent crashes
 - [x] **Agent transcript persistence**: SQLite `chat_session` + `chat_messages` per agent, viewable in AgentsPanel
-- [x] **Agent pool cleanup**: `clear_agents_for_parent` removes stale entries on session exit
+- [x] **Agent pool cleanup**: `clear_agents_for_parent` removes stale pool entries, `cleanup_agent_sessions` deletes agent DB records + images on session exit or `/clear`
+- [x] **Agent pool scoping**: `useAgentPool(parentSessionId)` filters agents per chat window — each window only shows its own agents
+- [x] **Agent sessions hidden from history**: SQL filter excludes `session_type='agent'` from chat history sidebar; agents remain queryable via dedicated `query_agent_sessions_by_parent`
+- [x] **check_agent_alive Windows fix**: Uses `no_window_command("tasklist")` to prevent console window flash on Windows
 - [x] **False distress fixes**: Emit `message-received` for `content_block_delta` events in raw JSON parser; text output recovers from any unhealthy state
 - [x] **Auto-dismiss task tracker**: Completed task list clears on next Claude `message-received` event
 - [x] **Skills infrastructure**: context-engine (checkpoint manager for delta scans), skill-builder (scaffold new skills from prompts), skills moved from `documentor/` to `.claude/skills/`

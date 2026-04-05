@@ -16,7 +16,7 @@
     {
       "file": "architecture.md",
       "description": "System architecture, data flow, component relationships, design patterns, agent pool, health monitoring, shared skills sync, operation pool",
-      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle"]
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent"]
     },
     {
       "file": "decisions.md",

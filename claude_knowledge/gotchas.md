@@ -199,6 +199,15 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Windows Console Flash from std::process::Command
+
+**Context**: `check_agent_alive` used `std::process::Command::new("tasklist")` to check if an agent PID is alive.
+**Surprise**: On Windows, `std::process::Command` spawns a visible console window briefly for each invocation. Since health checks run frequently, this causes rapid console window flashing visible to the user.
+**Impact**: Distracting UI flicker on Windows every time agent health is polled.
+**Workaround**: Use `crate::no_window_command("tasklist")` (Buildor's wrapper that sets `CREATE_NO_WINDOW` on Windows) instead of `std::process::Command::new()` for all subprocess spawns that don't need a visible console.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.
