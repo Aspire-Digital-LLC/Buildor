@@ -483,19 +483,59 @@ Three-panel visual editor for creating and editing Buildor skills:
 - **Scope**: Skills have `general` or `project` scope, filtered in the skills palette
 - **Store**: `skillBuilderStore.ts` (Zustand) tracks editor state, original state for dirty detection, new vs edit mode
 
-## SDK Service (Phase 1 — Node.js Agent SDK Sidecar)
+## SDK Service (Node.js Agent SDK Sidecar — Phase 2 Complete)
 
-Standalone Node.js HTTP server that wraps the Claude Agent SDK, designed to replace raw CLI spawning from Rust. Solves CMD window flashing, stdout backpressure, and permission IPC overhead.
+Node.js HTTP/SSE sidecar wrapping the Claude Agent SDK. All Claude session management now routes through this service — no raw CLI spawning remains in Rust.
 
 ```
-Buildor (Tauri)  ──HTTP/SSE──►  SDK Service (localhost:PORT)  ──SDK──►  Claude Code
+Buildor (Tauri/Rust)
+  │
+  ├── sdk_sidecar.rs  ── spawns/monitors ──►  SDK Service (Node.js, localhost:3456)
+  │                                              │
+  ├── sdk_client.rs   ── HTTP requests ────────►│── POST /sessions (create)
+  │                                              │── POST /sessions/:id/message
+  │                                              │── POST /sessions/:id/permission
+  │                                              │── POST /sessions/:id/interrupt
+  │                                              │── POST /sessions/:id/model
+  │                                              │── DELETE /sessions/:id
+  │                                              │── GET /sessions (list)
+  │                                              │── GET /health
+  │                                              │
+  └── sdk_sse.rs      ── SSE stream ───────────►│── GET /sessions/:id/stream
+        │                                              │
+        └── emits claude-output-{id} ──►  Frontend     └──► Claude Code (Agent SDK)
+             emits claude-exit-{id}
 ```
 
-- **Endpoints**: POST/GET/DELETE `/sessions`, GET `/sessions/:id/stream` (SSE), POST `/sessions/:id/message`, POST `/sessions/:id/permission`, POST `/sessions/:id/interrupt`, POST `/sessions/:id/model`, GET `/health`
-- **SSE format**: Raw NDJSON matching Claude CLI output — enables zero frontend changes when Rust proxies in Phase 2
-- **Permission hooks**: `PreToolUse` hooks in-process, permission gate exposed via REST for Buildor's pool integration
-- **Status**: Phase 1 complete (standalone server + smoke tests). Phase 2 (Rust integration, sidecar lifecycle management) not yet started
-- **Location**: `src-tauri/sdk-service/`
+### Sidecar Lifecycle (`sdk_sidecar.rs`)
+- Started in `setup()` via `start_sidecar()`, stopped on app exit via `stop_sidecar()`
+- Health loop (`start_health_loop`) polls `/health` every 5s; after 3 consecutive failures, auto-restarts and emits `sdk-sidecar-restarted` event
+- Port configurable via `BUILDOR_SDK_PORT` env var (default: 3456)
+
+### HTTP Client (`sdk_client.rs`)
+- Static `OnceLock<reqwest::Client>` with 30s timeout
+- Functions mirror SDK service endpoints 1:1: `create_session`, `send_message`, `send_message_with_images`, `send_permission`, `interrupt`, `set_model`, `delete_session`, `list_sessions`, `health_check`
+
+### SSE Bridge (`sdk_sse.rs`)
+- `connect_sse_bridge(app, sdk_session_id, tauri_session_id)` spawns a tokio task
+- Reads SSE frames, maps `claude-output` events to `claude-output-{tauriSessionId}` Tauri events
+- On `claude-exit` SSE event or stream end, emits `claude-exit-{tauriSessionId}`
+- Perf instrumentation: logs slow emits (>50ms) and per-session summary (line count, slow count, avg emit time)
+
+### What Changed from Phase 1 to Phase 2
+- `claude.rs`: 11 functions replaced — all now call `sdk_client` HTTP endpoints instead of spawning CLI processes
+- `agents.rs`: `spawn_agent` uses `sdk_client::create_session` + `connect_sse_bridge` instead of direct CLI
+- `lib.rs`: Sidecar startup in `setup()`, shutdown on window close
+- Frontend: **zero changes** — same Tauri commands, same event names, same payloads
+
+### Code Review Issues Found and Fixed During Phase 2
+1. SSE bridge used `sdk_session_id` instead of `tauri_session_id` for event names (would break multi-session)
+2. Permission wire format sent `requestId` but SDK service expected `tool_use_id` (fixed wire-format.ts to accept both)
+3. `set_model` used PUT but SDK service expected POST
+4. Window close shutdown scope was per-window, changed to app-global
+5. SSE whitespace parsing: `strip_prefix(' ')` for data lines per SSE spec
+
+- **Location**: `src-tauri/sdk-service/` (Node.js server), `src-tauri/src/sdk_*.rs` (Rust integration)
 - **Spec**: `claude_knowledge/sdk_service_spec.md`
 
 ## Chat History & Aware System
@@ -579,12 +619,10 @@ The chat assistant can propose field changes via `proposePendingUpdate(field, va
 
 Rules are stored in `config.json` under `autoApproveRules`. The module provides: `matchesAutoApproveRule()` for checking permissions, `deriveAutoApproveRule()` for creating rules from tool invocations (used by "Always Allow" buttons), and in-memory caching with `invalidateAutoApproveCache()`.
 
-## SDK Service (Phase 1 — Standalone)
+## SDK Service (Phase 2 — Fully Integrated Sidecar)
 
-Node.js HTTP/SSE server at `src-tauri/sdk-service/` that wraps the Claude Agent SDK (`@anthropic-ai/claude-code`). Currently a standalone service, not yet integrated as a Tauri sidecar. See `claude_knowledge/sdk_service_spec.md` for the full architecture spec.
-
-**Endpoints**: `POST /sessions` (create), `GET /sessions/:id/stream` (SSE), `POST /sessions/:id/message`, `POST /sessions/:id/permission`, `POST /sessions/:id/interrupt`, `POST /sessions/:id/model`, `DELETE /sessions/:id`, `GET /sessions`, `GET /health`
+Node.js HTTP/SSE sidecar at `src-tauri/sdk-service/` wrapping the Claude Agent SDK. **Phase 2 complete** — all Claude session management routes through the sidecar. See `claude_knowledge/sdk_service_spec.md` for the original design spec.
 
 **Key benefits over raw CLI spawning**: `windowsHide: true` propagation (fixes CMD flash), managed stdout backpressure (fixes 2x slowness from emit blocking), in-process PreToolUse permission hooks (reduces IPC overhead).
 
-**Status**: Phase 1 implemented — server runs independently, not yet wired into Buildor's session management. Tauri sidecar integration is Phase 2.
+**Rust integration modules**: `sdk_client.rs` (HTTP client), `sdk_sidecar.rs` (lifecycle + health loop), `sdk_sse.rs` (SSE bridge to Tauri events). See the main SDK Service section above for full architecture.

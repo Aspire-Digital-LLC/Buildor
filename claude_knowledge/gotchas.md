@@ -241,3 +241,24 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 **Surprise**: Config file had the project, the "already exists" error proved it was persisted, but the UI showed nothing. No log entries were generated for the load attempt.
 **Impact**: User sees empty state, tries to re-add, gets "already exists" error. Confusing loop.
 **Workaround**: Every failure path must log at `error` or `warn` level. Every operation entry point should log at `debug` level so we can see it was attempted. The project store now logs at each stage: start, listProjects result, branch fetch failures, active project restore, and final count.
+
+---
+
+### `claude-exit` Only Fires on Session Destroy, Not Per Turn
+
+**Context**: SDK service smoke test waited for `claude-exit` SSE event to detect turn completion.
+**Surprise**: `claude-exit` only fires when the session is destroyed (end of query loop), not between turns in a multi-turn session. A single-turn test happened to work because the session ended after one turn, but the test was fragile.
+**Impact**: Any code listening for `claude-exit` as a turn-completion signal will hang in multi-turn sessions.
+**Workaround**: Detect turn completion by watching for a `result` message type in the SSE stream. The result message is the correct per-turn completion signal.
+
+---
+
+### SDK Service Phase 2 — Wire Format Mismatches
+
+**Context**: Integrating Rust HTTP client with SDK service during Phase 2.
+**Surprise**: Multiple subtle mismatches between what Rust sent and what the SDK service expected:
+- Permission responses: Rust sent `requestId` but SDK service originally expected `tool_use_id`
+- `set_model`: Rust used PUT, service expected POST
+- SSE data lines: spec allows optional space after `data:` prefix, must handle both
+**Impact**: Silent failures — requests returned 400/404 with no obvious cause from the Rust side.
+**Workaround**: Fixed `wire-format.ts` to accept both field names. Changed Rust to use POST for model changes. Added `strip_prefix(' ')` fallback in SSE parser. Code review caught these before production.

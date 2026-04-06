@@ -83,12 +83,14 @@
 - [x] **Skill Builder panel**: Three-panel layout (SkillBrowser, SkillEditor, SkillBuilderChat) for creating/editing Buildor skills. Tabbed editor with sections for identity, params, execution, visibility, health, prompt, and files. Zustand store (`skillBuilderStore.ts`) with dirty tracking, manual field detection, review state.
 - [x] **Buildor Review system**: Inline field-level feedback cards (`FieldReviewCard`) with pass/warning/error states. Accept (applies suggestion), Decline (dismisses), Discuss (prefills chat with review context). Chat assistant can also propose field updates via `PendingUpdateCard` with explicit Accept/Decline gating.
 - [x] **Auto-approve rules engine**: `src/utils/autoApprove.ts` — pattern-based tool permission auto-approval (e.g., `"Bash(git:*)"`, `"Read"`). Stored in `config.json`, cached in memory, matched against tool permissions. Used by "Always Allow" buttons via `deriveAutoApproveRule()`.
-- [x] **SDK Service Phase 1**: Standalone Node.js HTTP/SSE server (`src-tauri/sdk-service/`) wrapping Claude Agent SDK. REST API for session CRUD, SSE streaming, permission handling. Solves CMD flash, stdout backpressure, and permission IPC overhead. Not yet integrated as Tauri sidecar.
+- [x] **SDK Service Phase 1**: Standalone Node.js HTTP/SSE server (`src-tauri/sdk-service/`) wrapping Claude Agent SDK. REST API for session CRUD, SSE streaming, permission handling. Solves CMD flash, stdout backpressure, and permission IPC overhead.
 - [x] **SDK Service architecture spec**: `claude_knowledge/sdk_service_spec.md` — full design doc covering problems solved, API surface, sidecar lifecycle, migration plan from raw CLI spawning.
 - [x] **Review-to-chat injection**: `406012b` — permission gating for pending field updates, review feedback flows into chat assistant for deeper discussion.
+- [x] **SDK Service Phase 2**: Full Rust integration — `sdk_client.rs` (HTTP client), `sdk_sidecar.rs` (lifecycle + health loop + auto-restart), `sdk_sse.rs` (SSE bridge + perf instrumentation). 11 functions in `claude.rs` replaced, `agents.rs` rerouted, sidecar starts in `setup()`. Frontend unchanged. Code-reviewed: 2 critical + 5 medium issues found and fixed.
+- [x] **Agent result handling analysis**: Root cause doc for orchestrator failing to acknowledge agent results (`claude_knowledge/agent_result_handling.md`) — distress alert priming, context distance, duplicate result blocks, ordering race.
+- [x] **Smoke test fix**: Turn completion detection changed from `claude-exit` event (only fires on session destroy) to `result` message type (fires per turn).
 
 ### In Progress
-- [ ] **SDK Service Phase 2**: Integrate `sdk-service` as Tauri sidecar — replace raw CLI spawning in `claude.rs` with HTTP/SSE calls to the sidecar
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)
 - [ ] Command Palette (skill browser with auto-generated parameter forms — component is placeholder only)
 - [ ] App-as-Orchestrator (flow execution engine — backend stubs exist but return empty)

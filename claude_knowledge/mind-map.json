@@ -6,7 +6,7 @@
     {
       "file": "codebase_structure.md",
       "description": "Project directory layout, module boundaries, and file organization conventions",
-      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection", "skill-builder", "SkillBuilder", "SkillEditor", "SkillBrowser", "sdk-service", "autoApprove", "skillBuilderStore"]
+      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection", "skill-builder", "SkillBuilder", "SkillEditor", "SkillBrowser", "sdk-service", "autoApprove", "skillBuilderStore", "sdk_client.rs", "sdk_sidecar.rs", "sdk_sse.rs"]
     },
     {
       "file": "tech_stack.md",
@@ -16,7 +16,7 @@
     {
       "file": "architecture.md",
       "description": "System architecture, data flow, component relationships, design patterns, agent pool, health monitoring, shared skills sync, operation pool",
-      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent", "dual-write", "transcript hierarchy", "source_agent_id", "agent_name", "stdout emit", "perf instrumentation", "slow emit", "sticky zone", "permission card", "StickyPermissionCard", "PermissionQueueEntry", "FIFO", "tiered", "skill builder", "SkillBuilder", "FieldReviewCard", "PendingUpdateCard", "review", "inline feedback", "auto-approve", "autoApprove", "SDK service", "sidecar"]
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent", "dual-write", "transcript hierarchy", "source_agent_id", "agent_name", "stdout emit", "perf instrumentation", "slow emit", "sticky zone", "permission card", "StickyPermissionCard", "PermissionQueueEntry", "FIFO", "tiered", "skill builder", "SkillBuilder", "FieldReviewCard", "PendingUpdateCard", "review", "inline feedback", "auto-approve", "autoApprove", "SDK service", "sidecar", "sdk_client", "sdk_sidecar", "sdk_sse", "SSE bridge", "health loop", "auto-restart"]
     },
     {
       "file": "decisions.md",
@@ -80,8 +80,8 @@
     },
     {
       "file": "sdk_service_spec.md",
-      "description": "Architecture spec for Node.js Agent SDK service — replaces raw CLI spawning with HTTP/SSE sidecar. Covers API endpoints, permission hooks, sidecar lifecycle, health monitoring, migration plan.",
-      "keywords": ["SDK", "agent SDK", "sidecar", "Node", "service", "windowsHide", "flashing", "backpressure", "SSE", "permission hook", "PreToolUse", "migration", "spawnClaudeCodeProcess", "health check", "heartbeat", "sdk-service", "HTTP", "REST", "Phase 1"]
+      "description": "Architecture spec for Node.js Agent SDK service — replaces raw CLI spawning with HTTP/SSE sidecar. Covers API endpoints, permission hooks, sidecar lifecycle, health monitoring, migration plan. Phase 2 integration complete.",
+      "keywords": ["SDK", "agent SDK", "sidecar", "Node", "service", "windowsHide", "flashing", "backpressure", "SSE", "permission hook", "PreToolUse", "migration", "spawnClaudeCodeProcess", "health check", "heartbeat", "sdk-service", "HTTP", "REST", "Phase 1", "Phase 2"]
     },
     {
       "file": "agent_result_handling.md",

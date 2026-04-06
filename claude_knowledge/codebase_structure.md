@@ -101,6 +101,9 @@ Buildor/
 │   │   │   ├── telemetry.rs    # subscribe_telemetry / unsubscribe_telemetry Tauri commands
 │   │   │   └── shell.rs         # Shell command execution (for skill !`command` blocks)
 │   │   ├── telemetry.rs         # Subscriber registry for pool/mailbox telemetry stream
+│   │   ├── sdk_client.rs        # HTTP client for SDK service (session CRUD, messages, permissions)
+│   │   ├── sdk_sidecar.rs       # Node sidecar lifecycle (start, stop, health loop, auto-restart)
+│   │   ├── sdk_sse.rs           # SSE bridge: SDK service stream → Tauri events + perf logging
 │   │   ├── logging/             # SQLite DB (logs + chat_sessions + chat_messages tables)
 │   │   ├── git/                 # Git CLI wrapper
 │   │   ├── orchestrator/        # Flow execution engine
