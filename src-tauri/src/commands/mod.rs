@@ -16,3 +16,4 @@ pub mod skill_sync;
 pub mod chat_images;
 pub mod mailbox;
 pub mod operation_pool;
+pub mod telemetry;
