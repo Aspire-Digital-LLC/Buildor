@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { listAgents, markAgentExited, injectIntoAgent } from '@/utils/commands/agents';
-import { respondToPermission, sendClaudeMessage } from '@/utils/commands/claude';
+import { respondToPermissionPooled, sendClaudeMessage } from '@/utils/commands/claude';
 import { getChatMessages, saveChatMessage, createChatSession, type ChatMessageRecord } from '@/utils/commands/chatHistory';
 import { updateAgentDraft } from '@/utils/commands/mailbox';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
@@ -214,10 +214,11 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
                 const permObj = raw.permission as Record<string, unknown> | undefined;
                 const toolInput = reqObj?.input || toolObj?.input || permObj?.input || undefined;
                 if (requestId) {
-                  respondToPermission(agentSid, requestId, true, toolInput as Record<string, unknown> | undefined).catch(() => {});
+                  const toolName = reqObj?.tool_name || toolObj?.name || 'tool';
+                  const resourceKey = `tool/${String(toolName)}/${agentSid}`;
+                  respondToPermissionPooled(agentSid, requestId, true, toolInput as Record<string, unknown> | undefined, resourceKey, 'subagent').catch(() => {});
                   setStatusLines((prev) => {
                     const next = new Map(prev);
-                    const toolName = reqObj?.tool_name || toolObj?.name || 'tool';
                     next.set(agentSid, `Approved ${String(toolName)}...`);
                     return next;
                   });

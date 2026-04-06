@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { PermissionQueueEntry } from './ClaudeChat';
-import { respondToPermission, addPermissionRule } from '@/utils/commands/claude';
+import { respondToPermissionPooled, addPermissionRule } from '@/utils/commands/claude';
 import { buildorEvents } from '@/utils/buildorEvents';
 
 const toolIcons: Record<string, string> = {
@@ -57,7 +57,12 @@ export function StickyPermissionCard({ queue, sessionId }: StickyPermissionCardP
   const handleResponse = async (approved: boolean) => {
     if (!effectiveSessionId || resolved) return;
     try {
-      await respondToPermission(effectiveSessionId, current.requestId, approved, approved ? current.input : undefined);
+      const resourceKey = `tool/${current.toolName}/${effectiveSessionId}`;
+      await respondToPermissionPooled(
+        effectiveSessionId, current.requestId, approved,
+        approved ? current.input : undefined,
+        resourceKey, 'user',
+      );
       setResolved(approved ? 'approved' : 'denied');
       buildorEvents.emit('permission-resolved', {
         requestId: current.requestId,
