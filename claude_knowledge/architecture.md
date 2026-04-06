@@ -475,3 +475,59 @@ Aware injection:
 **History injection instructions**: Centralized in `src/prompts/historyInjection.ts` — all prompt text for the aware system lives there (header, footer, injection mode labels, image markers). No hardcoded prompt strings in `buildAwareContext.ts`.
 
 **Title generation**: Haiku generates <8 word title after 3rd user message, refreshes every 15th. Untitled sessions get retroactive titles on history panel load.
+
+## Skill Builder
+
+Three-panel desktop IDE for creating and editing Buildor skills, accessible via sidebar tab.
+
+```
+┌──────────┬──────────────────────────┬──────────────┐
+│  Skill   │     Skill Editor         │   Chat       │
+│  Browser │                          │  Assistant   │
+│  (200px) │  Tabbed sections:        │  (340px)     │
+│          │  Identity | Params |     │              │
+│  - List  │  Execution | Visibility |│  Scoped to   │
+│  - New   │  Health | Prompt | Files │  current     │
+│  - Open  │                          │  skill       │
+│  - Del   │  [FieldReviewCard]       │              │
+│          │  [PendingUpdateCard]     │  Can propose │
+│          │                          │  field edits │
+└──────────┴──────────────────────────┴──────────────┘
+```
+
+### Review System (FieldReviewCard)
+
+When the user edits a skill field, the chat assistant can produce inline review feedback attached to specific fields. Each `FieldReviewCard` shows a status (pass/warning/error) with a message, optional suggestion, and three actions: Accept (applies suggestion), Decline (dismisses), Discuss (prefills chat input with the review context). Reviews are stored in `skillBuilderStore.reviews` keyed by field name.
+
+### Pending Update System (PendingUpdateCard)
+
+The chat assistant can propose field changes via `proposePendingUpdate(field, value, displayValue)`. These appear as blue "Updated by Buildor" cards attached to the relevant field, showing a preview of the proposed value. The user must explicitly Accept or Decline — changes are never applied automatically. This ensures the human stays in control while the assistant can proactively suggest improvements.
+
+### State Management
+
+`skillBuilderStore.ts` (Zustand) manages:
+- Editor state for all skill.json fields + prompt content + supporting files
+- Dirty tracking via JSON comparison against original state
+- `manualFields` set — tracks which fields the user has manually edited (triggers review)
+- `reviewPending` flag — indicates the editor has unsaved changes that need review
+- `pendingUpdates` — chat-proposed field values awaiting user acceptance
+
+## Auto-Approve Rules Engine
+
+`src/utils/autoApprove.ts` provides Buildor-managed tool permission auto-approval, replacing direct manipulation of Claude's `settings.local.json`. Rules use the same pattern syntax as Claude's permission system:
+
+- `"Read"` — approve all calls to the Read tool
+- `"Bash(git:*)"` — approve Bash calls where the command starts with "git"
+- `"Read(path/prefix**)"` — approve Read calls to matching paths
+
+Rules are stored in `config.json` under `autoApproveRules`. The module provides: `matchesAutoApproveRule()` for checking permissions, `deriveAutoApproveRule()` for creating rules from tool invocations (used by "Always Allow" buttons), and in-memory caching with `invalidateAutoApproveCache()`.
+
+## SDK Service (Phase 1 — Standalone)
+
+Node.js HTTP/SSE server at `src-tauri/sdk-service/` that wraps the Claude Agent SDK (`@anthropic-ai/claude-code`). Currently a standalone service, not yet integrated as a Tauri sidecar. See `claude_knowledge/sdk_service_spec.md` for the full architecture spec.
+
+**Endpoints**: `POST /sessions` (create), `GET /sessions/:id/stream` (SSE), `POST /sessions/:id/message`, `POST /sessions/:id/permission`, `POST /sessions/:id/interrupt`, `POST /sessions/:id/model`, `DELETE /sessions/:id`, `GET /sessions`, `GET /health`
+
+**Key benefits over raw CLI spawning**: `windowsHide: true` propagation (fixes CMD flash), managed stdout backpressure (fixes 2x slowness from emit blocking), in-process PreToolUse permission hooks (reduces IPC overhead).
+
+**Status**: Phase 1 implemented — server runs independently, not yet wired into Buildor's session management. Tauri sidecar integration is Phase 2.

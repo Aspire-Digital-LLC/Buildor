@@ -44,6 +44,20 @@ Buildor/
 │   │   │   ├── AgentStatusCard.tsx   # Pinned card above input (live agent status)
 │   │   │   ├── AgentsPanel.tsx       # Right-side panel (active + completed agents)
 │   │   │   └── AgentOutputBlock.tsx  # Inline surfaced agent results in chat
+│   │   ├── skill-builder/         # Skill Builder panel (create/edit skills)
+│   │   │   ├── SkillBuilder.tsx       # Three-panel layout (browser + editor + chat)
+│   │   │   ├── SkillBrowser.tsx       # Left panel: skill list with create/open/delete
+│   │   │   ├── SkillEditor.tsx        # Center panel: tabbed editor for skill.json fields
+│   │   │   ├── SkillEditorIdentity.tsx    # Name, description, tags, scope
+│   │   │   ├── SkillEditorParams.tsx      # Parameter definitions
+│   │   │   ├── SkillEditorExecution.tsx   # Execution config (mode, model, effort)
+│   │   │   ├── SkillEditorVisibility.tsx  # Visibility config (autoLoad, etc.)
+│   │   │   ├── SkillEditorHealth.tsx      # Health thresholds
+│   │   │   ├── SkillEditorPrompt.tsx      # prompt.md content editor
+│   │   │   ├── SkillEditorFiles.tsx       # Supporting files
+│   │   │   ├── SkillBuilderChat.tsx       # Right panel: scoped Claude assistant
+│   │   │   ├── FieldReviewCard.tsx        # Inline field feedback (pass/warning/error)
+│   │   │   └── PendingUpdateCard.tsx      # Chat-driven field update approval card
 │   │   └── settings/
 │   │       ├── Settings.tsx          # Settings sidebar with section routing
 │   │       └── SharedMemory.tsx      # Shared memory repo config (skills + flows live here)
@@ -52,7 +66,7 @@ Buildor/
 │   │   └── useAgentPool.ts          # Subscribes to agent events, maintains live agent state
 │   ├── themes/                  # Theme definitions (themes.ts — 7 themes, CSS variable system)
 │   ├── personalities/           # Personality definitions (personalities.ts — 6 built-in, type exports)
-│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore, personalityStore, worktreeConfigStore)
+│   ├── stores/                  # State management (Zustand — includes usageStore, themeStore, personalityStore, worktreeConfigStore, skillBuilderStore)
 │   ├── types/                   # TypeScript type definitions
 │   │   ├── skill.ts                 # BuildorSkill, ProjectSkill, SkillParam, SkillExecution types
 │   │   └── agent.ts                 # Agent, AgentHealthState, AgentMarker, AgentPoolEntry types
@@ -68,6 +82,7 @@ Buildor/
 │   │   │   ├── mailbox.ts          # depositResult, queryResult, purgeResults, spawnAgentWithDeps
 │   │   │   ├── telemetry.ts        # subscribeTelemetry, unsubscribeTelemetry
 │   │   │   └── chatImages.ts        # saveChatImage, readChatImage, deleteSessionImages
+│   │   ├── autoApprove.ts           # Auto-approve rules engine (pattern matching for tool permissions)
 │   │   └── buildorEvents.ts         # Event bus (permissions, agents, skills, compact, etc.)
 │   ├── prompts/                 # Centralized prompt templates
 │   │   └── historyInjection.ts      # Aware injection instructions (header, footer, modes, image markers)
@@ -100,6 +115,20 @@ Buildor/
 │   │       ├── config.rs        # PoolConfig (pool_config.json, defaults from num_cpus)
 │   │       ├── persistence.rs   # PersistedLimits (pool_limits.json, learned concurrency)
 │   │       └── resource_key.rs  # ResourceKeyed trait, derive_resource_key() (tool→lane mapping)
+│   ├── sdk-service/             # Node.js Agent SDK HTTP/SSE sidecar (Phase 1)
+│   │   ├── src/
+│   │   │   ├── index.ts             # HTTP server entry point (Express-like router)
+│   │   │   ├── router.ts            # Lightweight path-pattern router
+│   │   │   ├── sessions.ts          # Session lifecycle (create/destroy/list)
+│   │   │   ├── sdk-runner.ts        # Claude Agent SDK wrapper (spawnClaudeCodeProcess)
+│   │   │   ├── session-stream.ts    # SSE streaming from SDK to HTTP clients
+│   │   │   ├── permission-gate.ts   # PreToolUse permission hooks
+│   │   │   ├── wire-format.ts       # SDK event → Buildor wire format translation
+│   │   │   ├── types.ts             # Shared TypeScript types
+│   │   │   └── routes/              # Route handlers (CRUD, stream, message, permission, etc.)
+│   │   ├── build.mjs               # Build script
+│   │   ├── package.json            # SDK service dependencies
+│   │   └── tsconfig.json           # TypeScript config
 │   ├── Cargo.toml               # Rust dependencies
 │   └── tauri.conf.json          # Tauri app configuration
 ├── package.json                 # Node dependencies

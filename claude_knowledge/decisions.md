@@ -247,6 +247,24 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
+## Pending Update Gating over Auto-Apply for Chat-Driven Field Edits
+
+**Choice**: Chat assistant proposes field changes as `PendingUpdate` cards requiring explicit Accept/Decline
+**Rejected**: Auto-applying field changes from the chat assistant immediately
+
+**Why**: The Skill Builder chat assistant can propose changes to any skill.json field (name, description, params, prompt, etc.). Auto-applying would break trust — the user might not agree with a suggestion. The `PendingUpdateCard` pattern shows what will change (with a preview), requires a deliberate click, and can be declined without disrupting the editor. This keeps the human in the loop while still letting the AI be proactive. The Discuss button on `FieldReviewCard` bridges disagreements back into conversation rather than forcing accept-or-reject binary choices.
+
+---
+
+## SDK Service as Standalone HTTP Server over Direct IPC Integration
+
+**Choice**: Node.js HTTP/SSE server running alongside Tauri, accessed via HTTP
+**Rejected**: Embedding Agent SDK calls directly in the Rust backend via napi-rs or wasm
+
+**Why**: The Claude Agent SDK is a Node.js library. Calling it from Rust would require napi-rs FFI bindings (brittle, hard to debug), WASM compilation (Node APIs not available), or shelling out to a Node script per operation (process overhead). A standalone HTTP server runs the SDK natively, provides a clean REST/SSE API, and can be developed and tested independently. It also enables health monitoring, connection pooling, and graceful shutdown. The sidecar integration (Phase 2) will have Tauri manage the server's lifecycle while keeping the HTTP interface.
+
+---
+
 ## Shared Memory Repo over Separate Skills Sync
 
 **Choice**: Skills resolve from `{sharedMemoryRepo}/skills/` directory, falling back to `~/.buildor/skills/`
