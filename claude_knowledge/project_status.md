@@ -75,9 +75,9 @@
 - [x] **Pool Telemetry Stream**: Subscribable real-time telemetry feed from Operation Pool and Agent Mailbox. Static subscriber registry (`telemetry.rs`), Tauri commands (`subscribe_telemetry`/`unsubscribe_telemetry`), pool snapshot every 10 ticks, mailbox deposit/deps-met/abandoned events, auto-cleanup on session stop. Development-only tool — telemetry lines injected into Claude session stdin via `send_message()`.
 - [x] **Marker-based telemetry activation**: Claude sessions can subscribe/unsubscribe to pool telemetry via the marker protocol (`subscribe_telemetry`/`unsubscribe_telemetry` actions). `parseClaudeStream.ts` intercepts markers and calls Tauri commands with the session ID. Completes end-to-end activation path: user asks about queue state → Claude emits subscribe marker → observes telemetry lines → reports → unsubscribes.
 - [x] **Worktree symlink .bin shim fix**: `regenerate_bin_shims()` in `worktree.rs` generates fresh `.cmd`/`.ps1`/shell shims after junction creation, fixing CLI tools (vite, tauri, tsc) that fail when `.bin/` relative symlinks break across Windows junction boundaries.
+- [x] **Permission pipeline through Operation Pool**: All permission responses (approve/deny) now routed through the operation pool via `respond_to_permission_pooled` Tauri command. Resource key: `tool/{toolName}/{sessionId}`. User chat approvals and auto-accepts use Tier::User; agent auto-approvals use Tier::Subagent. Internal `write_permission_response()` extracted for reuse. Original `respond_to_permission` kept for backward compat.
 
 ### In Progress
-1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval
 - [ ] Flow Builder (drag-and-drop visual editor with React Flow — `@xyflow/react` installed but unused, component is placeholder only)
 - [ ] Command Palette (skill browser with auto-generated parameter forms — component is placeholder only)
 - [ ] App-as-Orchestrator (flow execution engine — backend stubs exist but return empty)
