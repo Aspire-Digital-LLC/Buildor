@@ -37,6 +37,13 @@ export interface FieldReview {
   suggestion?: string;
 }
 
+/** A field update proposed by the chat assistant, pending user acceptance. */
+export interface PendingUpdate {
+  field: string;
+  value: unknown;
+  displayValue: string;  // human-readable preview
+}
+
 function defaultEditorState(): SkillEditorState {
   return {
     name: '',
@@ -76,6 +83,9 @@ interface SkillBuilderStore {
   reviewPending: boolean;
   reviewInProgress: boolean;
 
+  // Pending chat-driven updates (not yet applied)
+  pendingUpdates: Record<string, PendingUpdate>;
+
   // Actions
   openSkill: (name: string, state: SkillEditorState) => void;
   createNew: () => void;
@@ -93,6 +103,11 @@ interface SkillBuilderStore {
   clearAllReviews: () => void;
   acceptReview: (field: string) => void;
   setReviewInProgress: (inProgress: boolean) => void;
+
+  // Pending update actions (chat-driven)
+  proposePendingUpdate: (field: string, value: unknown, displayValue: string) => void;
+  acceptPendingUpdate: (field: string) => void;
+  declinePendingUpdate: (field: string) => void;
 }
 
 function computeDirty(editor: SkillEditorState, original: SkillEditorState | null): boolean {
@@ -110,6 +125,7 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
   manualFields: new Set(),
   reviewPending: false,
   reviewInProgress: false,
+  pendingUpdates: {},
 
   openSkill: (name, state) => {
     set({
@@ -122,6 +138,7 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       manualFields: new Set(),
       reviewPending: false,
       reviewInProgress: false,
+      pendingUpdates: {},
     });
   },
 
@@ -137,6 +154,7 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       manualFields: new Set(),
       reviewPending: false,
       reviewInProgress: false,
+      pendingUpdates: {},
     });
   },
 
@@ -151,6 +169,7 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       manualFields: new Set(),
       reviewPending: false,
       reviewInProgress: false,
+      pendingUpdates: {},
     });
   },
 
@@ -272,5 +291,51 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
 
   setReviewInProgress: (inProgress) => {
     set({ reviewInProgress: inProgress });
+  },
+
+  proposePendingUpdate: (field, value, displayValue) => {
+    set((state) => ({
+      pendingUpdates: { ...state.pendingUpdates, [field]: { field, value, displayValue } },
+    }));
+  },
+
+  acceptPendingUpdate: (field) => {
+    set((state) => {
+      const pending = state.pendingUpdates[field];
+      if (!pending) return state;
+
+      // Apply the value to the editor
+      let editor = { ...state.editor };
+      const val = pending.value;
+      if (field === 'name') editor.name = String(val);
+      else if (field === 'description') editor.description = String(val);
+      else if (field === 'tags') editor.tags = val as string[];
+      else if (field === 'scope') editor.scope = val as 'general' | 'project';
+      else if (field === 'projects') editor.projects = val as string[];
+      else if (field === 'params') editor.params = val as typeof editor.params;
+      else if (field === 'promptContent') editor.promptContent = String(val);
+      else if (field === 'execution') editor.execution = { ...editor.execution, ...(val as Record<string, unknown>) };
+      else if (field === 'visibility') editor.visibility = { ...editor.visibility, ...(val as Record<string, unknown>) };
+      else if (field === 'health') editor.health = { ...editor.health, ...(val as Record<string, unknown>) };
+      else if (field === 'shell') editor.shell = val as 'bash' | 'powershell';
+
+      const pendingUpdates = { ...state.pendingUpdates };
+      delete pendingUpdates[field];
+
+      return {
+        editor,
+        pendingUpdates,
+        isDirty: computeDirty(editor, state.original),
+        reviewPending: true,
+      };
+    });
+  },
+
+  declinePendingUpdate: (field) => {
+    set((state) => {
+      const pendingUpdates = { ...state.pendingUpdates };
+      delete pendingUpdates[field];
+      return { pendingUpdates };
+    });
   },
 }));

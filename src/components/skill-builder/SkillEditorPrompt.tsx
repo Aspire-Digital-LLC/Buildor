@@ -1,5 +1,6 @@
 import { useSkillBuilderStore } from '@/stores/skillBuilderStore';
 import { FieldReviewCard } from './FieldReviewCard';
+import { PendingUpdateCard } from './PendingUpdateCard';
 
 interface SkillEditorPromptProps {
   onDiscuss: (field: string, message: string) => void;
@@ -41,7 +42,8 @@ export function SkillEditorPrompt({ onDiscuss }: SkillEditorPromptProps) {
         )}
       </div>
 
-      {/* Review card for prompt */}
+      {/* Pending update + review card for prompt */}
+      <PendingUpdateCard field="promptContent" />
       <FieldReviewCard field="promptContent" onDiscuss={onDiscuss} />
 
       {/* Editor */}
