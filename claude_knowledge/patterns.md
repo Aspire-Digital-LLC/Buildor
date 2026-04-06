@@ -120,7 +120,16 @@ async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
     rx.await.map_err(|_| "cancelled")?.map_err(|e| e)
 }
 ```
-**Why**: Prevents resource saturation when multiple agents or UI actions hit the same resource. Tier determines scheduling priority (App > User > Subagent). Use `Tier::App` for Buildor UI-driven operations, `Tier::User` for Claude tool calls (future permission pipeline), `Tier::Subagent` for background/sub-agent work. The pool handles concurrency limits, backpressure, and adaptive sizing automatically.
+**Why**: Prevents resource saturation when multiple agents or UI actions hit the same resource. Tier determines scheduling priority (App > User > Subagent). Use `Tier::App` for Buildor UI-driven operations, `Tier::User` for Claude tool call permission responses (primary chat + StickyPermissionCard), `Tier::Subagent` for agent auto-approvals and background work. The pool handles concurrency limits, backpressure, and adaptive sizing automatically.
+
+---
+
+### Pool-Gated Permission Response Pattern
+
+**When to use**: Sending any permission response (approve/deny) to a Claude session's stdin
+**Implementation**: Call `respondToPermissionPooled(sessionId, requestId, approved, toolInput, resourceKey, tier)` from the frontend. Resource key format: `tool/{toolName}/{sessionId}`. Use tier `"user"` for primary chat approvals, `"subagent"` for agent auto-approvals. The Rust backend submits to `OPERATION_POOL` which schedules the `write_permission_response()` call.
+**Example**: `StickyPermissionCard.tsx` — user clicks Approve → `respondToPermissionPooled(sid, reqId, true, input, \`tool/${toolName}/${sid}\`, 'user')`; `useAgentPool.ts` — agent auto-approve → `respondToPermissionPooled(agentSid, reqId, true, toolInput, \`tool/${toolName}/${agentSid}\`, 'subagent')`
+**Why**: Without pool gating, concurrent agents each approving their own tools could saturate system resources. Routing through the pool ensures per-session per-tool rate limiting. The original `respondToPermission` (direct, no pool) is kept for backward compat but should not be used in new code.
 
 ---
 

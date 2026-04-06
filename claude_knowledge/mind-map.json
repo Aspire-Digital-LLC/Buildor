@@ -31,7 +31,7 @@
     {
       "file": "patterns.md",
       "description": "Established code patterns, conventions, and reusable approaches in this project",
-      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template", "checkpoint", "delta scan", "context-engine", "submit", "OPERATION_POOL", "pool submission", "sticky zone", "tiered", "sticky-slot"]
+      "keywords": ["pattern", "convention", "approach", "how to", "standard", "reusable", "template", "checkpoint", "delta scan", "context-engine", "submit", "OPERATION_POOL", "pool submission", "sticky zone", "tiered", "sticky-slot", "respondToPermissionPooled", "pool-gated permission"]
     },
     {
       "file": "local_learnings.md",
