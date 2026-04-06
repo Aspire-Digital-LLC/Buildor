@@ -1,7 +1,0 @@
-{
-  "commit": "34d0667",
-  "date": "2026-04-05T17:37:02.091Z",
-  "command": "knowledge",
-  "type": "delta",
-  "notes": "Agent session cleanup (cleanup_agent_sessions), pool scoping by parentSessionId, agent sessions hidden from history sidebar, check_agent_alive Windows no_window_command fix, query_agent_sessions_by_parent for transcript tree"
-}
