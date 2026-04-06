@@ -1,0 +1,7 @@
+{
+  "commit": "3810f1a",
+  "date": "2026-04-06T02:54:28.378Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Sticky permission card, tiered sticky zone, PermissionQueueEntry type"
+}
