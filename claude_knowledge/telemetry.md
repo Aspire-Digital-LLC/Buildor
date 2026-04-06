@@ -6,18 +6,29 @@ Real-time telemetry feed from the Operation Pool and Agent Mailbox, subscribable
 
 Telemetry messages are injected into the subscribed Claude session's stdin via `send_message()`. They appear as user messages with `[TELEMETRY:...]` prefix. No new event channels, no frontend changes needed.
 
-## How to Subscribe
+## How to Subscribe (from a Claude session)
+
+Claude subscribes by emitting a marker in its text output. Buildor intercepts the marker and calls the Tauri command automatically:
+
+```
+-<*{ "action": "subscribe_telemetry", "streams": ["pool", "mailbox"] }*>-
+```
+
+To unsubscribe:
+```
+-<*{ "action": "unsubscribe_telemetry" }*>-
+```
+
+Once subscribed, telemetry lines arrive as user messages in the session every ~1 second. Claude reads them and can report on pool/mailbox state.
+
+The `streams` field is optional — defaults to `["pool", "mailbox"]`. Use `["pool"]` or `["mailbox"]` to filter.
+
+### Programmatic (frontend code)
 
 ```typescript
 import { subscribeTelemetry, unsubscribeTelemetry } from '@/utils/commands/telemetry';
 
-// Subscribe to both pool and mailbox streams
 await subscribeTelemetry(sessionId, ['pool', 'mailbox']);
-
-// Subscribe to pool only
-await subscribeTelemetry(sessionId, ['pool']);
-
-// Unsubscribe (also auto-cleans up on session exit)
 await unsubscribeTelemetry(sessionId);
 ```
 

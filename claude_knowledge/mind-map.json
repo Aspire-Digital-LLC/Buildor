@@ -51,7 +51,7 @@
     {
       "file": "personality_and_worktree_config.md",
       "description": "Personality system (built-in + custom prompt injection) and worktree dependency setup strategies",
-      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps"]
+      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps", "junction", ".bin", "shim", "regenerate_bin_shims"]
     },
     {
       "file": "../buildor_context.md",
