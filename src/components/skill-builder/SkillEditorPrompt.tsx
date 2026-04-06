@@ -1,6 +1,11 @@
 import { useSkillBuilderStore } from '@/stores/skillBuilderStore';
+import { FieldReviewCard } from './FieldReviewCard';
 
-export function SkillEditorPrompt() {
+interface SkillEditorPromptProps {
+  onDiscuss: (field: string, message: string) => void;
+}
+
+export function SkillEditorPrompt({ onDiscuss }: SkillEditorPromptProps) {
   const { editor, updateField } = useSkillBuilderStore();
 
   const paramNames = editor.params.map((p) => p.name).filter(Boolean);
@@ -8,27 +13,36 @@ export function SkillEditorPrompt() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
-      {paramNames.length > 0 && (
-        <div style={{
-          padding: '6px 12px', borderBottom: '1px solid var(--border-primary)',
-          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-        }}>
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Insert param:</span>
-          {paramNames.map((name) => (
-            <button
-              key={name}
-              onClick={() => updateField('promptContent', editor.promptContent + `{{${name}}}`)}
-              style={{
-                background: 'var(--bg-primary)', border: '1px solid var(--border-secondary)',
-                borderRadius: 3, padding: '2px 6px', fontSize: 11, color: 'var(--accent-primary)',
-                cursor: 'pointer', fontFamily: "'Cascadia Code', monospace",
-              }}
-            >
-              {`{{${name}}}`}
-            </button>
-          ))}
-        </div>
-      )}
+      <div style={{
+        padding: '6px 12px', borderBottom: '1px solid var(--border-primary)',
+        display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+          Prompt <span style={{ color: '#f85149' }}>*</span>
+        </span>
+        {paramNames.length > 0 && (
+          <>
+            <span style={{ color: 'var(--border-secondary)' }}>|</span>
+            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Insert:</span>
+            {paramNames.map((name) => (
+              <button
+                key={name}
+                onClick={() => updateField('promptContent', editor.promptContent + `{{${name}}}`)}
+                style={{
+                  background: 'var(--bg-primary)', border: '1px solid var(--border-secondary)',
+                  borderRadius: 3, padding: '2px 6px', fontSize: 11, color: 'var(--accent-primary)',
+                  cursor: 'pointer', fontFamily: "'Cascadia Code', monospace",
+                }}
+              >
+                {`{{${name}}}`}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Review card for prompt */}
+      <FieldReviewCard field="promptContent" onDiscuss={onDiscuss} />
 
       {/* Editor */}
       <textarea
