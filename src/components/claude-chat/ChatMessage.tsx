@@ -373,10 +373,8 @@ export function ChatMessage({ message, isVerbose, sessionId, activePermissionId 
         }
 
         if (block.type === 'permission_request') {
-          // In conversation mode: only show the active (first unresolved) permission, hide all others
-          if (!isVerbose) {
-            if (!activePermissionId || block.requestId !== activePermissionId) return null;
-          }
+          // In conversation mode: sticky card handles permissions — don't render inline
+          if (!isVerbose) return null;
           return (
             <PermissionCard
               key={i}

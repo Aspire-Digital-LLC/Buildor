@@ -28,6 +28,7 @@ import { readFileContent } from '@/utils/commands/filesystem';
 import { getBuildorSkill } from '@/utils/commands/skills';
 import type { ProjectSkill } from '@/types/skill';
 import { useAgentPool } from '@/hooks/useAgentPool';
+import { StickyPermissionCard } from './StickyPermissionCard';
 import { purgeResults } from '@/utils/commands/mailbox';
 import { clearAgentsForParent } from '@/utils/commands/agents';
 import { cleanupAgentSessions } from '@/utils/commands/chatHistory';
@@ -36,6 +37,19 @@ import { AgentsPanel } from './AgentsPanel';
 // AgentOutputBlock is rendered via ChatMessage for system-event messages
 
 type ActivePanel = 'skills' | 'agents' | 'history' | null;
+
+/** Typed permission queue entry — richer than just requestId */
+export interface PermissionQueueEntry {
+  requestId: string;
+  toolName: string;
+  description: string;
+  input?: Record<string, unknown>;
+  toolUseId: string;
+  /** null = main chat, string = agent name */
+  source: string | null;
+  /** Agent session ID for routing the response */
+  agentSessionId?: string;
+}
 
 const BUILDOR_CHAT_SYSTEM_PROMPT = `You are chatting with the user through Buildor, a desktop companion for Claude Code. This is a general-purpose conversation — your areas of conversation can extend to any topic and are NOT scoped to any specific project or codebase.
 
@@ -78,7 +92,7 @@ export function ClaudeChat() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [dynamicCommands, setDynamicCommands] = useState<SlashCommand[]>([]);
-  const [permissionQueue, setPermissionQueue] = useState<string[]>([]);
+  const [permissionQueue, setPermissionQueue] = useState<PermissionQueueEntry[]>([]);
   const [loadingForkSkill, setLoadingForkSkill] = useState<string | null>(null);
   const [autoAcceptTools, setAutoAcceptTools] = useState<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
@@ -152,7 +166,14 @@ export function ClaudeChat() {
             buildorEvents.emit('permission-resolved', { requestId: permBlock.requestId, autoAccepted: true, toolName }, sessionId);
             // Skip adding this message to the UI
           } else {
-            setPermissionQueue((q) => [...q, permBlock.requestId!]);
+            setPermissionQueue((q) => [...q, {
+              requestId: permBlock.requestId!,
+              toolName: permBlock.name || 'Unknown',
+              description: permBlock.text || '',
+              input: permBlock.input,
+              toolUseId: permBlock.toolUseId || '',
+              source: null, // main chat
+            }]);
             setMessages((prev) => [...prev, parsed]);
           }
         } else {
@@ -178,7 +199,7 @@ export function ClaudeChat() {
       // Accept resolutions from any session (main or agent)
       const data = event.data as { requestId?: string };
       if (data.requestId) {
-        setPermissionQueue((q) => q.filter((id) => id !== data.requestId));
+        setPermissionQueue((q) => q.filter((entry) => entry.requestId !== data.requestId));
       }
     };
     buildorEvents.on('permission-resolved', onPermResolved);
@@ -193,12 +214,19 @@ export function ClaudeChat() {
         description?: string;
       };
       if (data.requestId && data.agentSessionId) {
-        setPermissionQueue((q) => [...q, data.requestId!]);
+        setPermissionQueue((q) => [...q, {
+          requestId: data.requestId!,
+          toolName: data.toolName || 'Unknown',
+          description: data.description || '',
+          toolUseId: '',
+          source: data.agentName || 'Agent',
+          agentSessionId: data.agentSessionId,
+        }]);
         setMessages((prev) => [...prev, {
           role: 'tool' as const,
           content: [{
             type: 'permission_request' as const,
-            name: `Agent: ${data.agentName || 'Agent'} → ${data.toolName || 'Unknown'}`,
+            name: data.toolName || 'Unknown',
             text: data.description || '',
             requestId: data.requestId,
             toolUseId: '',
@@ -948,21 +976,34 @@ export function ClaudeChat() {
         {/* Messages */}
         <div ref={outputRef} style={{ flex: 1, overflow: 'auto', background: 'var(--bg-inset)' }}>
           {messages.map((msg, i) => (
-            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} activePermissionId={permissionQueue[0] || null} />
+            <ChatMessage key={i} message={msg} isVerbose={isVerbose} sessionId={sessionId || undefined} activePermissionId={permissionQueue[0]?.requestId || null} />
           ))}
         </div>
 
-        {/* Sticky task tracker — always mounted to preserve state across session restarts */}
-        <TaskTracker sessionId={sessionId || undefined} />
+        {/* ── Sticky zone: always-mounted slots, content controlled by conditions ── */}
+        {/* Tier 1: Blocking — user action required */}
+        <div className="sticky-slot sticky-slot--permission">
+          <StickyPermissionCard
+            queue={permissionQueue}
+            sessionId={sessionId || undefined}
+          />
+        </div>
 
-        {/* Agent status card — shows active agents above input */}
-        <AgentStatusCard agents={agentPool.agents} onOpenPanel={() => setActivePanel('agents')} />
+        {/* Tier 2: Awareness — background activity */}
+        <div className="sticky-slot sticky-slot--agents">
+          <AgentStatusCard agents={agentPool.agents} onOpenPanel={() => setActivePanel('agents')} />
+        </div>
 
-        {/* Compacting indicator — shown while /compact is in progress */}
-        {sessionId && <CompactingIndicator sessionId={sessionId} />}
+        {/* Tier 3: Reference — persistent state */}
+        <div className="sticky-slot sticky-slot--tasks">
+          <TaskTracker sessionId={sessionId || undefined} />
+        </div>
 
-        {/* Thinking animation */}
-        {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}
+        {/* Tier 4: Transient — status indicators */}
+        <div className="sticky-slot sticky-slot--status">
+          {sessionId && <CompactingIndicator sessionId={sessionId} />}
+          {isSending && sessionId && <ThinkingIndicator sessionId={sessionId} />}
+        </div>
 
         {/* Input */}
         {sessionId && (
