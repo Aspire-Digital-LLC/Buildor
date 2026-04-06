@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { PermissionQueueEntry } from './ClaudeChat';
-import { respondToPermissionPooled, addPermissionRule } from '@/utils/commands/claude';
+import { respondToPermissionPooled } from '@/utils/commands/claude';
+import { addAutoApproveRule, deriveAutoApproveRule } from '@/utils/autoApprove';
 import { buildorEvents } from '@/utils/buildorEvents';
 
 const toolIcons: Record<string, string> = {
@@ -77,17 +78,10 @@ export function StickyPermissionCard({ queue, sessionId }: StickyPermissionCardP
 
   const handleAlwaysAllow = async () => {
     await handleResponse(true);
-    if (effectiveSessionId) {
-      try {
-        let rule = current.toolName;
-        if (current.toolName === 'Bash' && current.input?.command) {
-          const cmd = String(current.input.command);
-          const baseCmd = cmd.split(' ')[0];
-          rule = `Bash(${baseCmd}:*)`;
-        }
-        await addPermissionRule(effectiveSessionId, rule);
-      } catch { /* best-effort */ }
-    }
+    try {
+      const rule = deriveAutoApproveRule(current.toolName, current.input);
+      await addAutoApproveRule(rule);
+    } catch { /* best-effort */ }
   };
 
   return (

@@ -300,12 +300,12 @@ Caller (git command, shell exec, agent spawn, etc.)
 
 **Lock ordering** (deadlock prevention): lanes HashMap → individual lane → config → persisted → pool_size → completions. Never acquire a lower-numbered lock while holding a higher one.
 
-**Integration**: `run_git()`, `execute_shell_command()`, `spawn_agent()`, `generate_slug()`, `start_session()`, `create_worktree()`, `setup_worktree_deps()` (pnpm/npm install) all submit through the pool. Callers await the oneshot receiver transparently.
+**Integration**: `run_git()`, `execute_shell_command()`, `spawn_agent()`, `generate_slug()`, `start_session()`, `create_worktree()`, `setup_worktree_deps()` (pnpm/npm install), `respond_to_permission_pooled()` all submit through the pool. Callers await the oneshot receiver transparently.
 
 **Tier assignments**:
 - `Tier::App` — `run_git()`, `execute_shell_command()`, `start_session()`, `create_worktree()` (Buildor UI actions)
-- `Tier::User` — reserved for Claude tool calls routed through the future permission pipeline
-- `Tier::Subagent` — `spawn_agent()`, `setup_worktree_deps()` (pnpm/npm install), background work
+- `Tier::User` — Claude tool call permission responses (`respondToPermissionPooled`) from both primary chat and StickyPermissionCard
+- `Tier::Subagent` — `spawn_agent()`, `setup_worktree_deps()` (pnpm/npm install), agent permission auto-approvals (`respondToPermissionPooled` with tier "subagent"), background work
 
 ## Pool Telemetry Stream (Development Tool)
 
@@ -363,7 +363,7 @@ After initial deployment, several false-positive scenarios were discovered and f
 ## Agent Autonomy & Completion (Post-Phase-8)
 
 ### Auto-Accept Permissions
-Agents are autonomous workers — they auto-approve all permission requests. `useAgentPool` intercepts `control_request/permission` events in the raw JSON parser and immediately responds via `respondToPermission` with the agent's own session ID. No permission cards are surfaced to the user for agent actions.
+Agents are autonomous workers — they auto-approve all permission requests. `useAgentPool` intercepts `control_request/permission` events in the raw JSON parser and responds via `respondToPermissionPooled` (tier: subagent, resource key: `tool/{toolName}/{sessionId}`) with the agent's own session ID. No permission cards are surfaced to the user for agent actions. The pool gate ensures agent tool executions are rate-limited alongside all other system operations.
 
 ### Completion Detection via Result Event
 In `--print stream-json` mode, Claude emits a `result` event (`success`/`failure`) but does NOT exit the process. Agent completion is detected by parsing the `result` event in the raw JSON listener, calling `markAgentExited()`, then stopping the orphaned process.

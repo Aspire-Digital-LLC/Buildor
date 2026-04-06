@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import { invoke } from '@tauri-apps/api/core';
 import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, interruptSession, setSessionModel, runClaudeCli, respondToPermissionPooled } from '@/utils/commands/claude';
+import { getAutoApproveRules, matchesAutoApproveRule, invalidateAutoApproveCache } from '@/utils/autoApprove';
 import { useImageAttachments } from './useImageAttachments';
 import { ImagePreviewStrip } from './ImagePreviewStrip';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
@@ -95,6 +96,7 @@ export function ClaudeChat() {
   const [permissionQueue, setPermissionQueue] = useState<PermissionQueueEntry[]>([]);
   const [loadingForkSkill, setLoadingForkSkill] = useState<string | null>(null);
   const [autoAcceptTools, setAutoAcceptTools] = useState<string[]>([]);
+  const autoApproveRulesRef = useRef<string[]>([]);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
@@ -118,6 +120,18 @@ export function ClaudeChat() {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Load Buildor auto-approve rules (replaces Claude's settings.local.json allow list)
+  useEffect(() => {
+    getAutoApproveRules().then((rules) => { autoApproveRulesRef.current = rules; }).catch(() => {});
+    // Re-load when permission is resolved (user may have clicked Always Allow)
+    const onResolved = () => {
+      invalidateAutoApproveCache();
+      getAutoApproveRules().then((rules) => { autoApproveRulesRef.current = rules; }).catch(() => {});
+    };
+    buildorEvents.on('permission-resolved', onResolved);
+    return () => { buildorEvents.off('permission-resolved', onResolved); };
+  }, []);
 
   // Load dynamic commands (skills + custom commands) from .claude/ directory
   useEffect(() => {
@@ -156,15 +170,18 @@ export function ClaudeChat() {
           setAutoAcceptTools([]); // Clear auto-accept after turn completes
           setTimeout(() => inputRef.current?.focus(), 50);
         }
-        // Queue permission requests — auto-accept if tool is in allowedTools, otherwise show UI
+        // Queue permission requests — check Buildor auto-approve rules first, then show UI
         const permBlock = parsed.content.find((c: ChatContent) => c.type === 'permission_request');
         if (permBlock && permBlock.requestId) {
           const toolName = permBlock.name || '';
-          if (autoAcceptTools.length > 0 && autoAcceptTools.includes(toolName)) {
-            // Auto-accept: respond immediately, don't show permission card
-            respondToPermissionPooled(sessionId, permBlock.requestId, true, undefined, `tool/${toolName}/${sessionId}`, 'user').catch(() => {});
+          const shouldAutoApprove =
+            (autoAcceptTools.length > 0 && autoAcceptTools.includes(toolName)) ||
+            matchesAutoApproveRule(autoApproveRulesRef.current, toolName, permBlock.input);
+
+          if (shouldAutoApprove) {
+            // Auto-approve: pool-gate then approve without showing card
+            respondToPermissionPooled(sessionId, permBlock.requestId, true, permBlock.input, `tool/${toolName}/${sessionId}`, 'user').catch(() => {});
             buildorEvents.emit('permission-resolved', { requestId: permBlock.requestId, autoAccepted: true, toolName }, sessionId);
-            // Skip adding this message to the UI
           } else {
             setPermissionQueue((q) => [...q, {
               requestId: permBlock.requestId!,

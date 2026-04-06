@@ -6,7 +6,7 @@ static TELEMETRY_SUBSCRIBERS: std::sync::OnceLock<Mutex<HashMap<String, Telemetr
 
 pub struct TelemetrySubscription {
     pub session_id: String,
-    pub streams: Vec<String>, // ["pool", "mailbox"] or subset
+    pub streams: Vec<String>,
     pub subscribed_at: String,
 }
 
@@ -15,14 +15,16 @@ fn get_subscribers() -> &'static Mutex<HashMap<String, TelemetrySubscription>> {
 }
 
 pub fn has_subscribers() -> bool {
-    match get_subscribers().lock() {
+    let subs = get_subscribers();
+    match subs.lock() {
         Ok(map) => !map.is_empty(),
         Err(_) => false,
     }
 }
 
 pub fn get_pool_subscribers() -> Vec<String> {
-    match get_subscribers().lock() {
+    let subs = get_subscribers();
+    match subs.lock() {
         Ok(map) => map
             .values()
             .filter(|s| s.streams.contains(&"pool".to_string()))
@@ -33,7 +35,8 @@ pub fn get_pool_subscribers() -> Vec<String> {
 }
 
 pub fn get_mailbox_subscribers() -> Vec<String> {
-    match get_subscribers().lock() {
+    let subs = get_subscribers();
+    match subs.lock() {
         Ok(map) => map
             .values()
             .filter(|s| s.streams.contains(&"mailbox".to_string()))
@@ -44,7 +47,8 @@ pub fn get_mailbox_subscribers() -> Vec<String> {
 }
 
 pub fn subscribe(session_id: String, streams: Vec<String>) {
-    if let Ok(mut map) = get_subscribers().lock() {
+    let subs = get_subscribers();
+    if let Ok(mut map) = subs.lock() {
         map.insert(
             session_id.clone(),
             TelemetrySubscription {
@@ -57,28 +61,22 @@ pub fn subscribe(session_id: String, streams: Vec<String>) {
 }
 
 pub fn unsubscribe(session_id: &str) {
-    if let Ok(mut map) = get_subscribers().lock() {
+    let subs = get_subscribers();
+    if let Ok(mut map) = subs.lock() {
         map.remove(session_id);
     }
 }
 
-/// Check if a session still exists in the Claude session registry.
-#[allow(dead_code)]
-pub fn session_exists(session_id: &str) -> bool {
-    crate::commands::claude::session_exists(session_id)
-}
-
 /// Remove subscriptions for sessions that no longer exist.
-#[allow(dead_code)]
 pub fn cleanup_dead_subscribers() {
-    if let Ok(mut map) = get_subscribers().lock() {
-        let dead: Vec<String> = map
-            .keys()
-            .filter(|sid| !session_exists(sid))
-            .cloned()
-            .collect();
-        for sid in dead {
-            map.remove(&sid);
-        }
+    let subs = get_subscribers();
+    if let Ok(mut map) = subs.lock() {
+        let active_sessions: Vec<String> = {
+            match crate::commands::claude::session_exists_list() {
+                Some(list) => list,
+                None => return,
+            }
+        };
+        map.retain(|sid, _| active_sessions.contains(sid));
     }
 }
