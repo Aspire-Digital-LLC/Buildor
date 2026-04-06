@@ -384,19 +384,35 @@ Agent sessions (`session_type = 'agent'`) are excluded from `get_chat_sessions_f
 │ [AgentOutputBlock: "Agent: explorer"]    │  ← inline surfaced results
 │                                          │
 ├──────────────────────────────────────────┤
-│ [AgentStatusCard]                        │  ← pinned above input, auto-hides when empty
+│ Sticky zone (tiered, bottom-to-top):     │
+│                                          │
+│ Tier 1 — Permission (blocking)           │
+│ [StickyPermissionCard]                   │  ← FIFO queue, pulse animation
+│   ⚠️ Permission Required [Chat] [1/3]   │
+│   💻 Bash: $ npm test                    │
+│   [Approve] [Always Allow] [Deny]        │
+│                                          │
+│ Tier 2 — Agents (awareness)              │
+│ [AgentStatusCard]                        │  ← pinned, auto-hides when empty
 │   ● explorer — Reading foo.ts...         │
 │   ● analyzer — Running cargo test...     │
+│                                          │
+│ Tier 3 — Tasks (reference)               │
+│ [TaskTracker]                            │
+│                                          │
+│ Tier 4 — Status (transient)              │
+│ [CompactingIndicator] [ThinkingIndicator]│
 ├──────────────────────────────────────────┤
 │ [Chat input]                             │
 └──────────────────────────────────────────┘
 ```
 
 - `useAgentPool(parentSessionId?)` hook: subscribes to agent-spawned/completed/failed/health-changed/permission events, maintains live Map<string, AgentPoolEntry>, scoped to parent session when ID provided
+- `StickyPermissionCard`: pinned above input, processes typed `PermissionQueueEntry` FIFO queue. Shows source attribution (Chat vs agent name), 1/N counter for multiple pending permissions, pulse animation on unresolved, fade-out after resolution. In conversation mode, inline permission cards are suppressed (only sticky card shows); verbose mode shows both.
+- `PermissionQueueEntry`: typed queue entries with `requestId`, `toolName`, `description`, `input`, `toolUseId`, `source` (null = main chat, string = agent name), `agentSessionId` (for routing response to correct subprocess). Exported from `ClaudeChat.tsx`.
 - `AgentStatusCard`: one row per top-level agent with status icon + name + truncated status line, accordion for children (max 2 levels)
 - `AgentsPanel`: third right-side panel (28px collapsed / 250px expanded), active agents list + completed section, transcript viewer reuses ChatMessage component
 - `AgentOutputBlock`: distinct visual treatment in chat stream (header badge, collapsible)
-- Agent permissions: same PermissionCard but with "Agent: <name>" prefix, routed to correct subprocess
 
 ## Shared Skills Repository Sync (Phase 8)
 

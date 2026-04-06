@@ -39,6 +39,7 @@ Buildor/
 │   │   │   ├── SkillsPalette.tsx    # Two-section skills palette (project + Buildor skills)
 │   │   │   ├── SkillEntry.tsx       # Individual skill row (eyeball + action icons)
 │   │   │   ├── SkillParamsModal.tsx  # Auto-generated param form from skill.json
+│   │   │   ├── StickyPermissionCard.tsx  # Pinned permission card with FIFO queue (above input)
 │   │   │   ├── AgentStatusCard.tsx   # Pinned card above input (live agent status)
 │   │   │   ├── AgentsPanel.tsx       # Right-side panel (active + completed agents)
 │   │   │   └── AgentOutputBlock.tsx  # Inline surfaced agent results in chat

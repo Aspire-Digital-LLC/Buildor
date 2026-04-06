@@ -124,6 +124,15 @@ async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
 
 ---
 
+### Tiered Sticky Zone Pattern
+
+**When to use**: When multiple always-visible UI elements compete for space between the chat area and input field
+**Implementation**: Organize pinned components into named tiers in priority order. Each tier gets a wrapper `<div className="sticky-slot sticky-slot--{name}">`. Components inside auto-hide when empty. The order in the DOM determines visual priority (top = highest priority, closest to input = lowest). Current tiers in `ClaudeChat.tsx`: Permission (blocking, user action required) > Agents (awareness, background activity) > Tasks (reference, persistent state) > Status (transient indicators like thinking/compacting).
+**Example**: `src/components/claude-chat/ClaudeChat.tsx` — four `sticky-slot` divs between the message area and input
+**Why**: Before tiering, permission cards were buried in the scrollable message area and invisible during streaming (ThinkingIndicator drew the eye to the bottom). The tiered approach ensures blocking items (permissions) always appear above informational items (agent status, tasks). New sticky elements slot into the appropriate tier without reshuffling others.
+
+---
+
 ### Shared DB Accessor Pattern
 
 **When to use**: Any Rust module that needs the logging/chat history SQLite database
