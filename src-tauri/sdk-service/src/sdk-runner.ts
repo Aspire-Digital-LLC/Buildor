@@ -1,8 +1,6 @@
 import { spawn } from "node:child_process";
 import {
   query,
-  type CanUseTool,
-  type PermissionResult,
   type SDKUserMessage,
   type SpawnedProcess,
   type SpawnOptions,
@@ -11,34 +9,12 @@ import {
 import type { ManagedSession } from "./types.js";
 import { AsyncMessageQueue } from "./types.js";
 import { sdkMessageToNDJSON } from "./wire-format.js";
-import { createPermissionHandler } from "./permission-gate.js";
+import { createPermissionHook } from "./permission-gate.js";
 import { sendSSE, closeSSEClients } from "./session-stream.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Wraps the boolean permission handler from permission-gate into the SDK's
- * CanUseTool signature that returns PermissionResult.
- */
-function buildCanUseTool(session: ManagedSession): CanUseTool {
-  const handler = createPermissionHandler(session);
-
-  return async (
-    toolName: string,
-    input: Record<string, unknown>,
-    options,
-  ): Promise<PermissionResult> => {
-    const toolUseId =
-      (options as Record<string, unknown>)["toolUseId"] as string ?? "";
-    const approved = await handler(toolName, input, toolUseId);
-    if (approved) {
-      return { behavior: "allow" };
-    }
-    return { behavior: "deny", message: `Tool "${toolName}" was denied.` };
-  };
-}
 
 /**
  * Async generator that maps queued strings into SDKUserMessage objects
@@ -82,7 +58,11 @@ export function startSession(session: ManagedSession): void {
       disallowedTools: session.disallowedTools.length
         ? session.disallowedTools
         : undefined,
-      canUseTool: buildCanUseTool(session),
+      hooks: {
+        PreToolUse: [{
+          hooks: [createPermissionHook(session)],
+        }],
+      },
       spawnClaudeCodeProcess: (opts: SpawnOptions): SpawnedProcess => {
         const child = spawn(opts.command, opts.args, {
           cwd: opts.cwd,
