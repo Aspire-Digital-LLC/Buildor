@@ -244,3 +244,12 @@ Architectural and design decisions with rationale. Each entry explains why X was
 **Rejected**: Injecting skill prompts into the active chat session
 
 **Why**: Heavy skills (documentation scans, log analysis) can take minutes and produce large outputs. Running them inline blocks the user's chat session — they can't ask questions or do other work while the skill runs. Forking as an agent gives the skill its own Claude process with independent context window, lets the user continue chatting, and produces a clean result that's injected back when done. The agent pool infrastructure (health monitoring, mailbox, transcript persistence) applies automatically.
+
+---
+
+## Shared Memory Repo over Separate Skills Sync
+
+**Choice**: Skills resolve from `{sharedMemoryRepo}/skills/` directory, falling back to `~/.buildor/skills/`
+**Rejected**: Dedicated git-backed skills sync system (`skill_sync.rs`, `SharedSkillsRepo.tsx`, startup auto-sync)
+
+**Why**: The original design had a separate "Shared Skills Repository" with its own git clone/pull/push lifecycle, status UI, and startup sync. This duplicated what the Shared Memory repo already provides — a single git-backed repo for shared configuration (flows, skills, defaults). Skills are just another type of shared content. Consolidating them into the shared memory repo eliminates ~700 lines of dedicated sync infrastructure (Rust backend, React UI, TypeScript commands), removes a separate Settings panel section, and gives skills the same sync lifecycle as flows. The `buildor_skills_dir()` function now reads `sharedMemoryRepo` from config and resolves `{repo}/skills/`.

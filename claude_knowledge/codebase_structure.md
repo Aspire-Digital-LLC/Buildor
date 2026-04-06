@@ -29,7 +29,8 @@ Buildor/
 │   ├── project_status.md        # Current phase, progress, known issues
 │   ├── personality_and_worktree_config.md  # Personality + worktree dep setup
 │   ├── buildor_skills_guide.md  # Skill authoring reference
-│   ├── operation_pool_spec.md   # Operation pool design spec (not yet implemented)
+│   ├── operation_pool_spec.md   # Operation pool design spec
+│   ├── pool_telemetry_spec.md   # Pool telemetry stream build spec (dev-time observability)
 │   ├── checkpoints/             # Context-engine scan checkpoints (per-command subdirs)
 │   └── local_learnings.md       # Machine-specific notes (gitignored)
 ├── src/                         # React frontend (TypeScript)
@@ -45,8 +46,7 @@ Buildor/
 │   │   │   └── AgentOutputBlock.tsx  # Inline surfaced agent results in chat
 │   │   └── settings/
 │   │       ├── Settings.tsx          # Settings sidebar with section routing
-│   │       ├── SharedMemory.tsx      # Shared memory repo config
-│   │       └── SharedSkillsRepo.tsx  # Shared skills repo config (URL, sync, push, status)
+│   │       └── SharedMemory.tsx      # Shared memory repo config (skills + flows live here)
 │   ├── hooks/                   # Custom React hooks
 │   │   ├── useSkills.ts             # Loads skills, manages eyeballs, search, sync refresh
 │   │   └── useAgentPool.ts          # Subscribes to agent events, maintains live agent state
@@ -64,7 +64,6 @@ Buildor/
 │   │   ├── buildSystemPrompt.ts     # System prompt assembly (identity + personality + skills)
 │   │   ├── commands/
 │   │   │   ├── skills.ts            # listBuildorSkills, listProjectSkills, etc.
-│   │   │   ├── skillSync.ts         # configureSharedRepo, syncSkillsRepo, pushSkillChanges
 │   │   │   ├── agents.ts            # spawnAgent, killAgent, extendAgent, markAgentExited
 │   │   │   ├── mailbox.ts          # depositResult, queryResult, purgeResults, spawnAgentWithDeps
 │   │   │   └── chatImages.ts        # saveChatImage, readChatImage, deleteSessionImages
@@ -72,15 +71,14 @@ Buildor/
 │   ├── prompts/                 # Centralized prompt templates
 │   │   └── historyInjection.ts      # Aware injection instructions (header, footer, modes, image markers)
 │   └── windows/                 # Per-window entry points
-│       └── main/MainApp.tsx         # App entry — loads projects, auto-syncs shared skills
+│       └── main/MainApp.tsx         # App entry — loads projects
 ├── src-tauri/                   # Tauri / Rust backend
 │   ├── src/
 │   │   ├── main.rs              # App entry point
 │   │   ├── commands/            # Tauri command handlers (IPC)
 │   │   │   ├── chat_history.rs  # Chat history CRUD + title/summary generation
 │   │   │   ├── chat_images.rs  # Image storage (save/read/delete), session cleanup
-│   │   │   ├── skills.rs        # Skill scanning (~/.buildor/skills/, .claude/skills/), defaults.json merge
-│   │   │   ├── skill_sync.rs    # Shared repo git ops (clone, pull, push, status)
+│   │   │   ├── skills.rs        # Skill scanning ({sharedMemoryRepo}/skills/ or ~/.buildor/skills/), defaults.json merge
 │   │   │   ├── agents.rs        # Agent pool (spawn, kill, extend, takeover, inject, list)
 │   │   │   ├── mailbox.rs      # Agent result mailbox (deposit, query, purge, dependency resolution)
 │   │   │   ├── claude.rs        # Claude session management (main + agent sessions)
@@ -112,7 +110,7 @@ Buildor/
 | **Frontend** | `src/` | UI rendering, user interaction, window management |
 | **Backend** | `src-tauri/` | Git ops, file system, process management, orchestration |
 | **Knowledge** | `claude_knowledge/` | Persistent project learnings for Claude |
-| **Buildor Skills** | `~/.buildor/skills/` | Buildor-managed skills (shared repo synced here) |
+| **Buildor Skills** | `{sharedMemoryRepo}/skills/` or `~/.buildor/skills/` | Buildor-managed skills (resolved from shared memory repo config, fallback to ~/.buildor/skills/) |
 | **Project Skills** | `.claude/skills/`, `~/.claude/skills/` | Native Claude Code skills (read-only in palette) |
 | **Skills** | `.claude/skills/` | Project-scoped Claude Code skills (document, read-logs, context-engine, skill-builder, simplify) |
 

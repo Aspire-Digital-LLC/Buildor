@@ -72,6 +72,11 @@
       "file": "operation_pool_dev_retrospective.md",
       "description": "Retrospective from first multi-agent orchestrated development cycle — lessons on phased pipelines, review loops, sub-agent spawning, marker syntax, and recommended flow templates",
       "keywords": ["retrospective", "multi-agent", "orchestration", "review loop", "adversarial review", "sub-agent", "marker", "flow template", "pipeline", "phased", "lessons learned"]
+    },
+    {
+      "file": "pool_telemetry_spec.md",
+      "description": "Build spec for real-time telemetry stream from Operation Pool and Agent Mailbox — injected into Claude's stdin for live observability during development",
+      "keywords": ["telemetry", "pool", "observability", "stream", "stdin", "send_message", "subscribe", "tick", "mailbox", "TELEMETRY_SUBSCRIBERS", "telemetry.rs", "dev tool"]
     }
   ]
 }

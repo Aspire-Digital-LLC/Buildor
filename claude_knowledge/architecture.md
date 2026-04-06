@@ -414,25 +414,12 @@ Agent sessions (`session_type = 'agent'`) are excluded from `get_chat_sessions_f
 - `AgentsPanel`: third right-side panel (28px collapsed / 250px expanded), active agents list + completed section, transcript viewer reuses ChatMessage component
 - `AgentOutputBlock`: distinct visual treatment in chat stream (header badge, collapsible)
 
-## Shared Skills Repository Sync (Phase 8)
+## Skills Resolution
 
-```
-App launch → getSyncStatus() → if configured → syncSkillsRepo() (background)
-  → First time: git clone <url> ~/.buildor/skills/
-  → Subsequent: git fetch + pull --ff-only
-  → If diverged: return error, don't force
-  → On success: emit skill-activated event → useSkills refreshes palette
-
-Settings > Shared Skills:
-  → Configure repo URL (HTTPS or SSH)
-  → Sync Now button → clone or pull
-  → Push Changes → git add -A && commit && push
-  → Status display: cloned/not-cloned, clean/dirty, diverged, last synced, branch
-```
+Skills are resolved from the **shared memory repo** configured in Settings > Shared Memory. The `buildor_skills_dir()` function in `skills.rs` reads `sharedMemoryRepo` from `config.json` and returns `{repo}/skills/`. Falls back to `~/.buildor/skills/` if no shared memory repo is configured or the path doesn't exist.
 
 - `defaults.json` at skills root provides org-wide fallback `model`, `effort`, `health` thresholds — individual skill.json values take precedence
-- Existing local skills backed up and merged on first clone (non-conflicting only)
-- Skill palette auto-refreshes after sync via event bus
+- No separate sync lifecycle — skills inherit the shared memory repo's git state (user syncs via Settings > Shared Memory)
 
 ## Chat History & Aware System
 
