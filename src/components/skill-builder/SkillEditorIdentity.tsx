@@ -1,7 +1,14 @@
 import { useSkillBuilderStore } from '@/stores/skillBuilderStore';
 import { useProjectStore } from '@/stores';
+import { FieldReviewCard } from './FieldReviewCard';
 
-export function SkillEditorIdentity() {
+interface SkillEditorIdentityProps {
+  onDiscuss: (field: string, message: string) => void;
+}
+
+const requiredMark = <span style={{ color: '#f85149', marginLeft: 2 }}>*</span>;
+
+export function SkillEditorIdentity({ onDiscuss }: SkillEditorIdentityProps) {
   const { editor, updateField } = useSkillBuilderStore();
   const { projects } = useProjectStore();
 
@@ -16,7 +23,7 @@ export function SkillEditorIdentity() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
       {/* Name */}
       <div>
-        <div style={labelStyle}>Name</div>
+        <div style={labelStyle}>Name {requiredMark}</div>
         <input
           type="text"
           value={editor.name}
@@ -25,11 +32,12 @@ export function SkillEditorIdentity() {
           style={inputStyle}
         />
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Lowercase + hyphens only. Matches the directory name.</div>
+        <FieldReviewCard field="name" onDiscuss={onDiscuss} />
       </div>
 
       {/* Description */}
       <div>
-        <div style={labelStyle}>Description (trigger-oriented)</div>
+        <div style={labelStyle}>Description (trigger-oriented) {requiredMark}</div>
         <textarea
           value={editor.description}
           onChange={(e) => updateField('description', e.target.value)}
@@ -41,6 +49,7 @@ export function SkillEditorIdentity() {
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
           {editor.description.length}/250 — Lead with user intent phrases for eyeball activation.
         </div>
+        <FieldReviewCard field="description" onDiscuss={onDiscuss} />
       </div>
 
       {/* Tags */}
@@ -54,6 +63,7 @@ export function SkillEditorIdentity() {
           style={inputStyle}
         />
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Comma-separated categories for search/filtering.</div>
+        <FieldReviewCard field="tags" onDiscuss={onDiscuss} />
       </div>
 
       {/* Shell */}
@@ -92,6 +102,7 @@ export function SkillEditorIdentity() {
             Project-Specific
           </label>
         </div>
+        <FieldReviewCard field="scope" onDiscuss={onDiscuss} />
       </div>
 
       {/* Projects multi-select (only when scope=project) */}
@@ -122,6 +133,7 @@ export function SkillEditorIdentity() {
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No projects configured.</div>
             )}
           </div>
+          <FieldReviewCard field="projects" onDiscuss={onDiscuss} />
         </div>
       )}
     </div>

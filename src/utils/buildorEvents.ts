@@ -42,6 +42,7 @@ export type BuildorEventType =
   | 'skill-activated'         // Skill eyeball toggled on (session restart)
   | 'skill-deactivated'       // Skill eyeball toggled off (session restart)
   | 'skill-invoked'           // Skill action mode executed
+  | 'skill-review-requested'  // Buildor Review clicked — local checks + AI review
   // Context compaction events
   | 'compact-started'         // Context compaction triggered (sent /compact)
   | 'compact-completed';      // Context compaction finished (context dropped)

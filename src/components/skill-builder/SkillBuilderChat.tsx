@@ -1,9 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { startClaudeSession, sendClaudeMessage, stopSession } from '@/utils/commands/claude';
 import { useSkillBuilderStore } from '@/stores/skillBuilderStore';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
+import { buildorEvents } from '@/utils/buildorEvents';
 import type { ChatContent } from '@/components/claude-chat/ChatMessage';
+
+export interface SkillBuilderChatHandle {
+  prefillInput: (text: string) => void;
+}
 
 const SKILL_BUILDER_MARKER_RE = /-<\*\{([\s\S]*?)\}\*>-/g;
 
@@ -67,7 +72,7 @@ function extractMarkers(text: string): SkillUpdateAction[] {
   return actions;
 }
 
-export function SkillBuilderChat() {
+export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function SkillBuilderChat(_props, ref) {
   const { editor, activeSkillName, isNew, updateField, updateExecution, updateVisibility, updateHealth } = useSkillBuilderStore();
   const isOpen = isNew || activeSkillName !== null;
 
@@ -78,6 +83,32 @@ export function SkillBuilderChat() {
   const [isStarting, setIsStarting] = useState(false);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Expose prefillInput for Discuss button
+  useImperativeHandle(ref, () => ({
+    prefillInput: (text: string) => {
+      setInput(text);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    },
+  }), []);
+
+  // Listen for review events — show review results in chat
+  useEffect(() => {
+    const handler = (event: { data: unknown }) => {
+      const data = event.data as { localReviews?: Record<string, { status: string; message: string }> };
+      if (data.localReviews) {
+        const entries = Object.entries(data.localReviews);
+        if (entries.length === 0) {
+          setMessages((prev) => [...prev, { role: 'system', text: 'Review passed — no issues found.' }]);
+        } else {
+          const summary = entries.map(([field, r]) => `${r.status.toUpperCase()}: ${field} — ${r.message}`).join('\n');
+          setMessages((prev) => [...prev, { role: 'system', text: `Review results:\n${summary}` }]);
+        }
+      }
+    };
+    buildorEvents.on('skill-review-requested', handler);
+    return () => { buildorEvents.off('skill-review-requested', handler); };
+  }, []);
 
   // Auto-scroll
   useEffect(() => {
@@ -287,4 +318,4 @@ export function SkillBuilderChat() {
       </div>
     </div>
   );
-}
+});

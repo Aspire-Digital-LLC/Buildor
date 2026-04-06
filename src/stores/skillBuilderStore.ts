@@ -31,6 +31,12 @@ export interface SkillEditorState {
   shell: 'bash' | 'powershell';
 }
 
+export interface FieldReview {
+  status: 'pass' | 'warning' | 'error';
+  message: string;
+  suggestion?: string;
+}
+
 function defaultEditorState(): SkillEditorState {
   return {
     name: '',
@@ -64,6 +70,12 @@ interface SkillBuilderStore {
   // Dirty flag
   isDirty: boolean;
 
+  // Review state
+  reviews: Record<string, FieldReview>;
+  manualFields: Set<string>;
+  reviewPending: boolean;
+  reviewInProgress: boolean;
+
   // Actions
   openSkill: (name: string, state: SkillEditorState) => void;
   createNew: () => void;
@@ -73,6 +85,14 @@ interface SkillBuilderStore {
   updateVisibility: (updates: Partial<SkillVisibility>) => void;
   updateHealth: (updates: Partial<SkillHealthConfig>) => void;
   markSaved: () => void;
+
+  // Review actions
+  setReview: (field: string, review: FieldReview) => void;
+  setReviews: (reviews: Record<string, FieldReview>) => void;
+  clearReview: (field: string) => void;
+  clearAllReviews: () => void;
+  acceptReview: (field: string) => void;
+  setReviewInProgress: (inProgress: boolean) => void;
 }
 
 function computeDirty(editor: SkillEditorState, original: SkillEditorState | null): boolean {
@@ -86,6 +106,10 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
   original: null,
   isNew: false,
   isDirty: false,
+  reviews: {},
+  manualFields: new Set(),
+  reviewPending: false,
+  reviewInProgress: false,
 
   openSkill: (name, state) => {
     set({
@@ -94,6 +118,10 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       original: { ...state },
       isNew: false,
       isDirty: false,
+      reviews: {},
+      manualFields: new Set(),
+      reviewPending: false,
+      reviewInProgress: false,
     });
   },
 
@@ -105,6 +133,10 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       original: { ...fresh },
       isNew: true,
       isDirty: false,
+      reviews: {},
+      manualFields: new Set(),
+      reviewPending: false,
+      reviewInProgress: false,
     });
   },
 
@@ -115,34 +147,66 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       original: null,
       isNew: false,
       isDirty: false,
+      reviews: {},
+      manualFields: new Set(),
+      reviewPending: false,
+      reviewInProgress: false,
     });
   },
 
   updateField: (field, value) => {
     set((state) => {
       const editor = { ...state.editor, [field]: value };
-      return { editor, isDirty: computeDirty(editor, state.original) };
+      const manualFields = new Set(state.manualFields);
+      manualFields.add(field as string);
+      return {
+        editor,
+        isDirty: computeDirty(editor, state.original),
+        manualFields,
+        reviewPending: true,
+      };
     });
   },
 
   updateExecution: (updates) => {
     set((state) => {
       const editor = { ...state.editor, execution: { ...state.editor.execution, ...updates } };
-      return { editor, isDirty: computeDirty(editor, state.original) };
+      const manualFields = new Set(state.manualFields);
+      manualFields.add('execution');
+      return {
+        editor,
+        isDirty: computeDirty(editor, state.original),
+        manualFields,
+        reviewPending: true,
+      };
     });
   },
 
   updateVisibility: (updates) => {
     set((state) => {
       const editor = { ...state.editor, visibility: { ...state.editor.visibility, ...updates } };
-      return { editor, isDirty: computeDirty(editor, state.original) };
+      const manualFields = new Set(state.manualFields);
+      manualFields.add('visibility');
+      return {
+        editor,
+        isDirty: computeDirty(editor, state.original),
+        manualFields,
+        reviewPending: true,
+      };
     });
   },
 
   updateHealth: (updates) => {
     set((state) => {
       const editor = { ...state.editor, health: { ...state.editor.health, ...updates } };
-      return { editor, isDirty: computeDirty(editor, state.original) };
+      const manualFields = new Set(state.manualFields);
+      manualFields.add('health');
+      return {
+        editor,
+        isDirty: computeDirty(editor, state.original),
+        manualFields,
+        reviewPending: true,
+      };
     });
   },
 
@@ -152,6 +216,61 @@ export const useSkillBuilderStore = create<SkillBuilderStore>((set) => ({
       isDirty: false,
       isNew: false,
       activeSkillName: state.editor.name || state.activeSkillName,
+      manualFields: new Set(),
+      reviewPending: false,
     }));
+  },
+
+  setReview: (field, review) => {
+    set((state) => ({
+      reviews: { ...state.reviews, [field]: review },
+    }));
+  },
+
+  setReviews: (reviews) => {
+    set({ reviews, reviewPending: false });
+  },
+
+  clearReview: (field) => {
+    set((state) => {
+      const reviews = { ...state.reviews };
+      delete reviews[field];
+      return { reviews };
+    });
+  },
+
+  clearAllReviews: () => {
+    set({ reviews: {}, reviewPending: false });
+  },
+
+  acceptReview: (field) => {
+    set((state) => {
+      const review = state.reviews[field];
+      if (!review?.suggestion) return state;
+
+      // Apply the suggestion to the editor field
+      let editor = { ...state.editor };
+      if (field === 'name') editor.name = review.suggestion;
+      else if (field === 'description') editor.description = review.suggestion;
+      else if (field === 'tags') {
+        try { editor.tags = JSON.parse(review.suggestion); } catch { /* skip */ }
+      }
+      else if (field === 'promptContent') editor.promptContent = review.suggestion;
+      else if (field === 'scope') editor.scope = review.suggestion as 'general' | 'project';
+
+      // Remove the review and mark dirty
+      const reviews = { ...state.reviews };
+      delete reviews[field];
+
+      return {
+        editor,
+        reviews,
+        isDirty: computeDirty(editor, state.original),
+      };
+    });
+  },
+
+  setReviewInProgress: (inProgress) => {
+    set({ reviewInProgress: inProgress });
   },
 }));
