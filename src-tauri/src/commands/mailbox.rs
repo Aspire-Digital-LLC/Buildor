@@ -91,6 +91,24 @@ pub fn deposit_result_internal(app: &AppHandle, entry: MailboxEntryData) -> Resu
         }
     }));
 
+    // Telemetry: deposit event
+    if crate::telemetry::has_subscribers() {
+        let msg = format!(
+            "[TELEMETRY:mailbox] deposit agent=\"{}\" parent={} status={} mailbox={}",
+            &entry.name,
+            entry.parent_session_id.as_deref().unwrap_or("none"),
+            &entry.status,
+            get_mailbox().lock().map(|m| m.len()).unwrap_or(0),
+        );
+        for sid in crate::telemetry::get_mailbox_subscribers() {
+            let msg_clone = msg.clone();
+            let sid_clone = sid.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = super::claude::send_message(sid_clone, msg_clone).await;
+            });
+        }
+    }
+
     // Check if any pending spawns can now proceed
     check_pending_spawns(app);
 
@@ -210,6 +228,20 @@ fn check_pending_spawns(app: &AppHandle) {
                     "parentSessionId": &ps.parent_session_id,
                 }
             }));
+            // Telemetry: abandoned event
+            if crate::telemetry::has_subscribers() {
+                let msg = format!(
+                    "[TELEMETRY:mailbox] abandoned agent=\"{}\" failed-dep=\"{}\" pending={}",
+                    ps.name, failed_dep, queue.len(),
+                );
+                for sid in crate::telemetry::get_mailbox_subscribers() {
+                    let msg_clone = msg.clone();
+                    let sid_clone = sid.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = super::claude::send_message(sid_clone, msg_clone).await;
+                    });
+                }
+            }
             failed_indices.push(i);
             continue;
         }
@@ -261,6 +293,24 @@ fn check_pending_spawns(app: &AppHandle) {
                 dep_context, ps.prompt
             )
         };
+
+        // Telemetry: deps-met event
+        if crate::telemetry::has_subscribers() {
+            let pending_count = get_pending().lock().map(|q| q.len()).unwrap_or(0);
+            let msg = format!(
+                "[TELEMETRY:mailbox] deps-met agent=\"{}\" spawning deps=[{}] pending={}",
+                ps.name,
+                ps.dependencies.join(","),
+                pending_count,
+            );
+            for sid in crate::telemetry::get_mailbox_subscribers() {
+                let msg_clone = msg.clone();
+                let sid_clone = sid.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = super::claude::send_message(sid_clone, msg_clone).await;
+                });
+            }
+        }
 
         let app_clone = app.clone();
         let name = ps.name.clone();
