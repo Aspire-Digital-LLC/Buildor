@@ -162,10 +162,14 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
               if (raw.type === 'result') {
                 const success = raw.subtype === 'success';
                 const output = agentOutputRef.current.get(agentSid) || '';
-                markAgentExited(agentSid, success, output || undefined).catch(() => {});
-                // Bridge to JS event bus — Rust emits buildor-event but nothing listens for it
-                // Include output so onCompleted can inject result back to parent
-                buildorEvents.emit(success ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+                // Await backend update BEFORE emitting JS event — prevents listAgents() race
+                // where onCompleted refreshes from backend before markAgentExited has resolved
+                markAgentExited(agentSid, success, output || undefined).then(() => {
+                  buildorEvents.emit(success ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+                }).catch(() => {
+                  // Still emit even if mark failed — UI should reflect completion
+                  buildorEvents.emit(success ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+                });
                 import('@/utils/commands/claude').then(({ stopSession }) => {
                   stopSession(agentSid).catch(() => {});
                 });
@@ -301,8 +305,11 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
           unlistenExit = await listen<string>(`claude-exit-${agentSid}`, () => {
             const output = agentOutputRef.current.get(agentSid) || '';
             const exitSuccess = output.length > 0;
-            markAgentExited(agentSid, exitSuccess, output || undefined).catch(() => {});
-            buildorEvents.emit(exitSuccess ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+            markAgentExited(agentSid, exitSuccess, output || undefined).then(() => {
+              buildorEvents.emit(exitSuccess ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+            }).catch(() => {
+              buildorEvents.emit(exitSuccess ? 'agent-completed' : 'agent-failed', { agentSessionId: agentSid, output }, agentSid);
+            });
 
             // Cleanup
             agentOutputRef.current.delete(agentSid);
