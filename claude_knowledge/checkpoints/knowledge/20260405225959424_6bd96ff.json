@@ -1,0 +1,7 @@
+{
+  "commit": "6bd96ff",
+  "date": "2026-04-06T03:59:59.424Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Documented .bin shim regeneration fix for Windows junction worktree strategy"
+}
