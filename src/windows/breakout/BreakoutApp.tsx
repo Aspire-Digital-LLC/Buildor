@@ -10,6 +10,7 @@ import { CommandPalette } from '../../components/command-palette/CommandPalette'
 import { WorktreeManager } from '../../components/worktree-manager/WorktreeManager';
 import { ProjectSwitcher } from '../../components/project-switcher/ProjectSwitcher';
 import { PlaceholderPanel } from '../../components/shared/PlaceholderPanel';
+import { SkillBuilder } from '../../components/skill-builder/SkillBuilder';
 
 function SettingsPanel() {
   return <PlaceholderPanel title="Settings" description="Coming soon" />;
@@ -20,6 +21,7 @@ const panelMap: Record<PanelType, React.ComponentType> = {
   'code-viewer': CodeViewer,
   'flow-builder': FlowBuilder,
   'claude-chat': ClaudeChat,
+  'skill-builder': SkillBuilder,
   'command-palette': CommandPalette,
   'worktree-manager': WorktreeManager,
   'projects': ProjectSwitcher,
@@ -31,6 +33,7 @@ const panelLabels: Record<PanelType, string> = {
   'code-viewer': 'Code Viewer',
   'flow-builder': 'Flow Builder',
   'claude-chat': 'Claude Chat',
+  'skill-builder': 'Skill Builder',
   'command-palette': 'Command Palette',
   'worktree-manager': 'Worktree Manager',
   'projects': 'Projects',

@@ -99,15 +99,26 @@ export function useSkills({ repoPath, projectName }: UseSkillsOptions): UseSkill
     setSearchQuery(query);
   }, []);
 
+  // Filter by scope: general skills always visible, project skills only when matching
+  const scopedBuildorSkills = useMemo(() => {
+    return buildorSkills.filter((s) => {
+      if (!s.scope || s.scope === 'general') return true;
+      if (s.scope === 'project' && s.projects && projectName) {
+        return s.projects.includes(projectName);
+      }
+      return false;
+    });
+  }, [buildorSkills, projectName]);
+
   const filteredBuildorSkills = useMemo(() => {
-    if (!searchQuery) return buildorSkills;
+    if (!searchQuery) return scopedBuildorSkills;
     const q = searchQuery.toLowerCase();
-    return buildorSkills.filter((s) =>
+    return scopedBuildorSkills.filter((s) =>
       s.name.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q) ||
       s.tags?.some((t) => t.toLowerCase().includes(q))
     );
-  }, [buildorSkills, searchQuery]);
+  }, [scopedBuildorSkills, searchQuery]);
 
   const filteredProjectSkills = useMemo(() => {
     if (!searchQuery) return projectSkills;

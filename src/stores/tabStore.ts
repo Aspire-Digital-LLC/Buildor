@@ -6,6 +6,7 @@ const panelLabels: Record<PanelType, string> = {
   'code-viewer': 'Code Viewer',
   'flow-builder': 'Flow Builder',
   'claude-chat': 'Claude Chat',
+  'skill-builder': 'Skill Builder',
   'command-palette': 'Command Palette',
   'worktree-manager': 'Worktrees',
   'projects': 'Projects',

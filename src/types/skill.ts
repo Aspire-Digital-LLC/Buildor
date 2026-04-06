@@ -50,6 +50,8 @@ export interface BuildorSkill {
   execution?: SkillExecution;
   visibility?: SkillVisibility;
   shell?: 'bash' | 'powershell';
+  scope?: 'general' | 'project';
+  projects?: string[];
 
   // Resolved at load time
   skillDir: string;                   // absolute path to skill directory

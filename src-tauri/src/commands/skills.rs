@@ -15,6 +15,10 @@ pub struct BuildorSkillData {
     pub execution: Option<SkillExecutionData>,
     pub visibility: Option<SkillVisibilityData>,
     pub shell: Option<String>,
+    #[serde(default = "default_scope")]
+    pub scope: String,
+    #[serde(default)]
+    pub projects: Vec<String>,
 
     // Resolved at load time (not from skill.json)
     #[serde(skip_deserializing)]
@@ -82,19 +86,41 @@ pub struct ProjectSkillData {
     pub has_fork: bool,
 }
 
-fn buildor_skills_dir() -> PathBuf {
-    // Read sharedMemoryRepo from config — skills live in {repo}/skills/
+fn default_scope() -> String {
+    "general".to_string()
+}
+
+fn shared_memory_repo_path() -> Option<String> {
     let config_path = AppConfig::config_file_path();
     if config_path.exists() {
         if let Ok(content) = fs::read_to_string(&config_path) {
             if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(repo) = cfg.get("sharedMemoryRepo").and_then(|v| v.as_str()) {
-                    let skills_path = PathBuf::from(repo).join("skills");
-                    if skills_path.exists() {
-                        return skills_path;
-                    }
-                }
+                return cfg.get("sharedMemoryRepo").and_then(|v| v.as_str()).map(|s| s.to_string());
             }
+        }
+    }
+    None
+}
+
+fn shared_memory_config() -> (Option<String>, bool) {
+    let config_path = AppConfig::config_file_path();
+    if config_path.exists() {
+        if let Ok(content) = fs::read_to_string(&config_path) {
+            if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&content) {
+                let repo = cfg.get("sharedMemoryRepo").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let protected = cfg.get("sharedMemoryBranchProtected").and_then(|v| v.as_bool()).unwrap_or(true);
+                return (repo, protected);
+            }
+        }
+    }
+    (None, true)
+}
+
+fn buildor_skills_dir() -> PathBuf {
+    if let Some(repo) = shared_memory_repo_path() {
+        let skills_path = PathBuf::from(&repo).join("skills");
+        if skills_path.exists() {
+            return skills_path;
         }
     }
     // Fallback if no shared memory repo configured
@@ -360,8 +386,86 @@ pub async fn delete_buildor_skill(name: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn index_skills() -> Result<Vec<BuildorSkillData>, String> {
-    // Rebuild and return the full skills list
-    // In future phases this will also update the SQLite cache
     let dir = buildor_skills_dir();
     Ok(scan_buildor_skills(&dir))
+}
+
+/// Save a skill and commit+push to the shared memory repo.
+#[tauri::command]
+pub async fn save_skill_and_commit(
+    name: String,
+    skill_json: String,
+    prompt_md: String,
+    supporting_files: Vec<(String, String)>,
+) -> Result<(), String> {
+    let dir = buildor_skills_dir().join(&name);
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create skill directory: {}", e))?;
+
+    fs::write(dir.join("skill.json"), &skill_json)
+        .map_err(|e| format!("Failed to write skill.json: {}", e))?;
+
+    fs::write(dir.join("prompt.md"), &prompt_md)
+        .map_err(|e| format!("Failed to write prompt.md: {}", e))?;
+
+    for (fname, content) in &supporting_files {
+        fs::write(dir.join(fname), content)
+            .map_err(|e| format!("Failed to write {}: {}", fname, e))?;
+    }
+
+    // Commit and push to the shared memory repo
+    let (repo_opt, branch_protected) = shared_memory_config();
+    if let Some(repo_path) = repo_opt {
+        let repo_dir = Path::new(&repo_path);
+        if repo_dir.join(".git").exists() {
+            let skill_rel = format!("skills/{}", name);
+
+            let run = |args: &[&str]| -> Result<String, String> {
+                let output = crate::no_window_command("git")
+                    .args(args)
+                    .current_dir(repo_dir)
+                    .output()
+                    .map_err(|e| format!("git error: {}", e))?;
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                } else {
+                    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+                }
+            };
+
+            run(&["add", &skill_rel])?;
+
+            // Check if there are staged changes
+            let status = run(&["diff", "--cached", "--name-only"])?;
+            if !status.is_empty() {
+                let msg = format!("Update skill: {}", name);
+                run(&["commit", "-m", &msg])?;
+
+                if !branch_protected {
+                    run(&["push"])?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Read a supporting file from a skill directory.
+#[tauri::command]
+pub async fn read_skill_file(skill_name: String, file_name: String) -> Result<String, String> {
+    let path = buildor_skills_dir().join(&skill_name).join(&file_name);
+    fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read {}/{}: {}", skill_name, file_name, e))
+}
+
+/// Delete a supporting file from a skill directory.
+#[tauri::command]
+pub async fn delete_skill_file(skill_name: String, file_name: String) -> Result<(), String> {
+    let path = buildor_skills_dir().join(&skill_name).join(&file_name);
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|e| format!("Failed to delete {}/{}: {}", skill_name, file_name, e))?;
+    }
+    Ok(())
 }

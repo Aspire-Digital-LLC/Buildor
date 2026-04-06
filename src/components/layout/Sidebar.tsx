@@ -40,6 +40,13 @@ const icons: Record<string, ReactNode> = {
       <path d="M8 10h.01M12 10h.01M16 10h.01" />
     </svg>
   ),
+  skillBuilder: (
+    <svg {...iconProps}>
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
+    </svg>
+  ),
   commandPalette: (
     <svg {...iconProps}>
       <path d="M4 17l6-6-6-6M12 19h8" />
@@ -79,6 +86,7 @@ const navItems: NavItem[] = [
   { panelType: 'code-viewer', icon: icons.codeViewer, label: 'Code Viewer', requiresProject: true },
   { panelType: 'flow-builder', icon: icons.flowBuilder, label: 'Flow Builder', requiresProject: false },
   { panelType: 'claude-chat', icon: icons.claudeChat, label: 'Claude Chat', requiresProject: true },
+  { panelType: 'skill-builder', icon: icons.skillBuilder, label: 'Skill Builder', requiresProject: false },
   { panelType: 'command-palette', icon: icons.commandPalette, label: 'Command Palette', requiresProject: false },
   { panelType: 'worktree-manager', icon: icons.worktrees, label: 'Worktrees', requiresProject: false },
 ];

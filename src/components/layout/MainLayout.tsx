@@ -15,6 +15,7 @@ import { CommandPalette } from '../command-palette/CommandPalette';
 import { WorktreeManager } from '../worktree-manager/WorktreeManager';
 import { ProjectSwitcher } from '../project-switcher/ProjectSwitcher';
 import { Settings } from '../settings/Settings';
+import { SkillBuilder } from '../skill-builder/SkillBuilder';
 import type { PanelType } from '@/types';
 
 const panelComponents: Record<PanelType, React.ComponentType> = {
@@ -22,6 +23,7 @@ const panelComponents: Record<PanelType, React.ComponentType> = {
   'code-viewer': CodeViewer,
   'flow-builder': FlowBuilder,
   'claude-chat': ClaudeChat,
+  'skill-builder': SkillBuilder,
   'command-palette': CommandPalette,
   'worktree-manager': WorktreeManager,
   'projects': ProjectSwitcher,
