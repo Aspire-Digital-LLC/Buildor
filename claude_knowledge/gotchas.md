@@ -208,6 +208,15 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Agent Pool Race: markAgentExited vs Completion Event Ordering
+
+**Context**: When an agent completes (result event or process exit), `useAgentPool` called `markAgentExited()` (async backend update) and immediately emitted `agent-completed`/`agent-failed` on the JS event bus.
+**Surprise**: The `onCompleted` handler (which refreshes agents via `listAgents()`) fired before `markAgentExited` resolved in the backend. The backend still showed the agent as running, so the UI refresh saw stale state.
+**Impact**: Agent appeared stuck in "running" state after completion. Required manual refresh or next poll cycle to correct.
+**Workaround**: `await` the `markAgentExited()` promise before emitting the JS event. Use `.then()` to chain the emit after the backend update. In the `.catch()` branch, still emit the event (UI should reflect completion even if the DB update failed). Applied in both the result-event handler and the claude-exit handler.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

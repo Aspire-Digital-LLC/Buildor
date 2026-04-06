@@ -360,6 +360,12 @@ Agents CAN spawn sub-agents via the marker protocol (`-<*{...}*>-`). The pool is
 ### Agent Transcript Persistence
 Each agent gets a SQLite `chat_session` record on spawn. Parsed messages are saved to `chat_messages` via `saveChatMessage`. The "View transcript" action in `AgentsPanel` reads from the DB.
 
+### Agent Transcript Hierarchy (Dual-Write)
+Agent messages are dual-written: once to the agent's own session (for transcript viewer) and once to the root parent session (for history injection). The root parent is resolved by walking up `agentMetaRef` — if a sub-agent's parent is itself an agent, the root is the grandparent's root, etc. Dual-written messages carry `source_agent_id` (the agent's session ID) and `agent_name` (human-readable name like "researcher") in the `chat_messages` table. `buildAwareContext` prefixes these messages with `[Agent: name]` when building aware injection context, so the parent session's history shows a labeled interleaved timeline of all agent work. The dual-write uses `Date.now()` as the sequence number — always higher than the parent's sequential ints (1,2,3...) — so temporal ordering is preserved.
+
+### Stdout Emit Performance Instrumentation
+Both `start_session` and `start_agent_session_sync` stdout reader threads instrument every `app_handle.emit()` call. Emits taking >50ms are logged as `warn` level with operation `stdout-emit-slow` (or `agent-stdout-emit-slow` for agents). When the reader thread exits, a summary is logged at `info` level with operation `stdout-emit-summary` (or `agent-stdout-emit-summary`), including total lines, slow emit count, total emit time, and average. Queryable via `/read-logs` filtering on these operations.
+
 ### Pool Cleanup
 `clear_agents_for_parent` Rust command removes all pool entries for a parent session. `cleanup_agent_sessions` deletes all agent `chat_session` + `chat_messages` DB records (and associated images) for a parent. Both are called when the main chat session exits or `/clear` is used (in-app and breakout windows). This prevents stale agents appearing in subsequent sessions and avoids orphaned DB records.
 

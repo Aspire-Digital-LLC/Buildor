@@ -63,6 +63,9 @@
 - [x] **Agent sessions hidden from history**: SQL filter excludes `session_type='agent'` from chat history sidebar; agents remain queryable via dedicated `query_agent_sessions_by_parent`
 - [x] **check_agent_alive Windows fix**: Uses `no_window_command("tasklist")` to prevent console window flash on Windows
 - [x] **False distress fixes**: Emit `message-received` for `content_block_delta` events in raw JSON parser; text output recovers from any unhealthy state
+- [x] **Agent transcript hierarchy dual-write**: Agent messages dual-written to root parent session with `source_agent_id` + `agent_name` columns; `buildAwareContext` labels agent-sourced messages with `[Agent: name]` prefix for history injection
+- [x] **Stdout emit perf instrumentation**: Both session and agent stdout reader threads log slow emits (>50ms) and session summaries to SQLite; queryable via `/read-logs`
+- [x] **Agent pool race fix**: `markAgentExited` awaited before emitting `agent-completed`/`agent-failed` events to prevent `listAgents()` seeing stale backend state
 - [x] **Auto-dismiss task tracker**: Completed task list clears on next Claude `message-received` event
 - [x] **Skills infrastructure**: context-engine (checkpoint manager for delta scans), skill-builder (scaffold new skills from prompts), skills moved from `documentor/` to `.claude/skills/`
 - [x] **Operation Pool design spec**: Full design specification for app-global adaptive operation scheduler (`claude_knowledge/operation_pool_spec.md`) — resource lanes, TCP slow-start concurrency, two-tier scheduling, unified permission pipeline, persisted learned limits
