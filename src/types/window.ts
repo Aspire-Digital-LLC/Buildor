@@ -3,6 +3,7 @@ export type PanelType =
   | 'code-viewer'
   | 'flow-builder'
   | 'claude-chat'
+  | 'skill-builder'
   | 'command-palette'
   | 'worktree-manager'
   | 'projects'
