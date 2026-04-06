@@ -1,7 +1,0 @@
-{
-  "commit": "4e4e010",
-  "date": "2026-04-04T00:43:27.802Z",
-  "command": "knowledge",
-  "type": "full",
-  "notes": "Full scan — 80+ commits, all phases 1-8, agent pool, mailbox, health monitoring, skills infrastructure, operation pool spec"
-}

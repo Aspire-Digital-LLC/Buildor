@@ -76,7 +76,7 @@
     {
       "file": "telemetry.md",
       "description": "Pool telemetry stream — how to subscribe, read, and diagnose Operation Pool and Mailbox behavior in real-time during development",
-      "keywords": ["telemetry", "pool", "mailbox", "subscribe", "monitor", "diagnose", "debug", "queue", "lane", "concurrency", "tick", "stream"]
+      "keywords": ["telemetry", "pool", "mailbox", "subscribe", "unsubscribe", "monitor", "diagnose", "debug", "queue", "lane", "concurrency", "tick", "stream", "subscribe_telemetry", "unsubscribe_telemetry", "marker"]
     }
   ]
 }

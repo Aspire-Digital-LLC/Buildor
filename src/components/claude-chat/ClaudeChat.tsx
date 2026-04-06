@@ -4,7 +4,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { useProjectStore } from '@/stores';
 import { useTabContext } from '@/contexts/TabContext';
 import { invoke } from '@tauri-apps/api/core';
-import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, interruptSession, setSessionModel, runClaudeCli, respondToPermission } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, sendClaudeMessageWithImages, stopSession, interruptSession, setSessionModel, runClaudeCli, respondToPermissionPooled } from '@/utils/commands/claude';
 import { useImageAttachments } from './useImageAttachments';
 import { ImagePreviewStrip } from './ImagePreviewStrip';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
@@ -162,7 +162,7 @@ export function ClaudeChat() {
           const toolName = permBlock.name || '';
           if (autoAcceptTools.length > 0 && autoAcceptTools.includes(toolName)) {
             // Auto-accept: respond immediately, don't show permission card
-            respondToPermission(sessionId, permBlock.requestId, true).catch(() => {});
+            respondToPermissionPooled(sessionId, permBlock.requestId, true, undefined, `tool/${toolName}/${sessionId}`, 'user').catch(() => {});
             buildorEvents.emit('permission-resolved', { requestId: permBlock.requestId, autoAccepted: true, toolName }, sessionId);
             // Skip adding this message to the UI
           } else {

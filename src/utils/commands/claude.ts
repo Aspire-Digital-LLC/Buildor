@@ -45,6 +45,32 @@ export async function respondToPermission(sessionId: string, requestId: string, 
   return invoke('respond_to_permission', { sessionId, requestId, approved, toolInput: toolInput || null });
 }
 
+/**
+ * Send a permission response through the operation pool.
+ * The pool schedules when the response is sent, preventing concurrent tool
+ * executions from overwhelming the system.
+ *
+ * @param resourceKey Lane key for pool scheduling (e.g. "tool/Bash/C:/Git/Repo")
+ * @param tier "app" | "user" | "subagent" — controls scheduling priority
+ */
+export async function respondToPermissionPooled(
+  sessionId: string,
+  requestId: string,
+  approved: boolean,
+  toolInput: Record<string, unknown> | undefined,
+  resourceKey: string,
+  tier?: 'app' | 'user' | 'subagent',
+): Promise<void> {
+  return invoke('respond_to_permission_pooled', {
+    sessionId,
+    requestId,
+    approved,
+    toolInput: toolInput || null,
+    resourceKey,
+    tier: tier || null,
+  });
+}
+
 export async function addPermissionRule(sessionId: string, rule: string): Promise<void> {
   return invoke('add_permission_rule', { sessionId, rule });
 }
