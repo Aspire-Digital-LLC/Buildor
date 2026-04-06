@@ -73,6 +73,7 @@ pub fn run() {
             commands::claude::stop_session,
             commands::claude::list_claude_sessions,
             commands::claude::respond_to_permission,
+            commands::claude::respond_to_permission_pooled,
             commands::claude::add_permission_rule,
             commands::claude::run_claude_cli,
             commands::claude::query_claude_status,

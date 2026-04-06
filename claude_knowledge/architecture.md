@@ -312,7 +312,7 @@ Caller (git command, shell exec, agent spawn, etc.)
 A subscribable real-time telemetry feed from the Operation Pool and Mailbox, designed for Claude sessions working on the Buildor codebase. Telemetry lines are injected directly into the subscribed session's stdin via `send_message()` — no new event channels or frontend UI needed.
 
 ```
-Claude session subscribes via subscribeTelemetry(sessionId, ['pool', 'mailbox'])
+Claude session subscribes via marker (-<*{ "action": "subscribe_telemetry", "streams": [...] }*>-) or frontend call
   → Subscriber registry: static OnceLock<Mutex<HashMap>> in telemetry.rs
   → Pool: every 10th tick (~1s), if has_subscribers(), format snapshot → send_message() to each pool subscriber
   → Mailbox: on deposit/deps-met/abandoned events → send_message() to each mailbox subscriber
@@ -322,6 +322,8 @@ Claude session subscribes via subscribeTelemetry(sessionId, ['pool', 'mailbox'])
 
 **Line format**: `[TELEMETRY:pool] tick:N state pool:cur/max sel:N done:N fail:N | lane_key:aN,qT1/T2,cN`
 **Mailbox events**: `[TELEMETRY:mailbox] deposit|deps-met|abandoned agent="name" ...`
+
+**Marker activation**: Claude sessions can self-subscribe by emitting `subscribe_telemetry`/`unsubscribe_telemetry` markers in the standard `-<*{...}*>-` format. `parseClaudeStream.ts` intercepts these and calls the Tauri commands with the session ID. This enables the end-to-end flow: user asks about queue state → Claude subscribes → reads telemetry → reports → unsubscribes.
 
 **Cost**: ~100-150 tokens per line. Subscribe only when actively testing, unsubscribe immediately after. See `claude_knowledge/telemetry.md` for full format reference, healthy/red-flag patterns, and testing recipes.
 

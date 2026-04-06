@@ -425,11 +425,11 @@ pub async fn read_file_base64(path: String) -> Result<(String, String), String> 
     Ok((media_type.to_string(), b64))
 }
 
-/// Send a permission response (approve/deny) back to Claude
-#[tauri::command]
-pub async fn respond_to_permission(
-    session_id: String,
-    request_id: String,
+/// Internal: write a permission response to the session's stdin.
+/// Used by both the direct and pool-gated permission paths.
+fn write_permission_response(
+    session_id: &str,
+    request_id: &str,
     approved: bool,
     tool_input: Option<serde_json::Value>,
 ) -> Result<(), String> {
@@ -438,7 +438,7 @@ pub async fn respond_to_permission(
     let sessions = get_sessions();
     let mut map = sessions.lock().map_err(|e| format!("Lock error: {}", e))?;
 
-    let session = map.get_mut(&session_id)
+    let session = map.get_mut(session_id)
         .ok_or_else(|| "Session not found".to_string())?;
 
     let stdin = session.stdin.as_mut()
@@ -448,7 +448,6 @@ pub async fn respond_to_permission(
         let mut response_data = serde_json::json!({
             "behavior": "allow"
         });
-        // Must echo back the original tool input
         if let Some(input) = tool_input {
             response_data["updatedInput"] = input;
         }
@@ -482,6 +481,57 @@ pub async fn respond_to_permission(
     stdin.flush()
         .map_err(|e| format!("Failed to flush: {}", e))?;
 
+    Ok(())
+}
+
+/// Send a permission response (approve/deny) back to Claude — direct, no pool gating.
+/// Kept for backward compat but prefer respond_to_permission_pooled for scheduled execution.
+#[tauri::command]
+pub async fn respond_to_permission(
+    session_id: String,
+    request_id: String,
+    approved: bool,
+    tool_input: Option<serde_json::Value>,
+) -> Result<(), String> {
+    write_permission_response(&session_id, &request_id, approved, tool_input)?;
+
+    Ok(())
+}
+
+/// Send a permission response through the operation pool.
+/// The pool schedules when the response is actually sent, preventing
+/// concurrent tool executions from overwhelming the system.
+///
+/// resource_key: lane key for pool scheduling (e.g. "tool/Bash/C:/Git/Repo")
+/// tier: "app", "user", or "subagent"
+#[tauri::command]
+pub async fn respond_to_permission_pooled(
+    session_id: String,
+    request_id: String,
+    approved: bool,
+    tool_input: Option<serde_json::Value>,
+    resource_key: String,
+    tier: Option<String>,
+) -> Result<(), String> {
+    let pool = crate::operation_pool::OPERATION_POOL.get()
+        .ok_or_else(|| "Operation pool not initialized".to_string())?;
+
+    let tier_enum = match tier.as_deref() {
+        Some("app") => crate::operation_pool::Tier::App,
+        Some("subagent") => crate::operation_pool::Tier::Subagent,
+        _ => crate::operation_pool::Tier::User,
+    };
+
+    let rx = pool.submit(
+        resource_key,
+        tier_enum,
+        move || {
+            write_permission_response(&session_id, &request_id, approved, tool_input)?;
+            Ok("ok".to_string())
+        },
+    ).await;
+
+    rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
     Ok(())
 }
 
