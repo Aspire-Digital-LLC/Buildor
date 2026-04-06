@@ -170,6 +170,10 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
         "--permission-mode".to_string(), "default".to_string(),
         "--permission-prompt-tool".to_string(), "stdio".to_string(),
         "--disallowedTools".to_string(), "Agent".to_string(),
+        // Force all tools through permission prompt by clearing allow lists.
+        // Buildor manages its own auto-approve rules and routes everything
+        // through the operation pool for scheduling.
+        "--settings".to_string(), r#"{"permissions":{"allow":[],"deny":[]}}"#.to_string(),
     ];
     if let Some(ref m) = model {
         args.push("--model".to_string());
@@ -625,6 +629,7 @@ pub fn start_agent_session_sync(
         "--permission-mode".to_string(), "default".to_string(),
         "--permission-prompt-tool".to_string(), "stdio".to_string(),
         "--disallowedTools".to_string(), "Agent".to_string(),
+        "--settings".to_string(), r#"{"permissions":{"allow":[],"deny":[]}}"#.to_string(),
         "--append-system-prompt".to_string(), system_prompt.to_string(),
     ];
     if let Some(m) = model {
