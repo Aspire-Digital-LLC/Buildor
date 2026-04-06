@@ -26,6 +26,15 @@ pub struct SessionStartResult {
     pub pid: Option<u32>,
 }
 
+/// Check if a session exists in the registry (used by telemetry cleanup).
+pub fn session_exists(session_id: &str) -> bool {
+    let sessions = get_sessions();
+    match sessions.lock() {
+        Ok(map) => map.contains_key(session_id),
+        Err(_) => false,
+    }
+}
+
 /// Get the working directory for an existing session (used by agent spawning).
 pub fn get_session_working_dir(session_id: &str) -> Option<String> {
     let sessions = get_sessions();
@@ -700,6 +709,9 @@ pub async fn stop_session(session_id: String) -> Result<(), String> {
         }
     }
 
+    // Clean up telemetry subscription
+    crate::telemetry::unsubscribe(&session_id);
+
     Ok(())
 }
 
@@ -726,6 +738,7 @@ pub fn stop_sessions_in_dir(dir: &str) {
                 let _ = child.wait();
             }
         }
+        crate::telemetry::unsubscribe(&id);
     }
 }
 

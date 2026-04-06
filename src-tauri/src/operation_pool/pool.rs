@@ -187,10 +187,10 @@ impl OperationPool {
                 }
 
                 // Wrap tick phases in catch_unwind to prevent panic from killing the pool
-                let selected = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let (selected, completions_drained, failures_drained) = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     pool_ref.tick_phase1()
                 })) {
-                    Ok(s) => s,
+                    Ok(result) => result,
                     Err(_) => {
                         eprintln!("[operation_pool] tick_phase1 panicked, recovering");
                         // Reset active_count on all lanes to prevent stuck slots
@@ -204,6 +204,8 @@ impl OperationPool {
                     }
                 };
 
+                let selected_count = selected.len();
+
                 // Phase2 is async — wrap in a spawned task to catch panics
                 let handle = tauri::async_runtime::spawn(async move {
                     pool_ref.tick_phase2(selected).await;
@@ -216,12 +218,30 @@ impl OperationPool {
                 if tick_count % 600 == 0 {
                     pool_ref.persist_limits();
                 }
+
+                // Telemetry emission every 10 ticks (~1s)
+                if tick_count % 10 == 0 && crate::telemetry::has_subscribers() {
+                    let snapshot = pool_ref.telemetry_snapshot(
+                        tick_count,
+                        selected_count,
+                        completions_drained,
+                        failures_drained,
+                    );
+                    for sid in crate::telemetry::get_pool_subscribers() {
+                        let msg = snapshot.clone();
+                        let sid_clone = sid.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = crate::commands::claude::send_message(sid_clone, msg).await;
+                        });
+                    }
+                }
             }
         });
     }
 
-    /// Phase 1: cleanup + candidate selection
-    fn tick_phase1(&self) -> Vec<PendingOp> {
+    /// Phase 1: cleanup + candidate selection.
+    /// Returns (selected_ops, completions_drained, failures_drained).
+    fn tick_phase1(&self) -> (Vec<PendingOp>, usize, usize) {
         self.state.store(-1, Ordering::Relaxed);
 
         // Drain completions and route to lanes
@@ -229,6 +249,9 @@ impl OperationPool {
             let mut lock = self.completions.lock();
             std::mem::take(&mut *lock)
         };
+
+        let completions_drained = completions.len();
+        let failures_drained = completions.iter().filter(|(_, ok)| !ok).count();
 
         let age_cap = self.config.read().age_cap;
 
@@ -308,7 +331,7 @@ impl OperationPool {
         };
 
         self.state.store(0, Ordering::Relaxed);
-        selected
+        (selected, completions_drained, failures_drained)
     }
 
     /// Phase 2: execute selected ops, await all completions
@@ -432,6 +455,55 @@ impl OperationPool {
         }
     }
 
+    /// Format a compact telemetry snapshot for injection into Claude's stdin.
+    pub fn telemetry_snapshot(
+        &self,
+        tick: u64,
+        selected: usize,
+        completed: usize,
+        failures: usize,
+    ) -> String {
+        let state = self.state.load(Ordering::Relaxed);
+        let state_label = match state {
+            -1 => "cleanup",
+            0 => "idle",
+            1 => "exec",
+            _ => "?",
+        };
+        let pool_size = self.pool_size.read();
+        let lanes = self.lanes.read();
+
+        let mut lane_parts: Vec<String> = Vec::new();
+        for (key, lane_lock) in lanes.iter() {
+            let lane = lane_lock.read();
+            let q1 = lane.tier1_queue.lock().len();
+            let q2 = lane.tier2_queue.lock().len();
+            let short_key = shorten_lane_key(key);
+            lane_parts.push(format!(
+                "{}:a{},q{}/{},c{}",
+                short_key, lane.active_count, q1, q2, lane.concurrency.current,
+            ));
+        }
+
+        let lane_str = if lane_parts.is_empty() {
+            "no-lanes".to_string()
+        } else {
+            lane_parts.join(" | ")
+        };
+
+        format!(
+            "[TELEMETRY:pool] tick:{} {} pool:{}/{} sel:{} done:{} fail:{} | {}",
+            tick,
+            state_label,
+            pool_size.current,
+            pool_size.max_seen_healthy,
+            selected,
+            completed,
+            failures,
+            lane_str,
+        )
+    }
+
     pub fn shutdown(&self) {
         self.persist_limits();
         self.shutdown.store(true, Ordering::Release);
@@ -516,4 +588,25 @@ impl OperationPool {
             lanes.clear();
         }
     }
+}
+
+fn shorten_lane_key(key: &str) -> String {
+    // "process/git/C:/Git/Buildor" -> "git/Buildor"
+    // "llm/agent-researcher" -> "llm/agent-researcher"
+    // "fs//src/components" -> "fs/components"
+    if let Some(rest) = key.strip_prefix("process/") {
+        if let Some(slash_pos) = rest.find('/') {
+            let tool = &rest[..slash_pos];
+            let path = &rest[slash_pos + 1..];
+            let last_seg = path.rsplit(['/', '\\']).next().unwrap_or(path);
+            return format!("{}/{}", tool, last_seg);
+        }
+        return rest.to_string();
+    }
+    if let Some(rest) = key.strip_prefix("fs/") {
+        let last_seg = rest.rsplit(['/', '\\']).next().unwrap_or(rest);
+        return format!("fs/{}", last_seg);
+    }
+    // llm/, api/, tool/ — keep as-is
+    key.to_string()
 }

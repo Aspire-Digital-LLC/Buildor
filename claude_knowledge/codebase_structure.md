@@ -30,7 +30,7 @@ Buildor/
 │   ├── personality_and_worktree_config.md  # Personality + worktree dep setup
 │   ├── buildor_skills_guide.md  # Skill authoring reference
 │   ├── operation_pool_spec.md   # Operation pool design spec
-│   ├── pool_telemetry_spec.md   # Pool telemetry stream build spec (dev-time observability)
+│   ├── telemetry.md             # Pool telemetry stream usage guide (subscribe, format, red flags)
 │   ├── checkpoints/             # Context-engine scan checkpoints (per-command subdirs)
 │   └── local_learnings.md       # Machine-specific notes (gitignored)
 ├── src/                         # React frontend (TypeScript)
@@ -66,6 +66,7 @@ Buildor/
 │   │   │   ├── skills.ts            # listBuildorSkills, listProjectSkills, etc.
 │   │   │   ├── agents.ts            # spawnAgent, killAgent, extendAgent, markAgentExited
 │   │   │   ├── mailbox.ts          # depositResult, queryResult, purgeResults, spawnAgentWithDeps
+│   │   │   ├── telemetry.ts        # subscribeTelemetry, unsubscribeTelemetry
 │   │   │   └── chatImages.ts        # saveChatImage, readChatImage, deleteSessionImages
 │   │   └── buildorEvents.ts         # Event bus (permissions, agents, skills, compact, etc.)
 │   ├── prompts/                 # Centralized prompt templates
@@ -82,7 +83,9 @@ Buildor/
 │   │   │   ├── agents.rs        # Agent pool (spawn, kill, extend, takeover, inject, list)
 │   │   │   ├── mailbox.rs      # Agent result mailbox (deposit, query, purge, dependency resolution)
 │   │   │   ├── claude.rs        # Claude session management (main + agent sessions)
+│   │   │   ├── telemetry.rs    # subscribe_telemetry / unsubscribe_telemetry Tauri commands
 │   │   │   └── shell.rs         # Shell command execution (for skill !`command` blocks)
+│   │   ├── telemetry.rs         # Subscriber registry for pool/mailbox telemetry stream
 │   │   ├── logging/             # SQLite DB (logs + chat_sessions + chat_messages tables)
 │   │   ├── git/                 # Git CLI wrapper
 │   │   ├── orchestrator/        # Flow execution engine

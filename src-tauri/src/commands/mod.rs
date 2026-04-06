@@ -15,3 +15,4 @@ pub mod shell;
 pub mod chat_images;
 pub mod mailbox;
 pub mod operation_pool;
+pub mod telemetry;

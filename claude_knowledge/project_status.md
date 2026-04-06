@@ -74,6 +74,7 @@
 - [x] **Pool telemetry stream spec**: Build specification for real-time telemetry from Operation Pool and Agent Mailbox (`claude_knowledge/pool_telemetry_spec.md`) — injected into Claude's stdin via `send_message()`, compact single-line format, subscriber registry, not yet implemented
 - [x] **Skills consolidation**: Removed dedicated shared skills sync (`skill_sync.rs`, `SharedSkillsRepo.tsx`, `skillSync.ts`, startup auto-sync) — skills now resolve from shared memory repo path
 - [x] **Version 0.0.5**: Bumped all version locations (package.json, Cargo.toml, tauri.conf.json x2)
+- [x] **Pool Telemetry Stream**: Subscribable real-time telemetry feed from Operation Pool and Agent Mailbox. Static subscriber registry (`telemetry.rs`), Tauri commands (`subscribe_telemetry`/`unsubscribe_telemetry`), pool snapshot every 10 ticks, mailbox deposit/deps-met/abandoned events, auto-cleanup on session stop. Development-only tool — telemetry lines injected into Claude session stdin via `send_message()`.
 
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval

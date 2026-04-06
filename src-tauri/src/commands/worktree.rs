@@ -540,6 +540,14 @@ pub async fn setup_worktree_deps(
                     .map_err(|e| format!("Failed to create symlink: {}", e))?;
             }
 
+            // Regenerate .bin shims so CLI tools (vite, tauri, etc.) resolve
+            // through the junction. Without this, .bin/ either doesn't exist
+            // or contains relative symlinks that break across junctions.
+            if let Err(e) = regenerate_bin_shims(&target) {
+                eprintln!("[worktree] warning: failed to regenerate .bin shims: {}", e);
+                // Non-fatal — the junction itself is valid, just CLI tools won't work
+            }
+
             Ok("ok:symlink".to_string())
         }
 
@@ -599,6 +607,173 @@ pub async fn setup_worktree_deps(
 
         _ => Err(format!("Unknown strategy: {}", strategy)),
     }
+}
+
+/// Regenerate .bin shims inside node_modules by scanning each package's
+/// package.json `bin` field. This fixes the common issue where junction/symlink'd
+/// node_modules either lacks .bin entirely or has broken relative symlinks.
+///
+/// Creates three shim types per bin entry (matching npm's behavior):
+/// - Shell script (no extension) for bash/git-bash/WSL
+/// - .cmd script for Windows cmd.exe
+/// - .ps1 script for PowerShell
+fn regenerate_bin_shims(node_modules: &Path) -> Result<(), String> {
+    let bin_dir = node_modules.join(".bin");
+    if !bin_dir.exists() {
+        std::fs::create_dir_all(&bin_dir)
+            .map_err(|e| format!("Failed to create .bin dir: {}", e))?;
+    }
+
+    // Scan top-level packages and scoped packages (@org/pkg)
+    let entries = std::fs::read_dir(node_modules)
+        .map_err(|e| format!("Failed to read node_modules: {}", e))?;
+
+    for entry in entries.flatten() {
+        let entry_name = entry.file_name().to_string_lossy().to_string();
+
+        if entry_name.starts_with('.') {
+            continue;
+        }
+
+        if entry_name.starts_with('@') {
+            // Scoped package — scan subdirectories
+            if let Ok(scoped_entries) = std::fs::read_dir(entry.path()) {
+                for scoped_entry in scoped_entries.flatten() {
+                    let pkg_name = format!("{}/{}", entry_name, scoped_entry.file_name().to_string_lossy());
+                    let _ = process_package_bin(&node_modules, &bin_dir, &scoped_entry.path(), &pkg_name);
+                }
+            }
+        } else {
+            let _ = process_package_bin(&node_modules, &bin_dir, &entry.path(), &entry_name);
+        }
+    }
+
+    Ok(())
+}
+
+/// Read a package's package.json, extract `bin` entries, and create shims.
+fn process_package_bin(
+    node_modules: &Path,
+    bin_dir: &Path,
+    pkg_path: &Path,
+    pkg_name: &str,
+) -> Result<(), String> {
+    let pkg_json_path = pkg_path.join("package.json");
+    if !pkg_json_path.exists() {
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(&pkg_json_path)
+        .map_err(|e| format!("Failed to read {}: {}", pkg_json_path.display(), e))?;
+    let pkg: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {}", pkg_json_path.display(), e))?;
+
+    // `bin` can be a string (single binary named after package) or an object
+    let bin_entries: Vec<(String, String)> = match pkg.get("bin") {
+        Some(serde_json::Value::String(s)) => {
+            // Single binary — name is the package name (without scope)
+            let bin_name = pkg_name.rsplit('/').next().unwrap_or(pkg_name);
+            vec![(bin_name.to_string(), s.clone())]
+        }
+        Some(serde_json::Value::Object(map)) => {
+            map.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        }
+        _ => return Ok(()),
+    };
+
+    for (bin_name, bin_path) in bin_entries {
+        // Relative path from .bin/ to the actual JS file
+        let rel_path = format!("../{}/{}", pkg_name, bin_path);
+        // Normalize forward slashes
+        let rel_path_fwd = rel_path.replace('\\', "/");
+        // Backslash version for .cmd
+        let rel_path_back = rel_path.replace('/', "\\");
+
+        // Only create shims if the target file actually exists
+        let target_file = node_modules.join(pkg_name).join(&bin_path);
+        if !target_file.exists() {
+            continue;
+        }
+
+        // Shell script (bash/git-bash/WSL)
+        let sh_shim = format!(
+            r#"#!/bin/sh
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+
+case `uname` in
+    *CYGWIN*|*MINGW*|*MSYS*)
+        if command -v cygpath > /dev/null 2>&1; then
+            basedir=`cygpath -w "$basedir"`
+        fi
+    ;;
+esac
+
+if [ -x "$basedir/node" ]; then
+  exec "$basedir/node"  "$basedir/{rel_path_fwd}" "$@"
+else
+  exec node  "$basedir/{rel_path_fwd}" "$@"
+fi
+"#
+        );
+        let _ = std::fs::write(bin_dir.join(&bin_name), sh_shim);
+
+        // .cmd shim (Windows cmd.exe)
+        let cmd_shim = format!(
+            r#"@ECHO off
+GOTO start
+:find_dp0
+SET dp0=%~dp0
+EXIT /b
+:start
+SETLOCAL
+CALL :find_dp0
+
+IF EXIST "%dp0%\node.exe" (
+  SET "_prog=%dp0%\node.exe"
+) ELSE (
+  SET "_prog=node"
+  SET PATHEXT=%PATHEXT:;.JS;=;%
+)
+
+endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\{rel_path_back}" %*
+"#
+        );
+        let _ = std::fs::write(bin_dir.join(format!("{}.cmd", &bin_name)), cmd_shim);
+
+        // .ps1 shim (PowerShell)
+        let ps1_shim = format!(
+            r#"#!/usr/bin/env pwsh
+$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent
+
+$exe=""
+if ($PSVersionTable.PSVersion -lt "6.0" -or $IsWindows) {{
+  $exe=".exe"
+}}
+$ret=0
+if (Test-Path "$basedir/node$exe") {{
+  if ($MyInvocation.ExpectingInput) {{
+    $input | & "$basedir/node$exe"  "$basedir/{rel_path_fwd}" $args
+  }} else {{
+    & "$basedir/node$exe"  "$basedir/{rel_path_fwd}" $args
+  }}
+  $ret=$LASTEXITCODE
+}} else {{
+  if ($MyInvocation.ExpectingInput) {{
+    $input | & "node$exe"  "$basedir/{rel_path_fwd}" $args
+  }} else {{
+    & "node$exe"  "$basedir/{rel_path_fwd}" $args
+  }}
+  $ret=$LASTEXITCODE
+}}
+exit $ret
+"#
+        );
+        let _ = std::fs::write(bin_dir.join(format!("{}.ps1", &bin_name)), ps1_shim);
+    }
+
+    Ok(())
 }
 
 /// Simple UUID v4 generator (no external crate needed)
