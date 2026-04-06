@@ -307,6 +307,24 @@ Caller (git command, shell exec, agent spawn, etc.)
 - `Tier::User` — reserved for Claude tool calls routed through the future permission pipeline
 - `Tier::Subagent` — `spawn_agent()`, `setup_worktree_deps()` (pnpm/npm install), background work
 
+## Pool Telemetry Stream (Development Tool)
+
+A subscribable real-time telemetry feed from the Operation Pool and Mailbox, designed for Claude sessions working on the Buildor codebase. Telemetry lines are injected directly into the subscribed session's stdin via `send_message()` — no new event channels or frontend UI needed.
+
+```
+Claude session subscribes via subscribeTelemetry(sessionId, ['pool', 'mailbox'])
+  → Subscriber registry: static OnceLock<Mutex<HashMap>> in telemetry.rs
+  → Pool: every 10th tick (~1s), if has_subscribers(), format snapshot → send_message() to each pool subscriber
+  → Mailbox: on deposit/deps-met/abandoned events → send_message() to each mailbox subscriber
+  → Session cleanup: unsubscribe() called automatically in stop_session() and stop_sessions_in_dir()
+  → Dead subscriber cleanup: cleanup_dead_subscribers() checks session registry
+```
+
+**Line format**: `[TELEMETRY:pool] tick:N state pool:cur/max sel:N done:N fail:N | lane_key:aN,qT1/T2,cN`
+**Mailbox events**: `[TELEMETRY:mailbox] deposit|deps-met|abandoned agent="name" ...`
+
+**Cost**: ~100-150 tokens per line. Subscribe only when actively testing, unsubscribe immediately after. See `claude_knowledge/telemetry.md` for full format reference, healthy/red-flag patterns, and testing recipes.
+
 ## Agent Health Monitoring (Phase 6)
 
 ```
