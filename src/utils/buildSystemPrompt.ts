@@ -58,12 +58,24 @@ export function buildSystemPrompt(
     : null;
 
   // Build skill descriptions block if any skills are activated (eyeball mode)
+  // Uses strong directive language so skills aren't drowned out by the large system prompt.
   let skillsBlock: string | null = null;
   if (activeSkills && activeSkills.length > 0) {
     const skillLines = activeSkills.map(
-      (s) => `- **${s.name}**: ${s.description}\n  Full content: \`${s.skillDir}/prompt.md\` (read with Read tool when relevant)`
+      (s) => `- **${s.name}**: ${s.description}\n  Skill directory: \`${s.skillDir}\`\n  Read \`${s.skillDir}/prompt.md\` for full instructions.`
     ).join('\n');
-    skillsBlock = `## Available Buildor Skills\nThe following skills are activated. Read the full skill content when relevant:\n${skillLines}`;
+    skillsBlock = [
+      `## ACTIVE BUILDOR SKILLS (MANDATORY)`,
+      ``,
+      `The following Buildor skills are activated. **You MUST evaluate every user request against these skill descriptions.** If a user's request matches what a skill does, you MUST:`,
+      `1. Read the skill's \`prompt.md\` file (and any supporting files it references)`,
+      `2. Use it as your primary methodology for responding — not freeform`,
+      `3. Follow the skill's output format exactly`,
+      ``,
+      `Do NOT perform freeform responses for tasks that an active skill covers.`,
+      ``,
+      skillLines,
+    ].join('\n');
   }
 
   return contextOnStart(
