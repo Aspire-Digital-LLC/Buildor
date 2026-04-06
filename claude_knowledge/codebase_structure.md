@@ -44,18 +44,20 @@ Buildor/
 │   │   │   ├── AgentStatusCard.tsx   # Pinned card above input (live agent status)
 │   │   │   ├── AgentsPanel.tsx       # Right-side panel (active + completed agents)
 │   │   │   └── AgentOutputBlock.tsx  # Inline surfaced agent results in chat
-│   │   ├── skill-builder/         # Skill Builder panel (visual editor)
-│   │   │   ├── SkillBuilder.tsx       # Main layout — three-panel (browser, editor, chat)
-│   │   │   ├── SkillBrowser.tsx       # Left panel — skill list with search, create/open
-│   │   │   ├── SkillEditor.tsx        # Center panel — 7-tab editor (Identity, Params, Exec, Vis, Health, Prompt, Files)
+│   │   ├── skill-builder/         # Skill Builder panel (create/edit skills)
+│   │   │   ├── SkillBuilder.tsx       # Three-panel layout (browser + editor + chat)
+│   │   │   ├── SkillBrowser.tsx       # Left panel: skill list with create/open/delete
+│   │   │   ├── SkillEditor.tsx        # Center panel: tabbed editor for skill.json fields
 │   │   │   ├── SkillEditorIdentity.tsx    # Name, description, tags, scope
-│   │   │   ├── SkillEditorParams.tsx      # Parameter definitions (add/remove/reorder)
-│   │   │   ├── SkillEditorExecution.tsx   # Context mode, model, effort, shell commands
-│   │   │   ├── SkillEditorVisibility.tsx  # Auto-load, activation rules
-│   │   │   ├── SkillEditorHealth.tsx      # Health thresholds for agent mode
+│   │   │   ├── SkillEditorParams.tsx      # Parameter definitions
+│   │   │   ├── SkillEditorExecution.tsx   # Execution config (mode, model, effort)
+│   │   │   ├── SkillEditorVisibility.tsx  # Visibility config (autoLoad, etc.)
+│   │   │   ├── SkillEditorHealth.tsx      # Health thresholds
 │   │   │   ├── SkillEditorPrompt.tsx      # prompt.md content editor
-│   │   │   ├── SkillEditorFiles.tsx       # Supporting files management
-│   │   │   └── SkillBuilderChat.tsx   # Right panel — restricted Sonnet chat with marker protocol
+│   │   │   ├── SkillEditorFiles.tsx       # Supporting files
+│   │   │   ├── SkillBuilderChat.tsx       # Right panel: scoped Claude assistant
+│   │   │   ├── FieldReviewCard.tsx        # Inline field feedback (pass/warning/error)
+│   │   │   └── PendingUpdateCard.tsx      # Chat-driven field update approval card
 │   │   └── settings/
 │   │       ├── Settings.tsx          # Settings sidebar with section routing
 │   │       └── SharedMemory.tsx      # Shared memory repo config (skills + flows live here)
@@ -74,13 +76,13 @@ Buildor/
 │   │   ├── skillProcessor.ts        # Param substitution, shell exec, link resolution
 │   │   ├── nativeSkillTranslator.ts # Runtime SKILL.md → BuildorSkill translation
 │   │   ├── buildSystemPrompt.ts     # System prompt assembly (identity + personality + skills)
-│   │   ├── autoApprove.ts           # Buildor-managed auto-approve rules (replaces Claude's settings.local.json)
 │   │   ├── commands/
-│   │   │   ├── skills.ts            # listBuildorSkills, listProjectSkills, saveSkillWithCommit, etc.
+│   │   │   ├── skills.ts            # listBuildorSkills, listProjectSkills, etc.
 │   │   │   ├── agents.ts            # spawnAgent, killAgent, extendAgent, markAgentExited
 │   │   │   ├── mailbox.ts          # depositResult, queryResult, purgeResults, spawnAgentWithDeps
 │   │   │   ├── telemetry.ts        # subscribeTelemetry, unsubscribeTelemetry
 │   │   │   └── chatImages.ts        # saveChatImage, readChatImage, deleteSessionImages
+│   │   ├── autoApprove.ts           # Auto-approve rules engine (pattern matching for tool permissions)
 │   │   └── buildorEvents.ts         # Event bus (permissions, agents, skills, compact, etc.)
 │   ├── prompts/                 # Centralized prompt templates
 │   │   └── historyInjection.ts      # Aware injection instructions (header, footer, modes, image markers)
@@ -113,21 +115,20 @@ Buildor/
 │   │       ├── config.rs        # PoolConfig (pool_config.json, defaults from num_cpus)
 │   │       ├── persistence.rs   # PersistedLimits (pool_limits.json, learned concurrency)
 │   │       └── resource_key.rs  # ResourceKeyed trait, derive_resource_key() (tool→lane mapping)
-│   ├── sdk-service/             # Node.js Agent SDK sidecar (Phase 1)
+│   ├── sdk-service/             # Node.js Agent SDK HTTP/SSE sidecar (Phase 1)
 │   │   ├── src/
-│   │   │   ├── index.ts             # Server entry point (Express, port discovery)
-│   │   │   ├── router.ts            # Route registration
-│   │   │   ├── sdk-runner.ts        # ClaudeSDK wrapper (spawnClaudeCodeProcess, PreToolUse hooks)
-│   │   │   ├── sessions.ts          # In-memory session store
-│   │   │   ├── session-stream.ts    # SSE stream per session
-│   │   │   ├── wire-format.ts       # NDJSON wire format (matches Claude CLI output)
+│   │   │   ├── index.ts             # HTTP server entry point (Express-like router)
+│   │   │   ├── router.ts            # Lightweight path-pattern router
+│   │   │   ├── sessions.ts          # Session lifecycle (create/destroy/list)
+│   │   │   ├── sdk-runner.ts        # Claude Agent SDK wrapper (spawnClaudeCodeProcess)
+│   │   │   ├── session-stream.ts    # SSE streaming from SDK to HTTP clients
 │   │   │   ├── permission-gate.ts   # PreToolUse permission hooks
+│   │   │   ├── wire-format.ts       # SDK event → Buildor wire format translation
 │   │   │   ├── types.ts             # Shared TypeScript types
-│   │   │   └── routes/              # Per-endpoint handlers (CRUD, stream, message, permission, health)
-│   │   ├── test/smoke.ts            # Smoke test suite
-│   │   ├── build.mjs               # esbuild bundler
-│   │   ├── package.json
-│   │   └── tsconfig.json
+│   │   │   └── routes/              # Route handlers (CRUD, stream, message, permission, etc.)
+│   │   ├── build.mjs               # Build script
+│   │   ├── package.json            # SDK service dependencies
+│   │   └── tsconfig.json           # TypeScript config
 │   ├── Cargo.toml               # Rust dependencies
 │   └── tauri.conf.json          # Tauri app configuration
 ├── package.json                 # Node dependencies

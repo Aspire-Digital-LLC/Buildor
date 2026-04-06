@@ -1,0 +1,7 @@
+{
+  "commit": "bbbd49e",
+  "date": "2026-04-06T21:14:50.988Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Documented Skill Builder panel (3-panel layout, FieldReviewCard, PendingUpdateCard), SDK service Phase 1 (standalone HTTP/SSE server), auto-approve rules engine, all-tools-through-pool enforcement, review-to-chat injection"
+}

@@ -142,6 +142,15 @@ async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
 
 ---
 
+### Field Review + Pending Update Pattern (Skill Builder)
+
+**When to use**: Any editor panel where an AI assistant needs to provide inline feedback on specific fields and propose changes
+**Implementation**: Store reviews in a `Record<string, FieldReview>` keyed by field name. Each review has `status` (pass/warning/error), `message`, and optional `suggestion`. Render `FieldReviewCard` beneath each field — it shows the feedback with Accept/Decline/Discuss buttons. For AI-proposed edits, use `PendingUpdate` entries (`field`, `value`, `displayValue`) rendered as `PendingUpdateCard`. Both require explicit user acceptance before modifying editor state. Track which fields the user has manually edited in a `manualFields` Set to know when to trigger review.
+**Example**: `src/components/skill-builder/FieldReviewCard.tsx`, `PendingUpdateCard.tsx`, `src/stores/skillBuilderStore.ts`
+**Why**: Keeps the human in control — AI can suggest but never force changes. The Discuss button bridges review feedback into the chat assistant for deeper conversation. The `manualFields` set prevents reviews from triggering on AI-accepted changes (only user edits).
+
+---
+
 ### Shared DB Accessor Pattern
 
 **When to use**: Any Rust module that needs the logging/chat history SQLite database

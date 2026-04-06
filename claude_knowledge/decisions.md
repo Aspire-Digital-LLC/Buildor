@@ -247,21 +247,21 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
-## Buildor-Managed Auto-Approve over Claude's settings.local.json
+## Pending Update Gating over Auto-Apply for Chat-Driven Field Edits
 
-**Choice**: Buildor maintains its own auto-approve rule store (`config.json/autoApproveRules`), Claude sessions start with an empty allow list
-**Rejected**: Letting Claude's `settings.local.json` `allowedTools` handle auto-approve
+**Choice**: Chat assistant proposes field changes as `PendingUpdate` cards requiring explicit Accept/Decline
+**Rejected**: Auto-applying field changes from the chat assistant immediately
 
-**Why**: Claude's native allow list bypasses the permission prompt entirely — Buildor never sees the tool call. By clearing the allow list and forcing all tools through the permission prompt, Buildor's operation pool gains full visibility into every tool execution. Auto-approved tools still go through the pool for scheduling and rate limiting — they just skip the UI permission card. This also decouples Buildor's permission state from Claude's config files, which could be modified by other tools or Claude Code CLI usage outside Buildor.
+**Why**: The Skill Builder chat assistant can propose changes to any skill.json field (name, description, params, prompt, etc.). Auto-applying would break trust — the user might not agree with a suggestion. The `PendingUpdateCard` pattern shows what will change (with a preview), requires a deliberate click, and can be declined without disrupting the editor. This keeps the human in the loop while still letting the AI be proactive. The Discuss button on `FieldReviewCard` bridges disagreements back into conversation rather than forcing accept-or-reject binary choices.
 
 ---
 
-## SDK Service (Node.js Sidecar) over Direct Rust CLI Spawning
+## SDK Service as Standalone HTTP Server over Direct IPC Integration
 
-**Choice**: Node.js HTTP server wrapping the Claude Agent SDK, communicating with Tauri via localhost HTTP/SSE
-**Rejected**: Continuing with `std::process::Command("claude")` from Rust
+**Choice**: Node.js HTTP/SSE server running alongside Tauri, accessed via HTTP
+**Rejected**: Embedding Agent SDK calls directly in the Rust backend via napi-rs or wasm
 
-**Why**: Three problems compounded: (1) On Windows, `std::process::Command` spawns visible console windows — `CREATE_NO_WINDOW` doesn't propagate to Claude's internal grandchild processes. The SDK's `spawnClaudeCodeProcess` with `windowsHide: true` handles the full process tree. (2) Rust `BufReader` → Tauri `emit()` → webview IPC creates backpressure when JS is busy — Claude's stdout pipe fills, stalling output by 2x. The SDK manages pipes internally. (3) Permission handling required Rust emit → JS parse → IPC back → stdin write round-trip. SDK's `PreToolUse` hooks handle permissions in-process. Node.js sidecar is the natural host since the Agent SDK is a JS library.
+**Why**: The Claude Agent SDK is a Node.js library. Calling it from Rust would require napi-rs FFI bindings (brittle, hard to debug), WASM compilation (Node APIs not available), or shelling out to a Node script per operation (process overhead). A standalone HTTP server runs the SDK natively, provides a clean REST/SSE API, and can be developed and tested independently. It also enables health monitoring, connection pooling, and graceful shutdown. The sidecar integration (Phase 2) will have Tauri manage the server's lifecycle while keeping the HTTP interface.
 
 ---
 
