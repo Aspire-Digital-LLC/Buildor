@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { startClaudeSession, sendClaudeMessage, stopSession } from '@/utils/commands/claude';
+import { startClaudeSession, sendClaudeMessage, stopSession, respondToPermissionPooled } from '@/utils/commands/claude';
+import { getConfig } from '@/utils/commands/config';
 import { useSkillBuilderStore } from '@/stores/skillBuilderStore';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
 import { buildorEvents } from '@/utils/buildorEvents';
@@ -12,13 +13,16 @@ export interface SkillBuilderChatHandle {
 
 const SKILL_BUILDER_MARKER_RE = /-<\*\{([\s\S]*?)\}\*>-/g;
 
+// Tools the skill builder chat is allowed to use (read-only access to skills)
+const ALLOWED_TOOLS = new Set(['Read', 'Grep', 'Glob']);
+
 interface SkillUpdateAction {
   action: 'skill_update';
   field: string;
   value: unknown;
 }
 
-function buildSkillBuilderPrompt(skillName: string, skillState: Record<string, unknown>): string {
+function buildSkillBuilderPrompt(skillName: string, skillState: Record<string, unknown>, skillsDir: string): string {
   return `You are the Buildor Skill Builder assistant. Your ONLY purpose is helping the user create and edit Buildor skills.
 
 You are working on the skill: "${skillName || 'untitled'}"
@@ -27,18 +31,20 @@ ${JSON.stringify(skillState, null, 2)}
 
 ## What you CAN do:
 - Answer questions about skill authoring (schema, params, execution modes, prompt syntax)
-- Read project files (Read, Grep, Glob) to understand codebases for project-specific skills
-- Search the web (WebSearch, WebFetch) for reference material
+- Read other skills in ${skillsDir} for reference (Read, Grep, Glob — read-only)
 - Suggest changes to skill fields by outputting structured update markers
 
 ## What you CANNOT do:
-- Edit, write, or delete any files directly
-- Run shell commands
+- Edit, write, or delete any files — you do not have write access
+- Run shell commands (Bash) — not available to you
+- Use WebSearch or WebFetch — not available to you
 - Discuss topics unrelated to skill building
 - Modify anything outside the current skill's fields
 
+If you attempt a disallowed tool, the system will deny it silently.
+
 ## How to update skill fields:
-When you want to update a field, output this marker:
+Output this marker to update a field:
 -<*{ "action": "skill_update", "field": "FIELD_NAME", "value": VALUE }*>-
 
 Valid fields: name, description, tags, scope, projects, params, execution, visibility, health, promptContent
@@ -72,8 +78,20 @@ function extractMarkers(text: string): SkillUpdateAction[] {
   return actions;
 }
 
+/** Get the shared memory repo skills directory from config. */
+async function getSkillsDir(): Promise<string> {
+  try {
+    const raw = await getConfig();
+    const cfg = JSON.parse(raw);
+    if (cfg.sharedMemoryRepo) {
+      return cfg.sharedMemoryRepo + '/skills';
+    }
+  } catch { /* fallback */ }
+  return '.';
+}
+
 export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function SkillBuilderChat(_props, ref) {
-  const { editor, activeSkillName, isNew, updateField, updateExecution, updateVisibility, updateHealth } = useSkillBuilderStore();
+  const { editor, activeSkillName, isNew, proposePendingUpdate } = useSkillBuilderStore();
   const isOpen = isNew || activeSkillName !== null;
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -92,7 +110,7 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
     },
   }), []);
 
-  // Listen for review events — show review results in chat
+  // Listen for review events — show in chat UI AND inject into AI session
   useEffect(() => {
     const handler = (event: { data: unknown }) => {
       const data = event.data as { localReviews?: Record<string, { status: string; message: string }> };
@@ -100,15 +118,23 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
         const entries = Object.entries(data.localReviews);
         if (entries.length === 0) {
           setMessages((prev) => [...prev, { role: 'system', text: 'Review passed — no issues found.' }]);
+          if (sessionId) {
+            sendClaudeMessage(sessionId, '[SYSTEM] Buildor Review completed — all checks passed. No issues found.').catch(() => {});
+          }
         } else {
           const summary = entries.map(([field, r]) => `${r.status.toUpperCase()}: ${field} — ${r.message}`).join('\n');
           setMessages((prev) => [...prev, { role: 'system', text: `Review results:\n${summary}` }]);
+          // Inject into AI session so it has context for follow-up discussion
+          if (sessionId) {
+            const aiSummary = `[SYSTEM] Buildor Review results for the current skill:\n${summary}\n\nThe user may ask you about these findings. You can suggest fixes using skill_update markers.`;
+            sendClaudeMessage(sessionId, aiSummary).catch(() => {});
+          }
         }
       }
     };
     buildorEvents.on('skill-review-requested', handler);
     return () => { buildorEvents.off('skill-review-requested', handler); };
-  }, []);
+  }, [sessionId]);
 
   // Auto-scroll
   useEffect(() => {
@@ -124,13 +150,40 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
     }
   }, [isOpen, sessionId]);
 
-  // Listen for output
+  // Listen for output + intercept permissions
   useEffect(() => {
     if (!sessionId) return;
 
     const unlistenOutput = listen<string>(`claude-output-${sessionId}`, (event) => {
       const parsed = parseStreamEvent(event.payload, sessionId);
       if (!parsed) return;
+
+      // Intercept permission requests — software approve/deny through the pool
+      const permBlock = parsed.content.find((c: ChatContent) => c.type === 'permission_request');
+      if (permBlock && permBlock.requestId) {
+        const toolName = permBlock.name || '';
+        const toolInput = permBlock.input as Record<string, unknown> | undefined;
+        const resourceKey = `tool/${toolName}/${sessionId}`;
+
+        if (ALLOWED_TOOLS.has(toolName)) {
+          // Auto-approve read-only tools through the operation pool
+          respondToPermissionPooled(sessionId, permBlock.requestId, true, toolInput, resourceKey, 'user').catch(() => {});
+        } else {
+          // Deny disallowed tool through the pool
+          respondToPermissionPooled(sessionId, permBlock.requestId, false, undefined, resourceKey, 'user')
+            .then(() => {
+              // Inject explanation back to AI so it understands why and doesn't retry
+              const explanation = `[SYSTEM] Tool "${toolName}" is not available in the Skill Builder. ` +
+                `You only have read-only access to other skills via Read, Grep, and Glob. ` +
+                `To modify the current skill's fields, use the skill_update marker format instead. ` +
+                `Do not retry this tool call.`;
+              sendClaudeMessage(sessionId, explanation).catch(() => {});
+            })
+            .catch(() => {});
+        }
+        // Don't show permission cards to the user — swallow the message
+        return;
+      }
 
       // Extract text content
       const textParts = parsed.content
@@ -150,9 +203,9 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
           setMessages((prev) => [...prev, { role: 'assistant', text: cleanText }]);
         }
 
-        // Show applied updates as system messages
+        // Show proposed updates as system messages
         for (const action of actions) {
-          setMessages((prev) => [...prev, { role: 'system', text: `Updated ${action.field}` }]);
+          setMessages((prev) => [...prev, { role: 'system', text: `Proposed update to ${action.field} — check the editor to Accept or Decline` }]);
         }
       }
 
@@ -176,19 +229,10 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
 
   const applySkillUpdate = useCallback((action: SkillUpdateAction) => {
     const { field, value } = action;
-    switch (field) {
-      case 'name': updateField('name', String(value)); break;
-      case 'description': updateField('description', String(value)); break;
-      case 'tags': updateField('tags', value as string[]); break;
-      case 'scope': updateField('scope', value as 'general' | 'project'); break;
-      case 'projects': updateField('projects', value as string[]); break;
-      case 'params': updateField('params', value as typeof editor.params); break;
-      case 'promptContent': updateField('promptContent', String(value)); break;
-      case 'execution': updateExecution(value as Record<string, unknown>); break;
-      case 'visibility': updateVisibility(value as Record<string, unknown>); break;
-      case 'health': updateHealth(value as Record<string, unknown>); break;
-    }
-  }, [updateField, updateExecution, updateVisibility, updateHealth, editor]);
+    // Don't apply directly — propose as pending update for user to Accept/Decline
+    const displayValue = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    proposePendingUpdate(field, value, displayValue);
+  }, [proposePendingUpdate]);
 
   const handleSendWithAutoStart = async () => {
     if (!input.trim() || isSending) return;
@@ -201,14 +245,16 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
     if (!sid) {
       setIsStarting(true);
       try {
+        const skillsDir = await getSkillsDir();
         const skillState: Record<string, unknown> = {
           name: editor.name, description: editor.description, tags: editor.tags,
           scope: editor.scope, projects: editor.projects, params: editor.params,
           execution: editor.execution, visibility: editor.visibility, health: editor.health,
           promptContent: editor.promptContent.substring(0, 500) + (editor.promptContent.length > 500 ? '...' : ''),
         };
-        const systemPrompt = buildSkillBuilderPrompt(editor.name, skillState);
-        const result = await startClaudeSession('.', 'sonnet', systemPrompt);
+        const systemPrompt = buildSkillBuilderPrompt(editor.name, skillState, skillsDir);
+        // Start session with skills directory as working dir so Read/Grep/Glob can access other skills
+        const result = await startClaudeSession(skillsDir, 'sonnet', systemPrompt);
         sid = result.sessionId;
         setSessionId(sid);
       } catch (e) {
@@ -257,7 +303,7 @@ export const SkillBuilderChat = forwardRef<SkillBuilderChatHandle>(function Skil
       }}>
         {messages.length === 0 && (
           <div style={{ color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center', paddingTop: 40 }}>
-            Ask me to help build your skill. I can suggest descriptions, parameters, prompt templates, and more.
+            Ask me to help build your skill. I can suggest descriptions, parameters, prompt templates, and read other skills for reference.
           </div>
         )}
         {messages.map((msg, i) => (

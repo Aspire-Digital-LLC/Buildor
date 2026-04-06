@@ -1,6 +1,7 @@
 import { useSkillBuilderStore } from '@/stores/skillBuilderStore';
 import { useProjectStore } from '@/stores';
 import { FieldReviewCard } from './FieldReviewCard';
+import { PendingUpdateCard } from './PendingUpdateCard';
 
 interface SkillEditorIdentityProps {
   onDiscuss: (field: string, message: string) => void;
@@ -32,6 +33,7 @@ export function SkillEditorIdentity({ onDiscuss }: SkillEditorIdentityProps) {
           style={inputStyle}
         />
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Lowercase + hyphens only. Matches the directory name.</div>
+        <PendingUpdateCard field="name" />
         <FieldReviewCard field="name" onDiscuss={onDiscuss} />
       </div>
 
@@ -49,6 +51,7 @@ export function SkillEditorIdentity({ onDiscuss }: SkillEditorIdentityProps) {
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
           {editor.description.length}/250 — Lead with user intent phrases for eyeball activation.
         </div>
+        <PendingUpdateCard field="description" />
         <FieldReviewCard field="description" onDiscuss={onDiscuss} />
       </div>
 
@@ -63,6 +66,7 @@ export function SkillEditorIdentity({ onDiscuss }: SkillEditorIdentityProps) {
           style={inputStyle}
         />
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Comma-separated categories for search/filtering.</div>
+        <PendingUpdateCard field="tags" />
         <FieldReviewCard field="tags" onDiscuss={onDiscuss} />
       </div>
 
@@ -102,6 +106,7 @@ export function SkillEditorIdentity({ onDiscuss }: SkillEditorIdentityProps) {
             Project-Specific
           </label>
         </div>
+        <PendingUpdateCard field="scope" />
         <FieldReviewCard field="scope" onDiscuss={onDiscuss} />
       </div>
 
