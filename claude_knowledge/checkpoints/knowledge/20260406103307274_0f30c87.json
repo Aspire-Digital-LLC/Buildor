@@ -1,0 +1,7 @@
+{
+  "commit": "0f30c87",
+  "date": "2026-04-06T15:33:07.274Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Documented forced permission pipeline: architecture section on --settings allow list clearing, decisions entry for Buildor-managed auto-approve over settings.local.json, codebase_structure added autoApprove.ts, project_status completed item, mind-map keywords updated"
+}
