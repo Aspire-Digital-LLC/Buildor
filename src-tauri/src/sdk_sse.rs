@@ -2,12 +2,20 @@ use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter};
 
 pub fn connect_sse_bridge(app: AppHandle, sdk_session_id: String, tauri_session_id: String) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let url = crate::sdk_client::stream_url(&sdk_session_id);
         let output_event = format!("claude-output-{}", tauri_session_id);
         let exit_event = format!("claude-exit-{}", tauri_session_id);
 
-        let resp = match crate::sdk_client::client()
+        eprintln!("[SSE] Connecting to {} for tauri session {}", url, tauri_session_id);
+
+        // Use a dedicated client without timeout — SSE is a long-lived stream
+        let sse_client = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        let resp = match sse_client
             .get(&url)
             .header("Accept", "text/event-stream")
             .send()
@@ -15,14 +23,16 @@ pub fn connect_sse_bridge(app: AppHandle, sdk_session_id: String, tauri_session_
         {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("SSE connection error for {}: {}", tauri_session_id, e);
+                eprintln!("[SSE] Connection error for {}: {}", tauri_session_id, e);
                 let _ = app.emit(&exit_event, "exited");
                 return;
             }
         };
 
+        eprintln!("[SSE] Connected, status={} for {}", resp.status(), tauri_session_id);
+
         if !resp.status().is_success() {
-            eprintln!("SSE connection failed for {}: {}", tauri_session_id, resp.status());
+            eprintln!("[SSE] Non-success status for {}: {}", tauri_session_id, resp.status());
             let _ = app.emit(&exit_event, "exited");
             return;
         }

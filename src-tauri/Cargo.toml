@@ -23,7 +23,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
-reqwest = { version = "0.12", features = ["json", "cookies", "native-tls", "stream"] }
+reqwest = { version = "0.12", features = ["json", "cookies", "native-tls", "stream", "blocking"] }
 futures-util = "0.3"
 urlencoding = "2"
 parking_lot = "0.12"

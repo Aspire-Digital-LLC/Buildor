@@ -19,18 +19,17 @@ pub fn start_sidecar() -> Result<(), String> {
     let port = std::env::var("BUILDOR_SDK_PORT").unwrap_or_else(|_| "3456".to_string());
 
     let mut cmd = crate::no_window_command("node");
-    cmd.args(["--import", "tsx", "src-tauri/sdk-service/src/index.ts"])
+    cmd.args(["--import", "tsx", "src/index.ts"])
         .env("BUILDOR_SDK_PORT", &port)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
 
-    // In dev mode, set current_dir to the project root (parent of src-tauri/)
+    // Set current_dir to the sdk-service directory where tsx is installed
+    // CARGO_MANIFEST_DIR is only available at compile time via env!() macro
     if cfg!(debug_assertions) {
-        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            if let Some(project_root) = std::path::Path::new(&manifest_dir).parent() {
-                cmd.current_dir(project_root);
-            }
-        }
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let sdk_service_dir = std::path::Path::new(manifest_dir).join("sdk-service");
+        cmd.current_dir(&sdk_service_dir);
     }
 
     let child = cmd
@@ -50,9 +49,17 @@ pub fn stop_sidecar() {
     }
 }
 
-pub async fn wait_for_healthy(timeout_ms: u64) -> Result<(), String> {
+/// Synchronous health check polling — safe to call from setup() before Tokio runtime is available.
+pub fn wait_for_healthy(timeout_ms: u64) -> Result<(), String> {
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
+    let url = format!("{}/health", crate::sdk_client::get_base_url());
+
+    // Use a blocking HTTP client since we can't use async here
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .map_err(|e| format!("Failed to create blocking client: {}", e))?;
 
     loop {
         if start.elapsed() >= timeout {
@@ -62,17 +69,18 @@ pub async fn wait_for_healthy(timeout_ms: u64) -> Result<(), String> {
             ));
         }
 
-        match crate::sdk_client::health_check().await {
-            Ok(_) => return Ok(()),
-            Err(_) => {
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        if let Ok(resp) = client.get(&url).send() {
+            if resp.status().is_success() {
+                return Ok(());
             }
         }
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }
 
 pub fn start_health_loop(app: tauri::AppHandle) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut consecutive_failures: u32 = 0;
 
         loop {
@@ -138,5 +146,8 @@ pub fn start_health_loop(app: tauri::AppHandle) {
 pub async fn restart_sidecar() -> Result<(), String> {
     stop_sidecar();
     start_sidecar()?;
-    wait_for_healthy(10000).await
+    // Run blocking health check in a thread to avoid blocking the async runtime
+    tokio::task::spawn_blocking(|| wait_for_healthy(10000))
+        .await
+        .map_err(|e| format!("Health check task failed: {}", e))?
 }

@@ -36,9 +36,7 @@ pub fn run() {
             // Start the SDK sidecar service — non-fatal on failure
             if let Err(e) = crate::sdk_sidecar::start_sidecar() {
                 eprintln!("SDK sidecar failed to start: {}", e);
-            } else if let Err(e) =
-                tauri::async_runtime::block_on(crate::sdk_sidecar::wait_for_healthy(10_000))
-            {
+            } else if let Err(e) = crate::sdk_sidecar::wait_for_healthy(10_000) {
                 eprintln!("SDK sidecar not healthy: {}", e);
             } else {
                 crate::sdk_sidecar::start_health_loop(app.handle().clone());
