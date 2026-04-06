@@ -40,7 +40,7 @@ export interface AgentPoolEntry {
 
 // --- Agent Marker (parsed from stream output) ---
 
-export type AgentMarkerAction = 'spawn_agent' | 'kill_agent' | 'extend_agent' | 'takeover_agent';
+export type AgentMarkerAction = 'spawn_agent' | 'kill_agent' | 'extend_agent' | 'takeover_agent' | 'subscribe_telemetry' | 'unsubscribe_telemetry';
 
 export interface AgentMarker {
   action: AgentMarkerAction;
@@ -55,6 +55,8 @@ export interface AgentMarker {
   agentId?: string;           // session ID or agent name
   mark?: 'completed' | 'failed';   // for kill_agent
   seconds?: number;           // for extend_agent
+  // subscribe_telemetry fields
+  streams?: string[];         // ["pool", "mailbox"] or subset
 }
 
 // --- Agent Spawn Request (sent to Rust backend) ---

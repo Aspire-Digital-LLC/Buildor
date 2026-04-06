@@ -75,6 +75,8 @@
 - [x] **Skills consolidation**: Removed dedicated shared skills sync (`skill_sync.rs`, `SharedSkillsRepo.tsx`, `skillSync.ts`, startup auto-sync) — skills now resolve from shared memory repo path
 - [x] **Skill activation strengthening**: Eyeball mode system prompt injection upgraded from passive "Available Skills" to mandatory "ACTIVE BUILDOR SKILLS" directive with explicit 3-step requirement (evaluate, read prompt.md, follow methodology). Skill guide updated with trigger-oriented description convention ("Use when the user asks to...")
 - [x] **Version 0.0.5**: Bumped all version locations (package.json, Cargo.toml, tauri.conf.json x2)
+- [x] **Pool Telemetry Stream**: Subscribable real-time telemetry feed from Operation Pool and Agent Mailbox. Static subscriber registry (`telemetry.rs`), Tauri commands (`subscribe_telemetry`/`unsubscribe_telemetry`), pool snapshot every 10 ticks, mailbox deposit/deps-met/abandoned events, auto-cleanup on session stop. Development-only tool — telemetry lines injected into Claude session stdin via `send_message()`.
+- [x] **Worktree symlink .bin shim fix**: `regenerate_bin_shims()` in `worktree.rs` generates fresh `.cmd`/`.ps1`/shell shims after junction creation, fixing CLI tools (vite, tauri, tsc) that fail when `.bin/` relative symlinks break across Windows junction boundaries.
 
 ### In Progress
 1. [ ] **Permission response validation** — control_response with updatedInput sent correctly per Agent SDK source, needs end-to-end verification that tools execute after approval

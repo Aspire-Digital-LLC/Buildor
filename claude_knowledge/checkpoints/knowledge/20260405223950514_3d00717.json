@@ -1,0 +1,7 @@
+{
+  "commit": "3d00717",
+  "date": "2026-04-06T03:39:50.514Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Documented pool telemetry stream: architecture.md (new section), codebase_structure.md (telemetry.rs, commands/telemetry.rs, telemetry.ts), project_status.md (completed item), mind-map.json (keywords)"
+}

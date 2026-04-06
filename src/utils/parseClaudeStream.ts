@@ -3,6 +3,7 @@ import { buildorEvents } from './buildorEvents';
 import { hasAgentMarkers, parseAgentMarkers } from './agentMarker';
 import { spawnAgent, killAgent, extendAgent, takeoverAgent } from './commands/agents';
 import { spawnAgentWithDeps } from './commands/mailbox';
+import { subscribeTelemetry, unsubscribeTelemetry } from './commands/telemetry';
 import { agentHealthMonitor } from './agentHealthMonitor';
 
 export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMessage | null {
@@ -352,6 +353,24 @@ function processAgentMarker(marker: import('@/types/agent').AgentMarker, parentS
       takeoverAgent(marker.agentId).catch((err) => {
         buildorEvents.emit('error-occurred', {
           message: `Failed to takeover agent: ${err}`,
+        }, parentSessionId);
+      });
+      break;
+    }
+    case 'subscribe_telemetry': {
+      if (!parentSessionId) break;
+      subscribeTelemetry(parentSessionId, marker.streams).catch((err) => {
+        buildorEvents.emit('error-occurred', {
+          message: `Failed to subscribe telemetry: ${err}`,
+        }, parentSessionId);
+      });
+      break;
+    }
+    case 'unsubscribe_telemetry': {
+      if (!parentSessionId) break;
+      unsubscribeTelemetry(parentSessionId).catch((err) => {
+        buildorEvents.emit('error-occurred', {
+          message: `Failed to unsubscribe telemetry: ${err}`,
         }, parentSessionId);
       });
       break;

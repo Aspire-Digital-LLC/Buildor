@@ -226,6 +226,15 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Windows Junctions for node_modules Break .bin/ Shims
+
+**Context**: Worktree symlink strategy uses `mklink /J` to junction `node_modules` from worktree to main repo
+**Surprise**: Windows junctions don't carry working `.bin/` shims. Either `.bin/` is missing entirely (junction target's `.bin` contains relative symlinks that don't resolve across junction boundaries) or the shims point to wrong relative paths. CLI tools like `vite`, `tauri`, `tsc` fail with "not recognized as a command."
+**Impact**: Any worktree using the symlink strategy can't run dev tooling — `npx tauri dev`, `npm run build`, etc. all fail
+**Workaround**: After creating the junction, `regenerate_bin_shims()` scans all packages' `package.json` `bin` fields and generates fresh `.cmd`, `.ps1`, and shell shims with correct relative paths from `.bin/` to the actual JS entry points. Non-fatal if shim generation fails — the junction itself remains valid for `require()`/`import` resolution. Implementation in `worktree.rs`: `regenerate_bin_shims()` + `process_package_bin()`.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

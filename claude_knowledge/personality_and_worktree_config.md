@@ -40,6 +40,7 @@ Buildor can automatically set up `node_modules` when creating worktrees for Node
 2. **Trigger**: `StartSessionModal.tsx` calls `setupWorktreeDeps()` after `createSession()` succeeds, reading strategy from `useWorktreeConfigStore`
 3. **Non-blocking**: dep setup failure logs a warning but doesn't fail session creation
 4. **Platform handling**: symlink uses `mklink /J` on Windows, `std::os::unix::fs::symlink` on Unix
+5. **Bin shim regeneration**: After junction creation, `regenerate_bin_shims()` scans all packages' `package.json` `bin` fields and generates fresh `.cmd`, `.ps1`, and shell shims in `.bin/`. Required on Windows because junction boundaries break the relative symlinks npm creates in `.bin/`.
 
 ### Extensibility
 

@@ -133,6 +133,16 @@ Optional fields for spawn_agent:
 -<*{ "action": "takeover_agent", "agentId": "agent-session-id" }*>-
 ```
 
+**Subscribe to pool telemetry** (live Operation Pool + Mailbox stream, ~1 line/sec):
+```
+-<*{ "action": "subscribe_telemetry", "streams": ["pool", "mailbox"] }*>-
+```
+
+**Unsubscribe from telemetry:**
+```
+-<*{ "action": "unsubscribe_telemetry" }*>-
+```
+
 #### Agent Behavior
 - Agents run as separate Claude Code subprocesses with their own context
 - When an agent completes, its result summary is automatically injected into your session

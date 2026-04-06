@@ -5,6 +5,7 @@ mod claude;
 mod config;
 mod logging;
 mod operation_pool;
+mod telemetry;
 
 /// Create a Command with CREATE_NO_WINDOW on Windows to prevent console flashing
 /// when the app runs as a GUI (production builds).
@@ -150,6 +151,8 @@ pub fn run() {
             commands::mailbox::purge_results,
             commands::mailbox::spawn_agent_with_deps,
             commands::operation_pool::get_pool_status,
+            commands::telemetry::subscribe_telemetry,
+            commands::telemetry::unsubscribe_telemetry,
         ])
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

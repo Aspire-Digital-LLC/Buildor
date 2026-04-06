@@ -6,7 +6,7 @@
     {
       "file": "codebase_structure.md",
       "description": "Project directory layout, module boundaries, and file organization conventions",
-      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection"]
+      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection", "telemetry.rs", "telemetry.ts"]
     },
     {
       "file": "tech_stack.md",
@@ -16,7 +16,7 @@
     {
       "file": "architecture.md",
       "description": "System architecture, data flow, component relationships, design patterns, agent pool, health monitoring, shared skills sync, operation pool",
-      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent", "dual-write", "transcript hierarchy", "source_agent_id", "agent_name", "stdout emit", "perf instrumentation", "slow emit", "sticky zone", "permission card", "StickyPermissionCard", "PermissionQueueEntry", "FIFO", "tiered"]
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent", "dual-write", "transcript hierarchy", "source_agent_id", "agent_name", "stdout emit", "perf instrumentation", "slow emit", "sticky zone", "permission card", "StickyPermissionCard", "PermissionQueueEntry", "FIFO", "tiered", "telemetry", "subscriber", "telemetry_snapshot", "shorten_lane_key"]
     },
     {
       "file": "decisions.md",
@@ -51,7 +51,7 @@
     {
       "file": "personality_and_worktree_config.md",
       "description": "Personality system (built-in + custom prompt injection) and worktree dependency setup strategies",
-      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps"]
+      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps", "junction", ".bin", "shim", "regenerate_bin_shims"]
     },
     {
       "file": "../buildor_context.md",
@@ -74,9 +74,9 @@
       "keywords": ["retrospective", "multi-agent", "orchestration", "review loop", "adversarial review", "sub-agent", "marker", "flow template", "pipeline", "phased", "lessons learned"]
     },
     {
-      "file": "pool_telemetry_spec.md",
-      "description": "Build spec for real-time telemetry stream from Operation Pool and Agent Mailbox — injected into Claude's stdin for live observability during development",
-      "keywords": ["telemetry", "pool", "observability", "stream", "stdin", "send_message", "subscribe", "tick", "mailbox", "TELEMETRY_SUBSCRIBERS", "telemetry.rs", "dev tool"]
+      "file": "telemetry.md",
+      "description": "Pool telemetry stream — how to subscribe, read, and diagnose Operation Pool and Mailbox behavior in real-time during development",
+      "keywords": ["telemetry", "pool", "mailbox", "subscribe", "monitor", "diagnose", "debug", "queue", "lane", "concurrency", "tick", "stream"]
     }
   ]
 }
