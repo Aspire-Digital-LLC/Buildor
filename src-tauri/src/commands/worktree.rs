@@ -304,6 +304,34 @@ pub async fn list_sessions() -> Result<Vec<SessionInfo>, String> {
     Ok(all_sessions)
 }
 
+/// Remove a node_modules junction/symlink from a worktree path without following it.
+/// This MUST be called before deleting the worktree directory, because on Windows
+/// `remove_dir_all` and `git worktree remove` follow junctions and delete the
+/// target's contents (the main repo's node_modules).
+fn remove_node_modules_junction(worktree_path: &str) {
+    let node_modules = Path::new(worktree_path).join("node_modules");
+    if !node_modules.exists() {
+        return;
+    }
+
+    #[cfg(windows)]
+    {
+        // fs::remove_dir removes a junction point itself without following it.
+        // Unlike remove_dir_all, it does NOT descend into the target directory.
+        if std::fs::remove_dir(&node_modules).is_err() {
+            // Fallback: use cmd /C rmdir which also removes junctions without following
+            let _ = std::process::Command::new("cmd")
+                .args(["/C", "rmdir", &node_modules.to_string_lossy()])
+                .output();
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        // On Unix, node_modules is a symlink — remove_file unlinks it
+        let _ = std::fs::remove_file(&node_modules);
+    }
+}
+
 #[tauri::command]
 pub async fn close_session(session_id: String, project_name: String, repo_path: String, worktree_path: String, force: Option<bool>) -> Result<(), String> {
     let force = force.unwrap_or(false);
@@ -381,6 +409,12 @@ pub async fn close_session(session_id: String, project_name: String, repo_path: 
 
     // Brief pause to let processes fully exit and release file handles
     std::thread::sleep(std::time::Duration::from_millis(300));
+
+    // CRITICAL: Remove junction/symlink at node_modules BEFORE deleting the worktree directory.
+    // On Windows, both `remove_dir_all` and `git worktree remove` follow directory junctions
+    // and delete the TARGET's contents — which is the main repo's node_modules/.
+    // This would destroy all CLI tools (.bin/tauri, .bin/vite, etc.) in the main repo.
+    remove_node_modules_junction(&worktree_path);
 
     // Remove worktree — try git first, fall back to manual deletion on Windows lock errors
     let remove_result = run_git(&repo_path, &["worktree", "remove", &worktree_path, "--force"]).await;
