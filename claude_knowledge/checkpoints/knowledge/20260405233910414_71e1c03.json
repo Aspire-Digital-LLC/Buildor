@@ -1,0 +1,7 @@
+{
+  "commit": "71e1c03",
+  "date": "2026-04-06T04:39:10.414Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "Documented skill activation strengthening: mandatory directive injection in buildSystemPrompt.ts, trigger-oriented description gotcha, architecture.md eyeball mode update"
+}
