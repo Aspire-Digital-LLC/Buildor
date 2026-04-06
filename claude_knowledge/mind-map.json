@@ -6,7 +6,7 @@
     {
       "file": "codebase_structure.md",
       "description": "Project directory layout, module boundaries, and file organization conventions",
-      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection", "telemetry.rs", "telemetry.ts"]
+      "keywords": ["structure", "folders", "directories", "layout", "modules", "organization", "where", "find", "file", "agents.rs", "mailbox.rs", "agentHealthMonitor", "agentMarker", "parseClaudeStream", "useAgentPool", "chatImages", "historyInjection"]
     },
     {
       "file": "tech_stack.md",
@@ -16,7 +16,7 @@
     {
       "file": "architecture.md",
       "description": "System architecture, data flow, component relationships, design patterns, agent pool, health monitoring, shared skills sync, operation pool",
-      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent", "dual-write", "transcript hierarchy", "source_agent_id", "agent_name", "stdout emit", "perf instrumentation", "slow emit", "sticky zone", "permission card", "StickyPermissionCard", "PermissionQueueEntry", "FIFO", "tiered", "telemetry", "subscriber", "telemetry_snapshot", "shorten_lane_key"]
+      "keywords": ["architecture", "design", "pattern", "data flow", "component", "backend", "frontend", "IPC", "window", "chat history", "aware", "injection", "session", "agent", "health", "escalation", "shared skills", "sync", "defaults.json", "image", "images", "compression", "history prompt", "lightbox", "mailbox", "dependency", "dependencies", "inter-agent", "communication", "result", "deposit", "pending spawn", "operation pool", "scheduler", "concurrency", "lane", "adaptive", "resource key", "tier", "throttle", "cleanup_agent_sessions", "agent pool scoping", "parentSessionId", "query_agent_sessions_by_parent", "dual-write", "transcript hierarchy", "source_agent_id", "agent_name", "stdout emit", "perf instrumentation", "slow emit", "sticky zone", "permission card", "StickyPermissionCard", "PermissionQueueEntry", "FIFO", "tiered"]
     },
     {
       "file": "decisions.md",
@@ -51,7 +51,7 @@
     {
       "file": "personality_and_worktree_config.md",
       "description": "Personality system (built-in + custom prompt injection) and worktree dependency setup strategies",
-      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps", "junction", ".bin", "shim", "regenerate_bin_shims"]
+      "keywords": ["personality", "persona", "system prompt", "communication style", "worktree", "node_modules", "dependencies", "pnpm", "symlink", "npm install", "setup deps"]
     },
     {
       "file": "../buildor_context.md",
@@ -77,6 +77,11 @@
       "file": "telemetry.md",
       "description": "Pool telemetry stream — how to subscribe, read, and diagnose Operation Pool and Mailbox behavior in real-time during development",
       "keywords": ["telemetry", "pool", "mailbox", "subscribe", "unsubscribe", "monitor", "diagnose", "debug", "queue", "lane", "concurrency", "tick", "stream", "subscribe_telemetry", "unsubscribe_telemetry", "marker"]
+    },
+    {
+      "file": "sdk_service_spec.md",
+      "description": "Architecture spec for Node.js Agent SDK service — replaces raw CLI spawning with HTTP/SSE sidecar. Covers API endpoints, permission hooks, sidecar lifecycle, health monitoring, migration plan.",
+      "keywords": ["SDK", "agent SDK", "sidecar", "Node", "service", "windowsHide", "flashing", "backpressure", "SSE", "permission hook", "PreToolUse", "migration", "spawnClaudeCodeProcess", "health check", "heartbeat"]
     }
   ]
 }
