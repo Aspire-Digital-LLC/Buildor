@@ -21,7 +21,7 @@ my-skill/
 ```json
 {
   "name": "skill-name",
-  "description": "One-line description of what this skill does and when to use it",
+  "description": "Use when the user asks to [trigger phrases]. Applies [methodology summary].",
   "tags": ["category1", "category2"],
 
   "params": [
@@ -68,7 +68,7 @@ my-skill/
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `name` | Yes | — | Lowercase + hyphens only. Max 64 chars. Matches the directory name. |
-| `description` | Yes | skill name | What the skill does. Shown in palette and used for eyeball (activate) mode. Max 250 chars recommended. |
+| `description` | Yes | skill name | **Trigger description** — must describe *when* to activate, not just *what* it does. Lead with user intent phrases ("Use when the user asks to..."). Claude matches user requests against this text to decide whether to invoke the skill. If the description only says what the skill contains, Claude won't know when to use it. Shown in palette and injected into system prompt for eyeball mode. Max 250 chars recommended. |
 | `tags` | No | `[]` | Categories for search/filtering in the palette. |
 | `params` | No | `[]` | Array of parameters that generate a modal form when invoked via Action mode. |
 | `execution.allowedTools` | No | `[]` | Tools auto-accepted without permission prompts during this skill's execution. |
@@ -133,11 +133,14 @@ Directly executes the skill:
 ### Eyeball (Activate) — Eye icon in palette
 
 Makes the session aware of the skill without running it:
-1. Only the `description` enters the session context
-2. Claude sees the skill is available and loads the full content on demand
-3. Activating triggers a silent session restart (invisible to user)
-4. Multiple skills can be active simultaneously
-5. Toggle off to deactivate
+1. The `description` is injected into the system prompt under an **ACTIVE BUILDOR SKILLS** directive
+2. Claude is instructed to evaluate every user request against active skill descriptions
+3. If a request matches, Claude **must** read the skill's `prompt.md` and use it as the primary methodology — not freeform
+4. Activating triggers a silent session restart (invisible to user)
+5. Multiple skills can be active simultaneously
+6. Toggle off to deactivate
+
+**This is why the `description` field must describe when to activate.** Claude matches user requests against these descriptions. A description like "Reviews code against 19 rules" won't trigger on "check this code for bugs." A description like "Use when the user asks for a code review, code quality check, or to evaluate code" will.
 
 ## Examples
 
@@ -153,7 +156,7 @@ code-review/
 ````json
 {
   "name": "code-review",
-  "description": "Reviews code changes for bugs, security issues, and style violations",
+  "description": "Use when the user asks for a code review, code quality check, to evaluate changes, review a diff, check for bugs, or assess readability. Applies structured review rules covering control flow, functions, naming, and comments.",
   "tags": ["review", "quality"],
   "params": [
     {
@@ -213,7 +216,7 @@ research-topic/
 ````json
 {
   "name": "research-topic",
-  "description": "Deep research on a topic, writes findings to a markdown file for downstream consumption",
+  "description": "Use when the user asks to research a topic, investigate a technology, analyze an approach, or produce a findings document. Performs deep codebase and optional web research, outputs structured markdown.",
   "tags": ["research", "pipeline"],
   "params": [
     {
@@ -304,7 +307,7 @@ The smallest valid skill — just a name, description, and prompt:
 ````json
 {
   "name": "quick-lint",
-  "description": "Runs a quick lint check on the current file or directory"
+  "description": "Use when the user asks to lint, check for warnings, or run a quick style check on the current directory or file."
 }
 ````
 
