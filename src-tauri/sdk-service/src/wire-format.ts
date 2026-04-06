@@ -23,16 +23,17 @@ export function buildPermissionRequest(
   toolName: string,
   toolInput: unknown,
   toolUseId: string,
-  description?: string,
+  _description?: string,
 ): string {
   return JSON.stringify({
     type: "control_request",
-    controlType: "permission",
-    requestId,
-    toolName,
-    toolInput,
-    toolUseId,
-    description: description ?? `Allow ${toolName}?`,
+    request_id: requestId,
+    request: {
+      subtype: "can_use_tool",
+      tool_name: toolName,
+      tool_use_id: toolUseId,
+      input: toolInput,
+    },
   });
 }
 

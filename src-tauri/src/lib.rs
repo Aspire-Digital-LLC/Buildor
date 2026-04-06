@@ -6,6 +6,9 @@ mod config;
 mod logging;
 mod operation_pool;
 mod telemetry;
+pub mod sdk_client;
+pub mod sdk_sidecar;
+pub mod sdk_sse;
 
 /// Create a Command with CREATE_NO_WINDOW on Windows to prevent console flashing
 /// when the app runs as a GUI (production builds).
@@ -29,6 +32,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // Start the SDK sidecar service — non-fatal on failure
+            if let Err(e) = crate::sdk_sidecar::start_sidecar() {
+                eprintln!("SDK sidecar failed to start: {}", e);
+            } else if let Err(e) =
+                tauri::async_runtime::block_on(crate::sdk_sidecar::wait_for_healthy(10_000))
+            {
+                eprintln!("SDK sidecar not healthy: {}", e);
+            } else {
+                crate::sdk_sidecar::start_health_loop(app.handle().clone());
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::project::list_projects,
             commands::project::add_project,
@@ -158,13 +174,12 @@ pub fn run() {
             commands::telemetry::subscribe_telemetry,
             commands::telemetry::unsubscribe_telemetry,
         ])
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                if let Some(pool) = crate::operation_pool::OPERATION_POOL.get() {
-                    pool.shutdown();
-                }
-            }
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    // App has exited — clean up sidecar and operation pool
+    crate::sdk_sidecar::stop_sidecar();
+    if let Some(pool) = crate::operation_pool::OPERATION_POOL.get() {
+        pool.shutdown();
+    }
 }

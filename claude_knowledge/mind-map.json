@@ -82,6 +82,11 @@
       "file": "sdk_service_spec.md",
       "description": "Architecture spec for Node.js Agent SDK service — replaces raw CLI spawning with HTTP/SSE sidecar. Covers API endpoints, permission hooks, sidecar lifecycle, health monitoring, migration plan.",
       "keywords": ["SDK", "agent SDK", "sidecar", "Node", "service", "windowsHide", "flashing", "backpressure", "SSE", "permission hook", "PreToolUse", "migration", "spawnClaudeCodeProcess", "health check", "heartbeat", "sdk-service", "HTTP", "REST", "Phase 1"]
+    },
+    {
+      "file": "agent_result_handling.md",
+      "description": "Known issue: orchestrator fails to acknowledge agent results despite them being in context. Root causes (alert priming, context distance, duplicates), potential fixes (alert wording, result-first ordering, prompt instructions).",
+      "keywords": ["agent result", "distress", "health alert", "BUILDOR_ALERT", "terminated", "result handling", "orchestrator", "context", "priming", "duplicate"]
     }
   ]
 }

@@ -72,11 +72,10 @@ pub async fn spawn_agent(
     let pool = crate::operation_pool::OPERATION_POOL.get()
         .ok_or_else(|| "Operation pool not initialized".to_string())?;
 
-    let app_clone = app.clone();
     let resolved_dir_clone = resolved_dir.clone();
     let model_clone = model.clone();
     let agent_prompt_clone = agent_system_prompt.clone();
-    let result_slot: std::sync::Arc<std::sync::Mutex<Option<super::claude::SessionStartResult>>> =
+    let result_slot: std::sync::Arc<std::sync::Mutex<Option<crate::sdk_client::CreateSessionResponse>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let result_slot_inner = result_slot.clone();
 
@@ -84,25 +83,39 @@ pub async fn spawn_agent(
         format!("llm/agent-{}", name),
         crate::operation_pool::Tier::Subagent,
         move || {
-            let r = super::claude::start_agent_session_sync(
-                &app_clone,
+            let handle = tokio::runtime::Handle::current();
+            let resp = handle.block_on(crate::sdk_client::create_session(
                 &resolved_dir_clone,
-                model_clone.as_deref(),
+                model_clone.as_deref().unwrap_or("sonnet"),
                 &agent_prompt_clone,
-            )?;
-            *result_slot_inner.lock().map_err(|e| format!("Lock error: {}", e))? = Some(r);
+                "default",
+                vec!["Agent".to_string()],
+            ))?;
+            *result_slot_inner.lock().map_err(|e| format!("Lock error: {}", e))? = Some(resp);
             Ok("spawned".to_string())
         },
     ).await;
 
     rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
 
-    let result = result_slot.lock()
+    let sdk_resp = result_slot.lock()
         .map_err(|e| format!("Lock error: {}", e))?
         .take()
         .ok_or_else(|| "Agent session result not available after pool spawn".to_string())?;
 
-    let agent_session_id = result.session_id.clone();
+    let agent_session_id = uuid::Uuid::new_v4().to_string();
+
+    // Start SSE bridge to forward events to frontend
+    crate::sdk_sse::connect_sse_bridge(app.clone(), sdk_resp.session_id.clone(), agent_session_id.clone());
+
+    // Register session in the shared sessions map
+    super::claude::insert_session(agent_session_id.clone(), super::claude::ClaudeSession {
+        sdk_session_id: sdk_resp.session_id,
+        working_dir: resolved_dir.clone(),
+        pid: sdk_resp.pid,
+        model: model.clone(),
+        system_prompt: Some(agent_system_prompt.clone()),
+    });
 
     // Register in pool
     let entry = AgentPoolEntryData {
@@ -120,7 +133,7 @@ pub async fn spawn_agent(
         return_mode: return_mode.clone(),
         output_path: output_path.clone(),
         prompt: Some(prompt.clone()),
-        pid: result.pid,
+        pid: sdk_resp.pid,
     };
 
     {
@@ -424,7 +437,7 @@ pub async fn get_agent_status(session_id: String) -> Result<AgentPoolEntryData, 
         .ok_or_else(|| format!("Agent not found: {}", session_id))
 }
 
-/// Inject a message into an agent's stdin (for escalation, pass-through, etc.)
+/// Inject a message into an agent's session (for escalation, pass-through, etc.)
 #[tauri::command]
 pub async fn inject_into_agent(session_id: String, message: String) -> Result<(), String> {
     super::claude::send_message(session_id, message).await
