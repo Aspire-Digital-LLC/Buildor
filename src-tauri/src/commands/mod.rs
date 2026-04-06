@@ -12,7 +12,6 @@ pub mod chat_history;
 pub mod skills;
 pub mod agents;
 pub mod shell;
-pub mod skill_sync;
 pub mod chat_images;
 pub mod mailbox;
 pub mod operation_pool;

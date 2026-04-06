@@ -1,6 +1,5 @@
 fn config_path() -> Result<std::path::PathBuf, String> {
-    let home = dirs_next::home_dir().ok_or_else(|| "Cannot find home directory".to_string())?;
-    Ok(home.join(".productaflows").join("config.json"))
+    Ok(crate::config::app_config::AppConfig::config_file_path())
 }
 
 #[tauri::command]

@@ -356,7 +356,7 @@ export function SharedMemory() {
           lineHeight: 1.8,
           whiteSpace: 'pre',
         }}>
-          {'shared-repo/\n├── .buildor.json     # branch config\n├── flows/            # flow definitions\n│   ├── develop.json\n│   └── hotfix.json\n└── skills/           # skill prompts\n    ├── commit.md\n    └── review.md'}
+          {'shared-repo/\n├── .buildor.json          # repo config\n├── defaults.json          # org-wide skill defaults\n├── flows/                 # flow definitions\n│   ├── develop.json\n│   └── hotfix.json\n└── skills/                # buildor skills\n    ├── code-review/\n    │   ├── skill.json      # metadata + params\n    │   └── prompt.md       # prompt template\n    └── research-topic/\n        ├── skill.json\n        ├── prompt.md\n        └── reference.md    # supporting files'}
         </div>
       </div>
     </div>

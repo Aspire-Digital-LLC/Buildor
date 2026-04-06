@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use crate::config::app_config::AppConfig;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -82,8 +83,22 @@ pub struct ProjectSkillData {
 }
 
 fn buildor_skills_dir() -> PathBuf {
-    let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".buildor").join("skills")
+    // Read sharedMemoryRepo from config — skills live in {repo}/skills/
+    let config_path = AppConfig::config_file_path();
+    if config_path.exists() {
+        if let Ok(content) = fs::read_to_string(&config_path) {
+            if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(repo) = cfg.get("sharedMemoryRepo").and_then(|v| v.as_str()) {
+                    let skills_path = PathBuf::from(repo).join("skills");
+                    if skills_path.exists() {
+                        return skills_path;
+                    }
+                }
+            }
+        }
+    }
+    // Fallback if no shared memory repo configured
+    AppConfig::config_dir().join("skills")
 }
 
 /// Org-wide fallback defaults loaded from `defaults.json` at skills root.

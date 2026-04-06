@@ -8,9 +8,7 @@ import { ThemeSettings } from './ThemeSettings';
 import { AccountSettings } from './AccountSettings';
 import { PersonalitySettings } from './PersonalitySettings';
 import { WorktreeSettings } from './WorktreeSettings';
-import { SharedSkillsRepo } from './SharedSkillsRepo';
-
-type SettingsSection = 'account' | 'projects' | 'themes' | 'personality' | 'worktrees' | 'logs' | 'shared-memory' | 'shared-skills' | 'updates';
+type SettingsSection = 'account' | 'projects' | 'themes' | 'personality' | 'worktrees' | 'logs' | 'shared-memory' | 'updates';
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'account', label: 'Account' },
@@ -20,7 +18,6 @@ const sections: { id: SettingsSection; label: string }[] = [
   { id: 'worktrees', label: 'Worktrees' },
   { id: 'logs', label: 'Logs' },
   { id: 'shared-memory', label: 'Shared Memory' },
-  { id: 'shared-skills', label: 'Shared Skills' },
   { id: 'updates', label: 'Updates' },
 ];
 
@@ -94,7 +91,6 @@ export function Settings() {
         {active === 'worktrees' && <WorktreeSettings />}
         {active === 'logs' && <LogsViewer />}
         {active === 'shared-memory' && <SharedMemory />}
-        {active === 'shared-skills' && <SharedSkillsRepo />}
         {active === 'updates' && <UpdateChecker />}
       </div>
     </div>
