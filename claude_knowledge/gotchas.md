@@ -217,6 +217,15 @@ Key: `request_id` goes inside `response`, not top-level. `updatedInput` must ech
 
 ---
 
+### Skill Descriptions Must Be Trigger-Oriented, Not Capability-Oriented
+
+**Context**: Writing skill.json `description` fields for eyeball (activate) mode
+**Surprise**: A description like "Reviews code against 19 rules" or "Deep research on a topic" describes what the skill *does* but not *when* to use it. Claude's system prompt matches user requests against these descriptions. If the user says "check this code for bugs," a capability-oriented description won't trigger — the words don't overlap enough.
+**Impact**: Activated skills are silently ignored. Claude responds freeform instead of reading the skill's `prompt.md` and following its methodology.
+**Workaround**: Lead with user intent phrases: "Use when the user asks for a code review, code quality check, to evaluate changes, review a diff, check for bugs, or assess readability." The system prompt directive is strong ("you MUST evaluate every user request"), but only fires if the description text actually matches what the user asked for. See `buildor_skills_guide.md` for the full pattern.
+
+---
+
 ### Silent Failures Hide Real Problems — Always Log Errors
 
 **Context**: `loadProjects` in the project store failed silently — the outer catch set `error` in state but the UI showed an empty project list with no indication of what went wrong.

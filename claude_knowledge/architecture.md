@@ -167,7 +167,7 @@ When Buildor starts a Claude Code session, it injects context at the top so Clau
 
 The identity and personality layers are separate so personality is user-configurable without editing the core identity file.
 
-4. **Active skill descriptions (Eyeball Mode)** — when skills are eyeball-activated in the palette, their names/descriptions are appended via `buildSystemPrompt({ activeSkills })`. This tells Claude what skills exist and where to read full content (`~/.buildor/skills/<name>/prompt.md`).
+4. **Active skill descriptions (Eyeball Mode)** — when skills are eyeball-activated in the palette, `buildSystemPrompt({ activeSkills })` injects an **ACTIVE BUILDOR SKILLS (MANDATORY)** directive into the system prompt. This tells Claude it MUST evaluate every user request against active skill descriptions, read `prompt.md` on match, and follow it as the primary methodology — not freeform. Skill descriptions must be trigger-oriented ("Use when the user asks to...") so Claude can match intent.
 
 ### Eyeball Mode — Silent Restart Flow
 

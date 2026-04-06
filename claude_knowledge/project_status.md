@@ -73,6 +73,7 @@
 - [x] **Operation Pool implementation**: App-global self-tuning operation scheduler in `src-tauri/src/operation_pool/` (7 modules, ~1140 lines). Resource-keyed lanes, three-tier scheduling (App/User/Subagent), adaptive concurrency (TCP slow start), persisted learned limits (`pool_limits.json`), configurable via `pool_config.json`. Integrated into git, shell, claude, agent, and worktree commands. Worktree deps (pnpm/npm install) routed through pool as Tier::Subagent. Hardened through 5 rounds of review: panic recovery, lock ordering, shutdown drain, timeout handling, active_count leak prevention.
 - [x] **Pool telemetry stream spec**: Build specification for real-time telemetry from Operation Pool and Agent Mailbox (`claude_knowledge/pool_telemetry_spec.md`) — injected into Claude's stdin via `send_message()`, compact single-line format, subscriber registry, not yet implemented
 - [x] **Skills consolidation**: Removed dedicated shared skills sync (`skill_sync.rs`, `SharedSkillsRepo.tsx`, `skillSync.ts`, startup auto-sync) — skills now resolve from shared memory repo path
+- [x] **Skill activation strengthening**: Eyeball mode system prompt injection upgraded from passive "Available Skills" to mandatory "ACTIVE BUILDOR SKILLS" directive with explicit 3-step requirement (evaluate, read prompt.md, follow methodology). Skill guide updated with trigger-oriented description convention ("Use when the user asks to...")
 - [x] **Version 0.0.5**: Bumped all version locations (package.json, Cargo.toml, tauri.conf.json x2)
 
 ### In Progress
