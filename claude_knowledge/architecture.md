@@ -441,6 +441,63 @@ Skills are resolved from the **shared memory repo** configured in Settings > Sha
 - `defaults.json` at skills root provides org-wide fallback `model`, `effort`, `health` thresholds — individual skill.json values take precedence
 - No separate sync lifecycle — skills inherit the shared memory repo's git state (user syncs via Settings > Shared Memory)
 
+## Buildor-Managed Auto-Approve (Pool-Gated Tool Permissions)
+
+Claude sessions now start with `--settings` that clears the allow list, forcing every tool call through the permission prompt. Buildor intercepts all permissions and routes them through the operation pool.
+
+```
+Claude asks permission (control_request/permission)
+  → Buildor checks autoApprove.ts rules (Buildor config, not settings.local.json)
+  → If rule matches: auto-approve (skip permission card), still pool-gated
+  → If no rule: show StickyPermissionCard to user
+  → respondToPermissionPooled() → pool.submit() → pool schedules → write_permission_response()
+  → Claude executes tool
+```
+
+**Rule format**: Same pattern syntax as Claude (`"Read"`, `"Bash(git:*)"`, `"Edit"`). Rules stored in Buildor's `config.json` under `autoApproveRules`. "Always Allow" button writes to Buildor's store, not `settings.local.json`.
+
+**Why**: Gives the operation pool full visibility into every tool execution across all sessions. Telemetry now shows `tool/*` lanes for all operations. Auto-approve is Buildor-managed so the pool can still rate-limit even approved tools.
+
+## Skill Builder Panel
+
+Three-panel visual editor for creating and editing Buildor skills:
+
+```
+┌─────────────┬────────────────────┬──────────────┐
+│ Skill       │ Editor (7 tabs)    │ Chat         │
+│ Browser     │                    │ Assistant    │
+│             │ Identity | Params  │              │
+│ [search]    │ Execution | Vis    │ (restricted  │
+│ [+ New]     │ Health | Prompt    │  Sonnet,     │
+│             │ Files              │  marker      │
+│ skill-1     │                    │  protocol)   │
+│ skill-2     ├────────────────────┤              │
+│ skill-3     │ [Save] [Revert]    │              │
+└─────────────┴────────────────────┴──────────────┘
+```
+
+- **Browser**: Skill list from shared memory repo, search, create new
+- **Editor**: 7 tabs covering all `skill.json` + `prompt.md` fields. Dirty tracking via JSON comparison
+- **Chat**: Restricted Sonnet assistant that uses the marker protocol for structured field updates
+- **Save**: Commits and pushes to shared memory repo via `save_skill_with_commit` backend command
+- **Scope**: Skills have `general` or `project` scope, filtered in the skills palette
+- **Store**: `skillBuilderStore.ts` (Zustand) tracks editor state, original state for dirty detection, new vs edit mode
+
+## SDK Service (Phase 1 — Node.js Agent SDK Sidecar)
+
+Standalone Node.js HTTP server that wraps the Claude Agent SDK, designed to replace raw CLI spawning from Rust. Solves CMD window flashing, stdout backpressure, and permission IPC overhead.
+
+```
+Buildor (Tauri)  ──HTTP/SSE──►  SDK Service (localhost:PORT)  ──SDK──►  Claude Code
+```
+
+- **Endpoints**: POST/GET/DELETE `/sessions`, GET `/sessions/:id/stream` (SSE), POST `/sessions/:id/message`, POST `/sessions/:id/permission`, POST `/sessions/:id/interrupt`, POST `/sessions/:id/model`, GET `/health`
+- **SSE format**: Raw NDJSON matching Claude CLI output — enables zero frontend changes when Rust proxies in Phase 2
+- **Permission hooks**: `PreToolUse` hooks in-process, permission gate exposed via REST for Buildor's pool integration
+- **Status**: Phase 1 complete (standalone server + smoke tests). Phase 2 (Rust integration, sidecar lifecycle management) not yet started
+- **Location**: `src-tauri/sdk-service/`
+- **Spec**: `claude_knowledge/sdk_service_spec.md`
+
 ## Chat History & Aware System
 
 ```

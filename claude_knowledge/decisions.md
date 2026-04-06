@@ -247,6 +247,24 @@ Architectural and design decisions with rationale. Each entry explains why X was
 
 ---
 
+## Buildor-Managed Auto-Approve over Claude's settings.local.json
+
+**Choice**: Buildor maintains its own auto-approve rule store (`config.json/autoApproveRules`), Claude sessions start with an empty allow list
+**Rejected**: Letting Claude's `settings.local.json` `allowedTools` handle auto-approve
+
+**Why**: Claude's native allow list bypasses the permission prompt entirely — Buildor never sees the tool call. By clearing the allow list and forcing all tools through the permission prompt, Buildor's operation pool gains full visibility into every tool execution. Auto-approved tools still go through the pool for scheduling and rate limiting — they just skip the UI permission card. This also decouples Buildor's permission state from Claude's config files, which could be modified by other tools or Claude Code CLI usage outside Buildor.
+
+---
+
+## SDK Service (Node.js Sidecar) over Direct Rust CLI Spawning
+
+**Choice**: Node.js HTTP server wrapping the Claude Agent SDK, communicating with Tauri via localhost HTTP/SSE
+**Rejected**: Continuing with `std::process::Command("claude")` from Rust
+
+**Why**: Three problems compounded: (1) On Windows, `std::process::Command` spawns visible console windows — `CREATE_NO_WINDOW` doesn't propagate to Claude's internal grandchild processes. The SDK's `spawnClaudeCodeProcess` with `windowsHide: true` handles the full process tree. (2) Rust `BufReader` → Tauri `emit()` → webview IPC creates backpressure when JS is busy — Claude's stdout pipe fills, stalling output by 2x. The SDK manages pipes internally. (3) Permission handling required Rust emit → JS parse → IPC back → stdin write round-trip. SDK's `PreToolUse` hooks handle permissions in-process. Node.js sidecar is the natural host since the Agent SDK is a JS library.
+
+---
+
 ## Shared Memory Repo over Separate Skills Sync
 
 **Choice**: Skills resolve from `{sharedMemoryRepo}/skills/` directory, falling back to `~/.buildor/skills/`

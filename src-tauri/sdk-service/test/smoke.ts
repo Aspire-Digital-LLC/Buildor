@@ -108,24 +108,25 @@ async function run(): Promise<void> {
   });
   assert(msg.status === 202, "status 202 accepted");
 
-  // 6. Wait for SSE events
+  // 6. Wait for turn-completion (result message in claude-output events)
   console.log("6. Waiting for SSE events (30s timeout)...");
   const deadline = Date.now() + 30_000;
   let gotOutput = false;
-  let gotExit = false;
+  let gotResult = false;
 
-  while (Date.now() < deadline && !gotExit) {
+  while (Date.now() < deadline && !gotResult) {
     await sleep(500);
     const combined = sse.events.join("");
     if (combined.includes("event: claude-output")) gotOutput = true;
-    if (combined.includes("event: claude-exit")) gotExit = true;
+    // A result-type message signals the turn is complete
+    if (combined.includes('"type":"result"') || combined.includes('"type": "result"')) gotResult = true;
   }
 
   assert(gotOutput, "received claude-output event");
-  assert(gotExit, "received claude-exit event");
+  assert(gotResult, "received result message (turn complete)");
   sse.close();
 
-  // 7. Delete session
+  // 7. Delete session (triggers claude-exit as the query loop ends)
   console.log("7. DELETE /sessions/:id");
   const del = await request("DELETE", `/sessions/${sessionId}`);
   assert(del.status === 200, "status 200");
