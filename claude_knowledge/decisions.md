@@ -244,3 +244,12 @@ Architectural and design decisions with rationale. Each entry explains why X was
 **Rejected**: Injecting skill prompts into the active chat session
 
 **Why**: Heavy skills (documentation scans, log analysis) can take minutes and produce large outputs. Running them inline blocks the user's chat session — they can't ask questions or do other work while the skill runs. Forking as an agent gives the skill its own Claude process with independent context window, lets the user continue chatting, and produces a clean result that's injected back when done. The agent pool infrastructure (health monitoring, mailbox, transcript persistence) applies automatically.
+
+---
+
+## Buildor-Managed Auto-Approve over Claude's settings.local.json
+
+**Choice**: Buildor manages its own auto-approve rule store (`autoApproveRules` in `~/.buildor/config.json`) and clears Claude's built-in allow list via `--settings '{"permissions":{"allow":[],"deny":[]}}'`
+**Rejected**: Letting Claude manage its own `settings.local.json` allow list
+
+**Why**: Claude's built-in allow list (`settings.local.json`) silently approves tools without emitting a permission request. This creates a blind spot — Buildor never sees those tool executions, so the operation pool can't schedule them and telemetry can't track them. By clearing the allow list at session start, every tool call is forced through the permission prompt. Buildor then checks its own auto-approve rules before showing the UI card. Auto-approved tools still flow through the pool (`respondToPermissionPooled`), giving the scheduler full visibility into all tool executions across all sessions. The "Always Allow" button in `StickyPermissionCard` now writes to Buildor's config instead of Claude's settings.

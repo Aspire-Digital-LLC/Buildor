@@ -365,6 +365,14 @@ After initial deployment, several false-positive scenarios were discovered and f
 ### Auto-Accept Permissions
 Agents are autonomous workers — they auto-approve all permission requests. `useAgentPool` intercepts `control_request/permission` events in the raw JSON parser and responds via `respondToPermissionPooled` (tier: subagent, resource key: `tool/{toolName}/{sessionId}`) with the agent's own session ID. No permission cards are surfaced to the user for agent actions. The pool gate ensures agent tool executions are rate-limited alongside all other system operations.
 
+### Forced Permission Pipeline (All Sessions)
+All sessions (main chat and agents) launch with `--settings '{"permissions":{"allow":[],"deny":[]}}'`, clearing Claude's built-in allow list. This forces **every** tool call (Read, Edit, Bash, Grep, Glob, etc.) through the permission prompt, giving Buildor full visibility. Buildor manages its own auto-approve rules (`autoApproveRules` in `~/.buildor/config.json` via `src/utils/autoApprove.ts`):
+
+- **Rule format**: Matches Claude's pattern syntax — `"Read"` (approve all), `"Bash(git:*)"` (prefix match), etc.
+- **Check flow**: Permission arrives → `matchesAutoApproveRule()` checks cached rules → if match, `respondToPermissionPooled()` immediately (no UI card) → if no match, queue in `StickyPermissionCard`
+- **Always Allow**: `StickyPermissionCard` "Always Allow" button calls `addAutoApproveRule()` which persists to Buildor config (not `settings.local.json`). Cache invalidated on `permission-resolved` event.
+- **All paths are pool-gated**: Both auto-approved and user-approved tool calls flow through `respondToPermissionPooled`, so the operation pool schedules and rate-limits every tool execution.
+
 ### Completion Detection via Result Event
 In `--print stream-json` mode, Claude emits a `result` event (`success`/`failure`) but does NOT exit the process. Agent completion is detected by parsing the `result` event in the raw JSON listener, calling `markAgentExited()`, then stopping the orphaned process.
 

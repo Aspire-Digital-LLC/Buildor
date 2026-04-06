@@ -70,6 +70,7 @@ Buildor/
 │   │   │   ├── mailbox.ts          # depositResult, queryResult, purgeResults, spawnAgentWithDeps
 │   │   │   ├── telemetry.ts        # subscribeTelemetry, unsubscribeTelemetry
 │   │   │   └── chatImages.ts        # saveChatImage, readChatImage, deleteSessionImages
+│   │   ├── autoApprove.ts            # Buildor-managed auto-approve rules (replaces Claude's allow list)
 │   │   └── buildorEvents.ts         # Event bus (permissions, agents, skills, compact, etc.)
 │   ├── prompts/                 # Centralized prompt templates
 │   │   └── historyInjection.ts      # Aware injection instructions (header, footer, modes, image markers)
