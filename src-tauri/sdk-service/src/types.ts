@@ -4,7 +4,7 @@ import type { ServerResponse } from "node:http";
 // Permission types
 // ---------------------------------------------------------------------------
 
-export type PermissionMode = "hook" | "auto" | "readonly-auto";
+export type PermissionMode = "default";
 
 export interface PendingPermission {
   toolName: string;

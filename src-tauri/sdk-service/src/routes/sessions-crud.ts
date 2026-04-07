@@ -22,7 +22,7 @@ export async function handleCreateSession(req: IncomingMessage, res: ServerRespo
     cwd: body.cwd as string,
     model: body.model as string | undefined,
     systemPrompt: body.systemPrompt as string | undefined,
-    permissionMode: body.permissionMode as "hook" | "auto" | "readonly-auto" | undefined,
+    permissionMode: "default" as const,
     allowedTools: body.allowedTools as string[] | undefined,
     disallowedTools: body.disallowedTools as string[] | undefined,
   });

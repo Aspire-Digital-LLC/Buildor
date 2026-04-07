@@ -9,7 +9,7 @@ import {
 import type { ManagedSession } from "./types.js";
 import { AsyncMessageQueue } from "./types.js";
 import { sdkMessageToNDJSON } from "./wire-format.js";
-import { createPermissionHook } from "./permission-gate.js";
+import { createCanUseToolHandler } from "./permission-gate.js";
 import { sendSSE, closeSSEClients } from "./session-stream.js";
 
 // ---------------------------------------------------------------------------
@@ -58,11 +58,7 @@ export function startSession(session: ManagedSession): void {
       disallowedTools: session.disallowedTools.length
         ? session.disallowedTools
         : undefined,
-      hooks: {
-        PreToolUse: [{
-          hooks: [createPermissionHook(session)],
-        }],
-      },
+      canUseTool: createCanUseToolHandler(session),
       spawnClaudeCodeProcess: (opts: SpawnOptions): SpawnedProcess => {
         const child = spawn(opts.command, opts.args, {
           cwd: opts.cwd,

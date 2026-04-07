@@ -21,7 +21,7 @@ export function createSession(req: CreateSessionRequest): ManagedSession {
     cwd: req.cwd,
     model: req.model ?? "claude-sonnet-4-20250514",
     systemPrompt: req.systemPrompt,
-    permissionMode: req.permissionMode ?? "hook",
+    permissionMode: "default",
     allowedTools: req.allowedTools ?? [],
     disallowedTools: req.disallowedTools ?? [],
     startedAt: Date.now(),
