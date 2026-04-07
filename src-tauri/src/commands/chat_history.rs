@@ -137,7 +137,7 @@ pub async fn generate_chat_title(session_id: String) -> Result<String, String> {
         transcript
     );
 
-    let raw = super::claude::call_haiku(&prompt)?;
+    let raw = super::claude::call_haiku(&prompt).await?;
     let title = raw.lines().next().unwrap_or("").trim().trim_matches('"').to_string();
     let title = if title.split_whitespace().count() > 8 {
         title.split_whitespace().take(8).collect::<Vec<_>>().join(" ")
@@ -190,7 +190,7 @@ pub async fn generate_chat_summary(session_id: String) -> Result<String, String>
         truncated
     );
 
-    let summary = super::claude::call_haiku(&prompt)?;
+    let summary = super::claude::call_haiku(&prompt).await?;
     db.update_session_summary(&session_id, &summary)?;
     Ok(summary)
 }

@@ -75,25 +75,23 @@ fn clean_response(raw: &str) -> String {
         .to_string()
 }
 
-pub fn call_haiku(prompt: &str) -> Result<String, String> {
+pub async fn call_haiku(prompt: &str) -> Result<String, String> {
     let prompt_owned = prompt.to_string();
-    tauri::async_runtime::block_on(async {
-        tokio::task::spawn_blocking(move || {
-            let output = crate::no_window_command("claude")
-                .args(["--print", "--model", "haiku", &prompt_owned])
-                .output()
-                .map_err(|e| format!("Failed to run claude: {}", e))?;
+    tokio::task::spawn_blocking(move || {
+        let output = crate::no_window_command("claude")
+            .args(["--print", "--model", "haiku", &prompt_owned])
+            .output()
+            .map_err(|e| format!("Failed to run claude: {}", e))?;
 
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("Claude failed: {}", stderr.trim()))
-            }
-        })
-        .await
-        .map_err(|e| format!("Task join error: {}", e))?
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(format!("Claude failed: {}", stderr.trim()))
+        }
     })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -130,21 +128,21 @@ pub async fn generate_slug(description: String) -> Result<String, String> {
     };
 
     // Attempt 1
-    let raw = call_haiku(&initial_prompt)?;
+    let raw = call_haiku(&initial_prompt).await?;
     let slug = clean_response(&raw);
     if is_valid_slug(&slug) {
         return Ok(slug);
     }
 
     // Attempt 2
-    let raw2 = call_haiku(&retry_prompt(&raw))?;
+    let raw2 = call_haiku(&retry_prompt(&raw)).await?;
     let slug2 = clean_response(&raw2);
     if is_valid_slug(&slug2) {
         return Ok(slug2);
     }
 
     // Attempt 3
-    let raw3 = call_haiku(&retry_prompt(&raw2))?;
+    let raw3 = call_haiku(&retry_prompt(&raw2)).await?;
     let slug3 = clean_response(&raw3);
     if is_valid_slug(&slug3) {
         return Ok(slug3);
