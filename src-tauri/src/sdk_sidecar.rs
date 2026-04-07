@@ -21,8 +21,8 @@ pub fn start_sidecar() -> Result<(), String> {
     let mut cmd = crate::no_window_command("node");
     cmd.args(["--import", "tsx", "src/index.ts"])
         .env("BUILDOR_SDK_PORT", &port)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped());
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
 
     // Set current_dir to the sdk-service directory where tsx is installed
     // CARGO_MANIFEST_DIR is only available at compile time via env!() macro

@@ -54,6 +54,8 @@ export function createPermissionHook(
     _toolUseId: string | undefined,
     _options: { signal: AbortSignal },
   ): Promise<HookJSONOutput> => {
+    console.log(`[PERM-HOOK] event=${input.hook_event_name} session=${session.id.slice(0,8)}`);
+
     // Only handle PreToolUse events
     if (input.hook_event_name !== "PreToolUse") {
       return { continue: true };
@@ -61,6 +63,7 @@ export function createPermissionHook(
 
     const ptInput = input as PreToolUseHookInput;
     const toolName = ptInput.tool_name;
+    console.log(`[PERM-HOOK] tool=${toolName} mode=${session.permissionMode} session=${session.id.slice(0,8)}`);
     const toolInput = ptInput.tool_input;
     const toolUseId = ptInput.tool_use_id;
 
