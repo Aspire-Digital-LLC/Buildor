@@ -22,18 +22,6 @@ pub fn has_subscribers() -> bool {
     }
 }
 
-pub fn get_pool_subscribers() -> Vec<String> {
-    let subs = get_subscribers();
-    match subs.lock() {
-        Ok(map) => map
-            .values()
-            .filter(|s| s.streams.contains(&"pool".to_string()))
-            .map(|s| s.session_id.clone())
-            .collect(),
-        Err(_) => Vec::new(),
-    }
-}
-
 pub fn get_mailbox_subscribers() -> Vec<String> {
     let subs = get_subscribers();
     match subs.lock() {

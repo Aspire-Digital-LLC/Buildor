@@ -25,41 +25,30 @@ pub struct SessionInfo {
 }
 
 async fn run_git(repo_path: &str, args: &[&str]) -> Result<String, String> {
-    let resource_key = format!("process/git/{}", repo_path);
-    let pool = crate::operation_pool::OPERATION_POOL
-        .get()
-        .ok_or_else(|| "Operation pool not initialized".to_string())?;
-
     let repo_path = repo_path.to_string();
     let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
-    let rx = pool
-        .submit(
-            resource_key,
-            crate::operation_pool::Tier::App,
-            move || {
-                let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                let output = crate::no_window_command("git")
-                    .args(&arg_refs)
-                    .current_dir(&repo_path)
-                    .output()
-                    .map_err(|e| format!("Failed to run git: {}", e))?;
+    tokio::task::spawn_blocking(move || {
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = crate::no_window_command("git")
+            .args(&arg_refs)
+            .current_dir(&repo_path)
+            .output()
+            .map_err(|e| format!("Failed to run git: {}", e))?;
 
-                if output.status.success() {
-                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    if stderr.trim().is_empty() {
-                        Ok(String::new())
-                    } else {
-                        Err(stderr.trim().to_string())
-                    }
-                }
-            },
-        )
-        .await;
-
-    rx.await.map_err(|_| "Operation cancelled".to_string())?
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            if stderr.trim().is_empty() {
+                Ok(String::new())
+            } else {
+                Err(stderr.trim().to_string())
+            }
+        }
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 fn worktree_base_dir(repo_path: &str) -> PathBuf {
@@ -586,57 +575,45 @@ pub async fn setup_worktree_deps(
         }
 
         "pnpm" => {
-            let resource_key = format!("process/pnpm/{}", worktree_path);
             let wt_path = worktree_path.clone();
-            let pool = crate::operation_pool::OPERATION_POOL.get()
-                .ok_or_else(|| "Operation pool not initialized".to_string())?;
-            let rx = pool.submit(
-                resource_key,
-                crate::operation_pool::Tier::Subagent,
-                move || {
-                    let output = crate::no_window_command("pnpm")
+            tokio::task::spawn_blocking(move || {
+                let output = crate::no_window_command("pnpm")
+                    .arg("install")
+                    .arg("--frozen-lockfile")
+                    .current_dir(&wt_path)
+                    .output()
+                    .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
+                if !output.status.success() {
+                    let retry = crate::no_window_command("pnpm")
                         .arg("install")
-                        .arg("--frozen-lockfile")
                         .current_dir(&wt_path)
                         .output()
                         .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
-                    if !output.status.success() {
-                        let retry = crate::no_window_command("pnpm")
-                            .arg("install")
-                            .current_dir(&wt_path)
-                            .output()
-                            .map_err(|e| format!("Failed to run pnpm install: {}", e))?;
-                        if !retry.status.success() {
-                            return Err(format!("pnpm install failed: {}", String::from_utf8_lossy(&retry.stderr)));
-                        }
+                    if !retry.status.success() {
+                        return Err(format!("pnpm install failed: {}", String::from_utf8_lossy(&retry.stderr)));
                     }
-                    Ok("ok:pnpm".to_string())
-                },
-            ).await;
-            rx.await.map_err(|_| "Operation cancelled".to_string())?
+                }
+                Ok("ok:pnpm".to_string())
+            })
+            .await
+            .map_err(|e| format!("Task join error: {}", e))?
         }
 
         "npm" => {
-            let resource_key = format!("process/npm/{}", worktree_path);
             let wt_path = worktree_path.clone();
-            let pool = crate::operation_pool::OPERATION_POOL.get()
-                .ok_or_else(|| "Operation pool not initialized".to_string())?;
-            let rx = pool.submit(
-                resource_key,
-                crate::operation_pool::Tier::Subagent,
-                move || {
-                    let output = crate::no_window_command("npm")
-                        .arg("install")
-                        .current_dir(&wt_path)
-                        .output()
-                        .map_err(|e| format!("Failed to run npm install: {}", e))?;
-                    if !output.status.success() {
-                        return Err(format!("npm install failed: {}", String::from_utf8_lossy(&output.stderr)));
-                    }
-                    Ok("ok:npm".to_string())
-                },
-            ).await;
-            rx.await.map_err(|_| "Operation cancelled".to_string())?
+            tokio::task::spawn_blocking(move || {
+                let output = crate::no_window_command("npm")
+                    .arg("install")
+                    .current_dir(&wt_path)
+                    .output()
+                    .map_err(|e| format!("Failed to run npm install: {}", e))?;
+                if !output.status.success() {
+                    return Err(format!("npm install failed: {}", String::from_utf8_lossy(&output.stderr)));
+                }
+                Ok("ok:npm".to_string())
+            })
+            .await
+            .map_err(|e| format!("Task join error: {}", e))?
         }
 
         _ => Err(format!("Unknown strategy: {}", strategy)),

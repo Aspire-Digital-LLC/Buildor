@@ -76,14 +76,9 @@ fn clean_response(raw: &str) -> String {
 }
 
 pub fn call_haiku(prompt: &str) -> Result<String, String> {
-    let pool = crate::operation_pool::OPERATION_POOL.get()
-        .ok_or_else(|| "Operation pool not initialized".to_string())?;
-
     let prompt_owned = prompt.to_string();
-    let rx = tauri::async_runtime::block_on(pool.submit(
-        "llm/haiku-oneshot".to_string(),
-        crate::operation_pool::Tier::Subagent,
-        move || {
+    tauri::async_runtime::block_on(async {
+        tokio::task::spawn_blocking(move || {
             let output = crate::no_window_command("claude")
                 .args(["--print", "--model", "haiku", &prompt_owned])
                 .output()
@@ -95,11 +90,10 @@ pub fn call_haiku(prompt: &str) -> Result<String, String> {
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 Err(format!("Claude failed: {}", stderr.trim()))
             }
-        },
-    ));
-
-    rx.blocking_recv()
-        .map_err(|_| "Pool operation cancelled".to_string())?
+        })
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+    })
 }
 
 #[tauri::command]
@@ -169,40 +163,13 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
     let resolved_model = model.clone().unwrap_or_else(|| "sonnet".to_string());
     let resolved_prompt = system_prompt.clone().unwrap_or_default();
 
-    // Route the initial spawn through the operation pool
-    let pool = crate::operation_pool::OPERATION_POOL.get()
-        .ok_or_else(|| "Operation pool not initialized".to_string())?;
-
-    let result_slot: std::sync::Arc<std::sync::Mutex<Option<crate::sdk_client::CreateSessionResponse>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
-    let result_slot_inner = result_slot.clone();
-    let working_dir_clone = working_dir.clone();
-    let model_clone = resolved_model.clone();
-    let prompt_clone = resolved_prompt.clone();
-
-    let rx = pool.submit(
-        format!("llm/{}", session_id),
-        crate::operation_pool::Tier::App,
-        move || {
-            let handle = tokio::runtime::Handle::current();
-            let resp = handle.block_on(crate::sdk_client::create_session(
-                &working_dir_clone,
-                &model_clone,
-                &prompt_clone,
-                "default",
-                vec!["Agent".to_string()],
-            ))?;
-            *result_slot_inner.lock().map_err(|e| format!("Lock error: {}", e))? = Some(resp);
-            Ok("spawned".to_string())
-        },
-    ).await;
-
-    rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
-
-    let sdk_resp = result_slot.lock()
-        .map_err(|e| format!("Lock error: {}", e))?
-        .take()
-        .ok_or_else(|| "SDK session response not available after pool spawn".to_string())?;
+    let sdk_resp = crate::sdk_client::create_session(
+        &working_dir,
+        &resolved_model,
+        &resolved_prompt,
+        "default",
+        vec!["Agent".to_string()],
+    ).await?;
 
     let pid = sdk_resp.pid;
 
@@ -273,8 +240,9 @@ pub async fn read_file_base64(path: String) -> Result<(String, String), String> 
     Ok((media_type.to_string(), b64))
 }
 
-/// Send a permission response (approve/deny) back to Claude — direct, no pool gating.
-/// Kept for backward compat but prefer respond_to_permission_pooled for scheduled execution.
+/// Send a permission response (approve/deny) back to Claude via SDK service.
+/// Both respond_to_permission and respond_to_permission_pooled are now identical
+/// (direct HTTP POST). Both kept for frontend API compatibility.
 #[tauri::command]
 pub async fn respond_to_permission(
     session_id: String,
@@ -293,20 +261,18 @@ pub async fn respond_to_permission(
     crate::sdk_client::send_permission(&sdk_session_id, &request_id, approved, false).await
 }
 
-/// Send a permission response through the operation pool.
-/// The pool schedules when the response is actually sent, preventing
-/// concurrent tool executions from overwhelming the system.
+/// Send a permission response directly to the SDK service.
 ///
-/// resource_key: lane key for pool scheduling (e.g. "tool/Bash/C:/Git/Repo")
-/// tier: "app", "user", or "subagent"
+/// resource_key and tier are accepted for API compatibility but ignored —
+/// the operation pool has been removed.
 #[tauri::command]
 pub async fn respond_to_permission_pooled(
     session_id: String,
     request_id: String,
     approved: bool,
     _tool_input: Option<serde_json::Value>,
-    resource_key: String,
-    tier: Option<String>,
+    _resource_key: String,
+    _tier: Option<String>,
 ) -> Result<(), String> {
     let sdk_session_id = {
         let sessions = get_sessions();
@@ -316,32 +282,7 @@ pub async fn respond_to_permission_pooled(
         session.sdk_session_id.clone()
     };
 
-    let pool = crate::operation_pool::OPERATION_POOL.get()
-        .ok_or_else(|| "Operation pool not initialized".to_string())?;
-
-    let tier_enum = match tier.as_deref() {
-        Some("app") => crate::operation_pool::Tier::App,
-        Some("subagent") => crate::operation_pool::Tier::Subagent,
-        _ => crate::operation_pool::Tier::User,
-    };
-
-    let rx = pool.submit(
-        resource_key,
-        tier_enum,
-        move || {
-            let handle = tokio::runtime::Handle::current();
-            handle.block_on(crate::sdk_client::send_permission(
-                &sdk_session_id,
-                &request_id,
-                approved,
-                false,
-            ))?;
-            Ok("ok".to_string())
-        },
-    ).await;
-
-    rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
-    Ok(())
+    crate::sdk_client::send_permission(&sdk_session_id, &request_id, approved, false).await
 }
 
 /// Send an interrupt to stop the current turn without killing the session.

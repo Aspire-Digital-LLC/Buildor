@@ -1,0 +1,7 @@
+{
+  "commit": "c59dfb3",
+  "date": "2026-04-06T21:53:28.380Z",
+  "command": "knowledge",
+  "type": "delta",
+  "notes": "SDK Phase 2 integration documented: architecture (sidecar lifecycle, HTTP client, SSE bridge), codebase structure (3 new Rust modules), project status (Phase 2 complete), gotchas (claude-exit vs result turn detection, wire format mismatches), mind-map keywords updated"
+}

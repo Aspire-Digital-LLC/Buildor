@@ -4,7 +4,6 @@ mod orchestrator;
 mod claude;
 mod config;
 mod logging;
-mod operation_pool;
 mod telemetry;
 pub mod sdk_client;
 pub mod sdk_sidecar;
@@ -23,12 +22,6 @@ pub fn no_window_command(program: &str) -> std::process::Command {
 }
 
 pub fn run() {
-    let pool_config = operation_pool::PoolConfig::load().unwrap_or_default();
-    let persisted_limits = operation_pool::PersistedLimits::load().unwrap_or_default();
-    let _ = operation_pool::OPERATION_POOL
-        .set(operation_pool::OperationPool::new(pool_config, persisted_limits));
-    operation_pool::OPERATION_POOL.get().unwrap().start_tick_loop();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -168,16 +161,12 @@ pub fn run() {
             commands::mailbox::update_agent_draft,
             commands::mailbox::purge_results,
             commands::mailbox::spawn_agent_with_deps,
-            commands::operation_pool::get_pool_status,
             commands::telemetry::subscribe_telemetry,
             commands::telemetry::unsubscribe_telemetry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 
-    // App has exited — clean up sidecar and operation pool
+    // App has exited — clean up sidecar
     crate::sdk_sidecar::stop_sidecar();
-    if let Some(pool) = crate::operation_pool::OPERATION_POOL.get() {
-        pool.shutdown();
-    }
 }

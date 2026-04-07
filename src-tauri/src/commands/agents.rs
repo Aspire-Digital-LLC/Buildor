@@ -68,40 +68,13 @@ pub async fn spawn_agent(
         - You may declare dependencies on other agents: -<*{{ \"action\": \"spawn_agent\", \"name\": \"agent-name\", \"prompt\": \"task\", \"dependencies\": [\"other-agent-name\"] }}*>-",
     );
 
-    // Route the agent spawn through the operation pool
-    let pool = crate::operation_pool::OPERATION_POOL.get()
-        .ok_or_else(|| "Operation pool not initialized".to_string())?;
-
-    let resolved_dir_clone = resolved_dir.clone();
-    let model_clone = model.clone();
-    let agent_prompt_clone = agent_system_prompt.clone();
-    let result_slot: std::sync::Arc<std::sync::Mutex<Option<crate::sdk_client::CreateSessionResponse>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
-    let result_slot_inner = result_slot.clone();
-
-    let rx = pool.submit(
-        format!("llm/agent-{}", name),
-        crate::operation_pool::Tier::Subagent,
-        move || {
-            let handle = tokio::runtime::Handle::current();
-            let resp = handle.block_on(crate::sdk_client::create_session(
-                &resolved_dir_clone,
-                model_clone.as_deref().unwrap_or("sonnet"),
-                &agent_prompt_clone,
-                "default",
-                vec!["Agent".to_string()],
-            ))?;
-            *result_slot_inner.lock().map_err(|e| format!("Lock error: {}", e))? = Some(resp);
-            Ok("spawned".to_string())
-        },
-    ).await;
-
-    rx.await.map_err(|_| "Pool operation cancelled".to_string())??;
-
-    let sdk_resp = result_slot.lock()
-        .map_err(|e| format!("Lock error: {}", e))?
-        .take()
-        .ok_or_else(|| "Agent session result not available after pool spawn".to_string())?;
+    let sdk_resp = crate::sdk_client::create_session(
+        &resolved_dir,
+        model.as_deref().unwrap_or("sonnet"),
+        &agent_system_prompt,
+        "default",
+        vec!["Agent".to_string()],
+    ).await?;
 
     let agent_session_id = uuid::Uuid::new_v4().to_string();
 
