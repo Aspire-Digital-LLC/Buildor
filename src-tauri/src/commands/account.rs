@@ -1,5 +1,6 @@
 use std::process::Command;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use crate::config::app_config::AppConfig;
 
 /// Open a webview window to claude.ai/login for authentication
 #[tauri::command]
@@ -128,10 +129,7 @@ fn store_session_data(json_str: &str) -> Result<(), String> {
     let data: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse session data: {}", e))?;
 
-    let config_dir = dirs_next::data_dir()
-        .or_else(dirs_next::home_dir)
-        .ok_or_else(|| "Cannot find config directory".to_string())?
-        .join("Buildor");
+    let config_dir = AppConfig::data_dir();
 
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| format!("Failed to create config dir: {}", e))?;
@@ -153,10 +151,7 @@ fn store_session_data(json_str: &str) -> Result<(), String> {
 /// Fetch usage data — returns stored usage from last login/refresh
 #[tauri::command]
 pub async fn fetch_claude_usage() -> Result<String, String> {
-    let config_dir = dirs_next::data_dir()
-        .or_else(dirs_next::home_dir)
-        .ok_or_else(|| "Cannot find config directory".to_string())?
-        .join("Buildor");
+    let config_dir = AppConfig::data_dir();
 
     let session_path = config_dir.join("claude_session.json");
     if !session_path.exists() {
@@ -187,10 +182,7 @@ pub async fn start_usage_polling(app: AppHandle) -> Result<(), String> {
     }
 
     // Need org ID
-    let config_dir = dirs_next::data_dir()
-        .or_else(dirs_next::home_dir)
-        .ok_or_else(|| "Cannot find config directory".to_string())?
-        .join("Buildor");
+    let config_dir = AppConfig::data_dir();
     let session_path = config_dir.join("claude_session.json");
     if !session_path.exists() {
         return Err("No session. Please log in first.".to_string());
@@ -277,10 +269,7 @@ pub async fn stop_usage_polling(app: AppHandle) -> Result<(), String> {
 /// Check if a stored session exists
 #[tauri::command]
 pub async fn has_claude_session() -> Result<bool, String> {
-    let config_dir = dirs_next::data_dir()
-        .or_else(dirs_next::home_dir)
-        .ok_or_else(|| "Cannot find config directory".to_string())?
-        .join("Buildor");
+    let config_dir = AppConfig::data_dir();
 
     let session_path = config_dir.join("claude_session.json");
     Ok(session_path.exists())
@@ -309,10 +298,7 @@ pub async fn clear_claude_session(app: AppHandle) -> Result<(), String> {
     }
 
     // 3. Delete stored session file
-    let config_dir = dirs_next::data_dir()
-        .or_else(dirs_next::home_dir)
-        .ok_or_else(|| "Cannot find config directory".to_string())?
-        .join("Buildor");
+    let config_dir = AppConfig::data_dir();
 
     let session_path = config_dir.join("claude_session.json");
     if session_path.exists() {

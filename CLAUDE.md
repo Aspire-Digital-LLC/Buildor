@@ -24,6 +24,31 @@ When bumping the app version, update **all four** of these:
 
 `Cargo.lock` updates automatically on build.
 
+## Dev vs Release Builds
+
+Buildor uses `cfg!(debug_assertions)` to distinguish dev from release builds. This matters because **Buildor is used to develop itself** — a stable (installed) instance runs alongside a dev instance.
+
+### Port Separation
+- **Release (installed):** SDK service on port `3456`
+- **Dev (`cargo run`):** SDK service on port `3457`
+- Override either with `BUILDOR_SDK_PORT` env var
+
+### Visual Indicators
+- Dev builds show a red **DEV** badge in the status bar with the SDK port
+- Dev window title: `Buildor v{version} [DEV :{port}]`
+- Release window title: `Buildor v{version}`
+
+### Running Both Simultaneously
+The installed Buildor and the dev Buildor can run side-by-side because they use different SDK ports. When launching `npm run tauri dev`, it will:
+1. Start its own SDK service on port 3457
+2. Start Vite on port 1420
+3. Compile and run the debug Rust binary
+
+If port 1420 is occupied (stale Vite from a crashed dev session), find and kill the orphaned node process on that port.
+
+### `get_app_info` Command
+Returns `{ version, isDev, sdkPort }` — use this to dynamically inject environment context into Claude sessions or display build info in the UI.
+
 ## Tech Stack
 
 - **Framework**: Tauri v2 (Rust backend + webview frontend)

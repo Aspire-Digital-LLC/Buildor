@@ -1,10 +1,11 @@
 import type { ServerResponse } from "node:http";
+import type { Query } from "@anthropic-ai/claude-agent-sdk";
 
 // ---------------------------------------------------------------------------
 // Permission types
 // ---------------------------------------------------------------------------
 
-export type PermissionMode = "default";
+export type PermissionMode = "default" | "dontAsk" | "acceptEdits" | "plan";
 
 export interface PendingPermission {
   toolName: string;
@@ -30,13 +31,18 @@ export interface ManagedSession {
   permissionMode: PermissionMode;
   allowedTools: string[];
   disallowedTools: string[];
+  settingSources: string[];
   startedAt: number;
   abortController: AbortController;
   sseClients: Set<ServerResponse>;
   pendingPermissions: Map<string, PendingPermission>;
   isRunning: boolean;
   turnActive: boolean;
+  /** Timestamp (Date.now()) when turnActive was set to true — used for deadlock detection */
+  turnActiveSince: number;
   messageQueue: AsyncMessageQueue;
+  /** The active SDK Query object — used for interrupt/setModel control requests */
+  activeQuery: Query | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +56,7 @@ export interface CreateSessionRequest {
   permissionMode?: PermissionMode;
   allowedTools?: string[];
   disallowedTools?: string[];
+  settingSources?: string[];
 }
 
 export interface SendMessageRequest {

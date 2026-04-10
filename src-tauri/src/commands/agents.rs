@@ -72,8 +72,17 @@ pub async fn spawn_agent(
         &resolved_dir,
         model.as_deref().unwrap_or("sonnet"),
         &agent_system_prompt,
-        "default",
-        vec!["Agent".to_string()],
+        "dontAsk",
+        // Agents are autonomous — pre-approve all dev tools via allowedTools.
+        // The SDK auto-approves these; anything not listed is denied (dontAsk mode).
+        vec![
+            "Read".to_string(), "Edit".to_string(), "Write".to_string(),
+            "Bash".to_string(), "Grep".to_string(), "Glob".to_string(),
+            "WebSearch".to_string(), "WebFetch".to_string(),
+            "TodoWrite".to_string(), "ToolSearch".to_string(),
+        ],
+        vec!["Agent".to_string()],  // Keep native Agent tool disabled — use marker protocol
+        vec!["project".to_string()],  // Load CLAUDE.md but not local settings
     ).await?;
 
     let agent_session_id = uuid::Uuid::new_v4().to_string();

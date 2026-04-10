@@ -26,6 +26,6 @@ export async function handleSetModel(req: IncomingMessage, res: ServerResponse, 
   }
 
   const model = body.model as string;
-  setModel(session, model);
-  json(res, 200, { model, note: "Model change takes effect on next session. Mid-session model switching requires session restart." });
+  await setModel(session, model);
+  json(res, 200, { model });
 }

@@ -44,6 +44,12 @@ async function* promptFromQueue(
 export function startSession(session: ManagedSession): void {
   session.isRunning = true;
 
+  // Only attach canUseTool for interactive sessions (permissionMode: "default").
+  // For "dontAsk" sessions (agents), the SDK handles denials natively —
+  // no callback needed, no settings.local.json pollution.
+  const useInteractivePermissions = session.permissionMode === "default";
+  console.log(`[sdk-runner] startSession: id=${session.id} permissionMode=${session.permissionMode} useInteractivePermissions=${useInteractivePermissions} allowedTools=${JSON.stringify(session.allowedTools)} settingSources=${JSON.stringify(session.settingSources)}`);
+
   const q = query({
     prompt: promptFromQueue(session),
     options: {
@@ -51,14 +57,15 @@ export function startSession(session: ManagedSession): void {
       cwd: session.cwd,
       model: session.model,
       systemPrompt: session.systemPrompt,
-      permissionMode: "default",
+      permissionMode: session.permissionMode,
       allowedTools: session.allowedTools.length
         ? session.allowedTools
         : undefined,
       disallowedTools: session.disallowedTools.length
         ? session.disallowedTools
         : undefined,
-      canUseTool: createCanUseToolHandler(session),
+      ...(session.settingSources.length > 0 && { settingSources: session.settingSources }),
+      ...(useInteractivePermissions && { canUseTool: createCanUseToolHandler(session) }),
       spawnClaudeCodeProcess: (opts: SpawnOptions): SpawnedProcess => {
         const child = spawn(opts.command, opts.args, {
           cwd: opts.cwd,
@@ -99,12 +106,25 @@ export function startSession(session: ManagedSession): void {
     },
   });
 
+  // Store the active query so interrupt/setModel can use SDK control methods
+  session.activeQuery = q;
+
   // Background pump — iterate SDK messages and send to SSE clients
   void (async () => {
     try {
       for await (const message of q) {
+        const m = message as Record<string, unknown>;
+        if (m.type === 'assistant') {
+          const content = (m.message as Record<string, unknown>)?.content as Array<Record<string, unknown>> | undefined;
+          const tools = content?.filter(b => b.type === 'tool_use').map(b => b.name) ?? [];
+          if (tools.length) console.log(`[sdk-runner] tool_use: ${tools.join(', ')}`);
+        } else if (m.type !== 'system' && m.type !== 'user') {
+          console.log(`[sdk-runner] message type=${m.type}`);
+        }
         sendSSE(session, "claude-output", sdkMessageToNDJSON(message));
         if (message && typeof message === "object" && "type" in message && (message as Record<string, unknown>).type === "result") {
+          const turnDuration = session.turnActiveSince ? ((Date.now() - session.turnActiveSince) / 1000).toFixed(1) : '?';
+          console.log(`[sdk-runner] result received for session=${session.id} — turn took ${turnDuration}s`);
           session.turnActive = false;
         }
       }
@@ -122,6 +142,7 @@ export function startSession(session: ManagedSession): void {
     } finally {
       session.isRunning = false;
       session.turnActive = false;
+      session.activeQuery = null;
       sendSSE(session, "claude-exit", JSON.stringify({ type: "exit" }));
     }
   })();
@@ -137,37 +158,44 @@ export function sendMessage(
   _images?: string[],
 ): void {
   session.turnActive = true;
+  session.turnActiveSince = Date.now();
   session.messageQueue.push(text);
 }
 
 /**
- * Interrupt the current turn by aborting the session's AbortController,
- * then restart the query pump with a fresh controller so the session
- * remains usable for subsequent messages.
+ * Interrupt the current turn using the SDK's built-in interrupt() method.
+ * This stops the current response but keeps the process alive with full
+ * conversation history intact — no restart needed.
  */
-export function interruptSession(session: ManagedSession): void {
-  session.abortController.abort();
+export async function interruptSession(session: ManagedSession): Promise<void> {
+  if (session.activeQuery) {
+    await session.activeQuery.interrupt();
+  }
   session.turnActive = false;
-  // End old queue so the old promptFromQueue generator finishes
-  session.messageQueue.end();
-  // Replace controller and queue, then restart the query pump
-  session.abortController = new AbortController();
-  session.messageQueue = new AsyncMessageQueue();
-  startSession(session);
 }
 
 /**
- * Store a new model — takes effect on the next session start.
+ * Change the model mid-session via the SDK's setModel() control request.
+ * Takes effect immediately for subsequent responses.
  */
-export function setModel(session: ManagedSession, model: string): void {
+export async function setModel(session: ManagedSession, model: string): Promise<void> {
   session.model = model;
+  if (session.activeQuery) {
+    await session.activeQuery.setModel(model);
+  }
 }
 
 /**
  * Fully stop a session: abort, deny pending permissions, end the queue.
  */
 export function stopSession(session: ManagedSession): void {
-  session.abortController.abort();
+  // Use close() on the query if available — forcefully terminates the process
+  if (session.activeQuery) {
+    session.activeQuery.close();
+    session.activeQuery = null;
+  } else {
+    session.abortController.abort();
+  }
   session.messageQueue.end();
 
   // Deny all pending permission requests

@@ -22,17 +22,43 @@ pub fn no_window_command(program: &str) -> std::process::Command {
 }
 
 pub fn run() {
+    use tauri::Manager;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Start the SDK sidecar service — non-fatal on failure
-            if let Err(e) = crate::sdk_sidecar::start_sidecar() {
-                eprintln!("SDK sidecar failed to start: {}", e);
-            } else if let Err(e) = crate::sdk_sidecar::wait_for_healthy(10_000) {
-                eprintln!("SDK sidecar not healthy: {}", e);
-            } else {
-                crate::sdk_sidecar::start_health_loop(app.handle().clone());
+            // Set window title with DEV indicator for debug builds
+            if cfg!(debug_assertions) {
+                if let Some(window) = app.get_webview_window("main") {
+                    let version = env!("CARGO_PKG_VERSION");
+                    let port = crate::sdk_client::default_sdk_port();
+                    let _ = window.set_title(&format!("Buildor v{} [DEV :{}]", version, port));
+                }
+            }
+
+            // Start the SDK sidecar service.
+            // In dev builds: fatal — dev must run its own isolated sidecar, never leak to release.
+            // In release builds: non-fatal — log and continue, chat will be broken but app opens.
+            match crate::sdk_sidecar::start_sidecar() {
+                Err(e) => {
+                    if cfg!(debug_assertions) {
+                        panic!("DEV: SDK sidecar failed to start (is port {} already in use by another instance?): {}", crate::sdk_client::default_sdk_port(), e);
+                    } else {
+                        eprintln!("SDK sidecar failed to start: {}", e);
+                    }
+                }
+                Ok(_) => {
+                    if let Err(e) = crate::sdk_sidecar::wait_for_healthy(10_000) {
+                        if cfg!(debug_assertions) {
+                            panic!("DEV: SDK sidecar not healthy after start: {}", e);
+                        } else {
+                            eprintln!("SDK sidecar not healthy: {}", e);
+                        }
+                    } else {
+                        crate::sdk_sidecar::start_health_loop(app.handle().clone());
+                    }
+                }
             }
             Ok(())
         })
@@ -88,6 +114,7 @@ pub fn run() {
             commands::config::set_config,
             commands::config::scaffold_shared_repo,
             commands::config::check_for_update,
+            commands::config::get_app_info,
             commands::worktree::list_worktrees,
             commands::worktree::create_worktree,
             commands::worktree::remove_worktree,
@@ -164,9 +191,12 @@ pub fn run() {
             commands::telemetry::subscribe_telemetry,
             commands::telemetry::unsubscribe_telemetry,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-
-    // App has exited — clean up sidecar
-    crate::sdk_sidecar::stop_sidecar();
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Kill sidecar on any exit path — clean shutdown, crash, or dev restart
+                crate::sdk_sidecar::stop_sidecar();
+            }
+        });
 }

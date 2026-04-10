@@ -16,7 +16,15 @@ pub fn start_sidecar() -> Result<(), String> {
         return Ok(()); // already running
     }
 
-    let port = std::env::var("BUILDOR_SDK_PORT").unwrap_or_else(|_| "3456".to_string());
+    // In dev builds, always use the compiled-in dev port — never inherit from env.
+    // Inheriting BUILDOR_SDK_PORT from the environment causes dev to leech off
+    // the release sidecar when both instances run simultaneously.
+    let port = if cfg!(debug_assertions) {
+        crate::sdk_client::default_sdk_port().to_string()
+    } else {
+        std::env::var("BUILDOR_SDK_PORT")
+            .unwrap_or_else(|_| crate::sdk_client::default_sdk_port().to_string())
+    };
 
     let mut cmd = crate::no_window_command("node");
     cmd.args(["--import", "tsx", "src/index.ts"])

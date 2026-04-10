@@ -161,7 +161,7 @@ export function StickyPermissionCard({ queue, sessionId }: StickyPermissionCardP
         }}>
           {current.description}
         </div>
-        {current.input && (current.toolName === 'Bash') && current.input.command && (
+        {current.input && current.toolName === 'Bash' && !!current.input.command && (
           <div style={{
             background: 'var(--bg-primary)',
             border: '1px solid var(--border-primary)',

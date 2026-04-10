@@ -36,11 +36,27 @@ impl AppConfig {
     /// - Linux: ~/.config/Buildor (via XDG_CONFIG_HOME)
     /// Falls back to ~/.buildor if OS dirs unavailable
     pub fn config_dir() -> PathBuf {
+        let dir_name = if cfg!(debug_assertions) { "Buildor-dev" } else { "Buildor" };
         if let Some(config) = dirs_next::config_dir() {
-            config.join("Buildor")
+            config.join(dir_name)
         } else {
             let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
-            home.join(".buildor")
+            home.join(if cfg!(debug_assertions) { ".buildor-dev" } else { ".buildor" })
+        }
+    }
+
+    /// Returns the OS-standard data directory (dev-aware):
+    /// - Windows: %LOCALAPPDATA%/Buildor (or Buildor-dev)
+    /// - macOS: ~/Library/Application Support/Buildor
+    /// - Linux: ~/.local/share/Buildor (via XDG_DATA_HOME)
+    /// Falls back to config_dir if data_dir unavailable.
+    pub fn data_dir() -> PathBuf {
+        let dir_name = if cfg!(debug_assertions) { "Buildor-dev" } else { "Buildor" };
+        if let Some(data) = dirs_next::data_dir() {
+            data.join(dir_name)
+        } else {
+            // Fall back to config_dir — still dev-aware
+            Self::config_dir()
         }
     }
 

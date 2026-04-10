@@ -166,7 +166,9 @@ pub async fn start_session(app: AppHandle, working_dir: String, model: Option<St
         &resolved_model,
         &resolved_prompt,
         "default",
-        vec!["Agent".to_string()],
+        vec![],  // No pre-approved tools — user approves interactively via canUseTool
+        vec!["Agent".to_string()],  // Native Agent tool disabled — use marker protocol
+        vec![],  // No filesystem settings — matches POC behavior where canUseTool fires correctly
     ).await?;
 
     let pid = sdk_resp.pid;

@@ -156,13 +156,7 @@ impl LogDb {
     }
 
     fn db_path() -> PathBuf {
-        let base = if let Some(config) = dirs_next::config_dir() {
-            config.join("Buildor")
-        } else {
-            let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
-            home.join(".buildor")
-        };
-        base.join("logs.db")
+        crate::config::app_config::AppConfig::config_dir().join("logs.db")
     }
 
     fn migrate_chat_sessions_agent_columns(conn: &Connection) -> Result<(), String> {
@@ -389,13 +383,13 @@ impl LogDb {
         let (sql, param_values): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(wt_id) = worktree_session_id {
             (
                 "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
-                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id = ?2 AND (session_type IS NULL OR session_type != 'agent') ORDER BY started_at DESC".to_string(),
+                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id = ?2 AND (session_type IS NULL OR session_type != 'agent') ORDER BY COALESCE((SELECT MAX(created_at) FROM chat_messages WHERE chat_messages.session_id = chat_sessions.id), started_at) DESC".to_string(),
                 vec![Box::new(project_name.to_string()), Box::new(wt_id.to_string())],
             )
         } else {
             (
                 "SELECT id, project_name, repo_path, worktree_session_id, branch_name, title, started_at, ended_at, message_count, cached_summary, session_type, parent_session_id, return_to, source_skill, agent_source
-                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id IS NULL AND (session_type IS NULL OR session_type != 'agent') ORDER BY started_at DESC".to_string(),
+                 FROM chat_sessions WHERE project_name = ?1 AND worktree_session_id IS NULL AND (session_type IS NULL OR session_type != 'agent') ORDER BY COALESCE((SELECT MAX(created_at) FROM chat_messages WHERE chat_messages.session_id = chat_sessions.id), started_at) DESC".to_string(),
                 vec![Box::new(project_name.to_string())],
             )
         };

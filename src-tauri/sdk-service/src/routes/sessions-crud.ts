@@ -22,9 +22,10 @@ export async function handleCreateSession(req: IncomingMessage, res: ServerRespo
     cwd: body.cwd as string,
     model: body.model as string | undefined,
     systemPrompt: body.systemPrompt as string | undefined,
-    permissionMode: "default" as const,
+    permissionMode: (body.permissionMode as string | undefined) as import("../types.js").PermissionMode | undefined,
     allowedTools: body.allowedTools as string[] | undefined,
     disallowedTools: body.disallowedTools as string[] | undefined,
+    settingSources: body.settingSources as string[] | undefined,
   });
 
   json(res, 201, { sessionId: session.id, pid: session.pid });

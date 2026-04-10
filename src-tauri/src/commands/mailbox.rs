@@ -18,9 +18,7 @@ fn get_pending() -> &'static Mutex<Vec<PendingSpawn>> {
 }
 
 fn mailbox_dir() -> Result<PathBuf, String> {
-    let base = dirs_next::data_dir()
-        .ok_or_else(|| "Cannot resolve app data directory".to_string())?;
-    let dir = base.join("Buildor").join("agent-results");
+    let dir = crate::config::app_config::AppConfig::data_dir().join("agent-results");
     if !dir.exists() {
         std::fs::create_dir_all(&dir)
             .map_err(|e| format!("Failed to create mailbox dir: {}", e))?;

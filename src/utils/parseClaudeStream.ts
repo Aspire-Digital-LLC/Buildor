@@ -5,13 +5,27 @@ import { spawnAgent, killAgent, extendAgent, takeoverAgent } from './commands/ag
 import { spawnAgentWithDeps } from './commands/mailbox';
 import { subscribeTelemetry, unsubscribeTelemetry } from './commands/telemetry';
 import { agentHealthMonitor } from './agentHealthMonitor';
+import { logEvent } from './commands/logging';
 
-export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMessage | null {
+/**
+ * Parse a single NDJSON line from the SDK SSE stream into a renderable message.
+ *
+ * @param suppressEvents - When true, skip all emit() calls.
+ *   Used by useAgentPool so agent SSE events are parsed for SQLite persistence
+ *   without producing duplicate side-effect events (permission cards, cost updates, etc.).
+ */
+export function parseStreamEvent(jsonLine: string, sessionId?: string, suppressEvents = false): ParsedMessage | null {
+  // When suppressEvents is true (agent sessions), all event emissions are no-ops.
+  // The parsed message is still returned for SQLite persistence.
+  const emit: typeof buildorEvents.emit = suppressEvents
+    ? (() => {}) as unknown as typeof buildorEvents.emit
+    : buildorEvents.emit.bind(buildorEvents);
+
   try {
     const event = JSON.parse(jsonLine);
 
     if (event.type === 'system' && event.subtype === 'init') {
-      buildorEvents.emit('session-started', {
+      emit('session-started', {
         model: event.model,
         tools: event.tools,
         skills: event.skills,
@@ -28,7 +42,7 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
       // Extract token usage from message if available
       const usage = event.message?.usage || event.usage;
       if (usage) {
-        buildorEvents.emit('usage-updated', {
+        emit('usage-updated', {
           inputTokens: usage.input_tokens || 0,
           outputTokens: usage.output_tokens || 0,
           cacheReadTokens: usage.cache_read_input_tokens || 0,
@@ -52,27 +66,36 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
           }
 
           if (displayText) {
-            buildorEvents.emit('message-received', { text: displayText }, sessionId);
+            emit('message-received', { text: displayText }, sessionId);
           }
           return { type: 'text' as const, text: displayText };
         }
         if (block.type === 'tool_use') {
-          buildorEvents.emit('tool-executing', {
+          emit('tool-executing', {
             toolName: block.name,
             toolUseId: block.id,
             input: block.input,
           }, sessionId);
 
+          logEvent({
+            sessionId,
+            functionArea: 'claude-chat',
+            level: 'info',
+            operation: 'tool-use',
+            message: `Tool: ${block.name}`,
+            details: block.input ? JSON.stringify(block.input).slice(0, 500) : undefined,
+          }).catch(() => {});
+
           // Intercept task tools to update the sticky task tracker
           if (block.name === 'TodoWrite') {
             const input = block.input || {};
             if (input.todos) {
-              buildorEvents.emit('tasks-updated', { action: 'replace', todos: input.todos }, sessionId);
+              emit('tasks-updated', { action: 'replace', todos: input.todos }, sessionId);
             }
           } else if (block.name === 'TaskCreate' || block.name === 'TaskOutput') {
-            buildorEvents.emit('tasks-updated', { action: 'create', task: block.input }, sessionId);
+            emit('tasks-updated', { action: 'create', task: block.input }, sessionId);
           } else if (block.name === 'TaskUpdate') {
-            buildorEvents.emit('tasks-updated', { action: 'update', task: block.input }, sessionId);
+            emit('tasks-updated', { action: 'update', task: block.input }, sessionId);
           }
 
           return {
@@ -88,7 +111,7 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
             : Array.isArray(block.content)
               ? block.content.map((c: any) => c.text || '').join('\n')
               : JSON.stringify(block.content);
-          buildorEvents.emit('tool-completed', {
+          emit('tool-completed', {
             toolUseId: block.tool_use_id,
             isError: block.is_error,
           }, sessionId);
@@ -117,7 +140,7 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
       event.type === 'control_request' && event.request?.subtype === 'can_use_tool' ||
       event.type === 'permission_request' || event.type === 'permission'
     ) {
-      console.log(`[PERM DETECTED] sessionId=${sessionId}, type=${event.type}, requestId=${event.request_id}, tool=${event.request?.tool_name || event.tool?.name || '?'}`);
+      // Debug log removed — permission detection confirmed working
       const toolName = event.request?.tool_name || event.tool?.name || event.permission?.tool_name || 'Unknown tool';
       const toolUseId = event.request?.tool_use_id || event.tool?.id || event.permission?.tool_use_id || '';
       const requestId = event.request_id || '';
@@ -135,7 +158,7 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
         description = `Read file: ${input.file_path}`;
       }
 
-      buildorEvents.emit('permission-required', {
+      emit('permission-required', {
         requestId,
         toolUseId,
         toolName,
@@ -143,21 +166,20 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
         description,
       }, sessionId);
 
-      // If this permission comes from an agent session, emit agent-permission event
-      console.log(`[PERM AGENT CHECK] sessionId=${sessionId}, healthState=${sessionId ? agentHealthMonitor.getState(sessionId) : 'no-sid'}`);
-      if (sessionId && agentHealthMonitor.getState(sessionId) !== null) {
-        const agentName = agentHealthMonitor.getName(sessionId);
-        console.log(`[PERM → AGENT-PERMISSION] emitting for agent=${agentName}, tool=${toolName}, requestId=${requestId}`);
-        buildorEvents.emit('agent-permission', {
-          agentSessionId: sessionId,
-          agentName: agentName || 'Agent',
-          requestId,
-          toolName,
-          description,
-        }, sessionId);
-      }
+      logEvent({
+        sessionId,
+        functionArea: 'claude-chat',
+        level: 'info',
+        operation: 'permission-request',
+        message: `Permission requested: ${description} (requestId=${requestId})`,
+        details: input ? JSON.stringify(input).slice(0, 500) : undefined,
+      }).catch(() => {});
 
-      buildorEvents.emit('user-attention-needed', {
+      // Agent permissions are handled by useAgentPool (auto-approve).
+      // Do NOT emit agent-permission here — it creates zombie cards in ClaudeChat
+      // that can never be dismissed because useAgentPool already resolved the permission.
+
+      emit('user-attention-needed', {
         reason: 'permission',
         toolName,
         description,
@@ -177,21 +199,30 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
     }
 
     if (event.type === 'result') {
-      buildorEvents.emit('cost-updated', {
+      emit('cost-updated', {
         costUsd: event.total_cost_usd,
         durationMs: event.duration_ms,
         turns: event.num_turns,
       }, sessionId);
 
-      buildorEvents.emit('turn-completed', {
+      emit('turn-completed', {
         costUsd: event.total_cost_usd,
         durationMs: event.duration_ms,
         turns: event.num_turns,
       }, sessionId);
+
+      logEvent({
+        sessionId,
+        functionArea: 'claude-chat',
+        level: 'info',
+        operation: 'turn-completed',
+        message: `Turn completed: ${event.num_turns} turn(s), ${(event.duration_ms / 1000).toFixed(1)}s, $${event.total_cost_usd?.toFixed(4) || '0'}`,
+        durationMs: event.duration_ms,
+      }).catch(() => {});
 
       // Emit final usage stats from result if available
       if (event.usage || event.total_input_tokens || event.input_tokens) {
-        buildorEvents.emit('usage-updated', {
+        emit('usage-updated', {
           inputTokens: event.usage?.input_tokens || event.total_input_tokens || event.input_tokens || 0,
           outputTokens: event.usage?.output_tokens || event.total_output_tokens || event.output_tokens || 0,
           cacheReadTokens: event.usage?.cache_read_input_tokens || 0,
@@ -213,9 +244,19 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
     }
 
     if (event.type === 'error') {
-      buildorEvents.emit('error-occurred', {
-        message: event.error?.message || event.message || 'Unknown error',
+      const errMsg = event.error?.message || event.message || 'Unknown error';
+      emit('error-occurred', {
+        message: errMsg,
       }, sessionId);
+
+      logEvent({
+        sessionId,
+        functionArea: 'claude-chat',
+        level: 'error',
+        operation: 'sdk-error',
+        message: `SDK error: ${errMsg}`,
+        details: JSON.stringify(event).slice(0, 500),
+      }).catch(() => {});
 
       return {
         role: 'system',
@@ -226,7 +267,7 @@ export function parseStreamEvent(jsonLine: string, sessionId?: string): ParsedMe
 
     // Capture rate limit / usage events for StatusBar
     if (event.type === 'rate_limit' || event.type === 'rate_limit_event' || event.type === 'usage') {
-      buildorEvents.emit('usage-updated', {
+      emit('usage-updated', {
         // Session/rate limit fields (various possible shapes)
         sessionUsedPercent: event.session_usage_percent ?? event.usage_percent ?? event.percent_used ?? null,
         sessionResetAt: event.session_reset_at ?? event.reset_at ?? event.resets_at ?? null,

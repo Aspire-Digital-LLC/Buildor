@@ -2,6 +2,18 @@ import { usePersonalityStore } from '@/stores';
 import { getPersonalityById } from '@/personalities/personalities';
 import buildorContext from '../../buildor_context.md?raw';
 
+// Cached app info — populated by setAppInfoForPrompt() at startup
+let _appInfoBlock: string | null = null;
+
+/**
+ * Call once at startup with the result of getAppInfo() to inject
+ * environment context (version, dev/release, SDK port) into all Claude sessions.
+ */
+export function setAppInfoForPrompt(info: { version: string; isDev: boolean; sdkPort: string }): void {
+  const env = info.isDev ? 'DEV (debug build)' : 'RELEASE (installed build)';
+  _appInfoBlock = `## Buildor Instance Info\n- Version: ${info.version}\n- Environment: ${env}\n- SDK service port: ${info.sdkPort}`;
+}
+
 /**
  * Assemble a system prompt from multiple context sources.
  * Each source is either a string or null/undefined (skipped).
@@ -80,6 +92,7 @@ export function buildSystemPrompt(
 
   return contextOnStart(
     buildorContext,
+    _appInfoBlock,
     personalityBlock,
     skillsBlock,
     ...extra,

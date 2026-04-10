@@ -70,6 +70,18 @@ pub async fn scaffold_shared_repo(repo_path: String) -> Result<Vec<String>, Stri
 }
 
 #[tauri::command]
+pub async fn get_app_info() -> Result<serde_json::Value, String> {
+    let version = std::env!("CARGO_PKG_VERSION").to_string();
+    let is_dev = cfg!(debug_assertions);
+    let sdk_port = crate::sdk_client::default_sdk_port().to_string();
+    Ok(serde_json::json!({
+        "version": version,
+        "isDev": is_dev,
+        "sdkPort": sdk_port,
+    }))
+}
+
+#[tauri::command]
 pub async fn check_for_update() -> Result<(String, String, bool), String> {
     // Read local version
     let local_ver = std::env!("CARGO_PKG_VERSION").to_string();

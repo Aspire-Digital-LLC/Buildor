@@ -4,13 +4,13 @@ import { json } from "../router.js";
 import { getSession } from "../sessions.js";
 import { interruptSession } from "../sdk-runner.js";
 
-export function handleInterrupt(_req: IncomingMessage, res: ServerResponse, params: RouteParams): void {
+export async function handleInterrupt(_req: IncomingMessage, res: ServerResponse, params: RouteParams): Promise<void> {
   const session = getSession(params.id);
   if (!session) {
     json(res, 404, { error: "Session not found" });
     return;
   }
 
-  interruptSession(session);
+  await interruptSession(session);
   json(res, 200, { success: true });
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { buildorEvents, type BuildorEvent } from '@/utils/buildorEvents';
 import { listAgents, markAgentExited, injectIntoAgent } from '@/utils/commands/agents';
-import { respondToPermissionPooled, sendClaudeMessage } from '@/utils/commands/claude';
+import { sendClaudeMessage } from '@/utils/commands/claude';
 import { getChatMessages, saveChatMessage, createChatSession, type ChatMessageRecord } from '@/utils/commands/chatHistory';
 import { updateAgentDraft } from '@/utils/commands/mailbox';
 import { parseStreamEvent } from '@/utils/parseClaudeStream';
@@ -151,11 +151,14 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
         let unlistenExit: UnlistenFn | null = null;
 
         const setupListeners = async () => {
+          console.log(`[useAgentPool] Setting up listeners for agent ${agentSid}`);
           unlistenOutput = await listen<string>(`claude-output-${agentSid}`, (evt) => {
             let raw: Record<string, unknown> | null = null;
             try {
               raw = JSON.parse(evt.payload as string);
-            } catch { /* ignore parse failures */ }
+            } catch (e) {
+              console.warn(`[useAgentPool] Failed to parse SSE payload for agent ${agentSid}:`, e, 'payload:', String(evt.payload).slice(0, 200));
+            }
 
             if (raw) {
               // ── Result detection — agent completed its turn ──
@@ -203,27 +206,10 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
                 });
               }
 
-              // ── Permission requests — auto-approve ──
-              else if (
-                (raw.type === 'control_request' && (raw.request as Record<string, unknown>)?.subtype === 'can_use_tool') ||
-                raw.type === 'permission_request' || raw.type === 'permission'
-              ) {
-                const requestId = (raw.request_id || raw.id || '') as string;
-                const reqObj = raw.request as Record<string, unknown> | undefined;
-                const toolObj = raw.tool as Record<string, unknown> | undefined;
-                const permObj = raw.permission as Record<string, unknown> | undefined;
-                const toolInput = reqObj?.input || toolObj?.input || permObj?.input || undefined;
-                if (requestId) {
-                  const toolName = reqObj?.tool_name || toolObj?.name || 'tool';
-                  const resourceKey = `tool/${String(toolName)}/${agentSid}`;
-                  respondToPermissionPooled(agentSid, requestId, true, toolInput as Record<string, unknown> | undefined, resourceKey, 'subagent').catch(() => {});
-                  setStatusLines((prev) => {
-                    const next = new Map(prev);
-                    next.set(agentSid, `Approved ${String(toolName)}...`);
-                    return next;
-                  });
-                }
-              }
+              // ── Permission requests — handled by SDK natively ──
+              // Agents use permissionMode: "dontAsk" + allowedTools, so the SDK
+              // auto-approves listed tools and denies everything else. No frontend
+              // permission handling needed for agent sessions.
 
               // ── assistant message — complete message with content blocks ──
               else if (raw.type === 'assistant' && (raw.message as Record<string, unknown>)?.content) {
@@ -249,8 +235,9 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
               // Unhandled event types — no action needed
             }
 
-            // Still call parseStreamEvent for event emission + output accumulation
-            const parsed = parseStreamEvent(evt.payload, agentSid);
+            // Parse for SQLite persistence only — suppress event emissions to avoid
+            // duplicate side effects (useAgentPool handles agent events directly above)
+            const parsed = parseStreamEvent(evt.payload, agentSid, true);
             if (parsed) {
               // Persist to SQLite for transcript viewer (agent's own session)
               const seq = (agentSeqRef.current.get(agentSid) || 0) + 1;
@@ -324,8 +311,29 @@ export function useAgentPool(parentSessionId?: string | null): UseAgentPoolResul
           // Send the initial prompt AFTER listeners are active
           // (Rust spawn_agent deliberately does NOT send it to avoid race condition)
           if (agentPrompt) {
-            injectIntoAgent(agentSid, agentPrompt).catch(() => {});
+            console.log(`[useAgentPool] Injecting initial prompt into agent ${agentSid} (${agentPrompt.length} chars)`);
+            injectIntoAgent(agentSid, agentPrompt).catch((err) => {
+              console.error(`[useAgentPool] FAILED to inject prompt into agent ${agentSid}:`, err);
+              logEvent({
+                sessionId: agentSid,
+                functionArea: 'claude-chat',
+                level: 'error',
+                operation: 'agent-prompt-inject',
+                message: `Failed to inject initial prompt into agent ${agentSid}: ${err}`,
+              }).catch(() => {});
+            });
+          } else {
+            console.warn(`[useAgentPool] Agent ${agentSid} registered with NO prompt`);
           }
+        }).catch((err) => {
+          console.error(`[useAgentPool] FAILED to setup listeners for agent ${agentSid}:`, err);
+          logEvent({
+            sessionId: agentSid,
+            functionArea: 'claude-chat',
+            level: 'error',
+            operation: 'agent-listener-setup',
+            message: `Failed to setup event listeners for agent ${agentSid}: ${err}`,
+          }).catch(() => {});
         });
         agentListenersRef.current.set(agentSid, () => {
           cleanupPromise.then(() => {

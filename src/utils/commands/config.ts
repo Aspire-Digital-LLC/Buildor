@@ -15,3 +15,13 @@ export async function scaffoldSharedRepo(repoPath: string): Promise<string[]> {
 export async function checkForUpdate(): Promise<[string, string, boolean]> {
   return invoke('check_for_update');
 }
+
+export interface AppInfo {
+  version: string;
+  isDev: boolean;
+  sdkPort: string;
+}
+
+export async function getAppInfo(): Promise<AppInfo> {
+  return invoke('get_app_info');
+}

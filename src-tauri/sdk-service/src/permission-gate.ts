@@ -20,6 +20,7 @@ export function createCanUseToolHandler(session: ManagedSession): CanUseTool {
     input: Record<string, unknown>,
     options,
   ): Promise<PermissionResult> => {
+    console.log(`[permission-gate] canUseTool fired: tool=${toolName} input=${JSON.stringify(input).slice(0, 120)}`);
     const requestId = randomUUID();
     const toolUseId = options.toolUseID;
 
@@ -30,6 +31,8 @@ export function createCanUseToolHandler(session: ManagedSession): CanUseTool {
       input,
       toolUseId,
     );
+    const clientCount = session.sseClients.size;
+    console.log(`[permission-gate] sending SSE to ${clientCount} client(s), requestId=${requestId}`);
     sendSSE(session, "claude-output", ssePayload);
 
     // Block until the frontend responds or timeout
@@ -50,9 +53,11 @@ export function createCanUseToolHandler(session: ManagedSession): CanUseTool {
       });
     });
 
+    console.log(`[permission-gate] decision for ${toolName}: approved=${decision.approved} alwaysAllow=${decision.alwaysAllow}`);
     if (decision.approved) {
       return {
         behavior: "allow" as const,
+        updatedInput: input,
         updatedPermissions: decision.alwaysAllow ? options.suggestions : undefined,
       };
     }

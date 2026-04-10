@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useUsageStore, useTabStore } from '@/stores';
 import { queryClaudeStatus } from '@/utils/commands/claude';
 import { openLoginWindow, fetchClaudeUsage, hasClaudeSession, startUsagePolling } from '@/utils/commands/account';
+import { getAppInfo, type AppInfo } from '@/utils/commands/config';
 import { buildorEvents } from '@/utils/buildorEvents';
 import type { ClaudeStatusInfo } from '@/stores/usageStore';
 
@@ -244,12 +245,14 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
   const setStatus = useUsageStore((s) => s.setStatus);
   const setStatusLoading = useUsageStore((s) => s.setStatusLoading);
   const [hasSession, setHasSession] = useState(false);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const isLoggedIn = hasSession || !!(status.planType && status.planType !== 'Plan' && status.planType !== '...');
   const openTab = useTabStore((s) => s.openTab);
 
   // Check session immediately on mount
   useEffect(() => {
     hasClaudeSession().then(setHasSession).catch(() => {});
+    getAppInfo().then(setAppInfo).catch(() => {});
   }, []);
   // Per-session CTX: use explicit sessionId, or find the most active session
   const sessionCtx = useUsageStore((s) => {
@@ -388,6 +391,28 @@ export function StatusBar({ sessionId }: StatusBarProps = {}) {
 
       {/* ── LEFT SIDE ── */}
       <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+
+        {/* DEV badge — only in debug builds */}
+        {appInfo?.isDev && (
+          <>
+            <StatusItem title={`Dev build v${appInfo.version}\nSDK port: ${appInfo.sdkPort}`} gap={4}>
+              <span style={{
+                background: '#f8514922',
+                color: '#f85149',
+                padding: '1px 6px',
+                borderRadius: 3,
+                fontSize: 9,
+                fontWeight: 800,
+                border: '1px solid #f8514944',
+                letterSpacing: '1px',
+              }}>
+                DEV
+              </span>
+              <span style={{ color: '#f85149', fontSize: 9 }}>:{appInfo.sdkPort}</span>
+            </StatusItem>
+            <Sep />
+          </>
+        )}
 
         {/* Plan badge */}
         <StatusItem

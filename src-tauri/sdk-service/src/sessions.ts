@@ -21,16 +21,19 @@ export function createSession(req: CreateSessionRequest): ManagedSession {
     cwd: req.cwd,
     model: req.model ?? "claude-sonnet-4-20250514",
     systemPrompt: req.systemPrompt,
-    permissionMode: "default",
+    permissionMode: req.permissionMode ?? "default",
     allowedTools: req.allowedTools ?? [],
     disallowedTools: req.disallowedTools ?? [],
+    settingSources: req.settingSources ?? [],
     startedAt: Date.now(),
     abortController: new AbortController(),
     sseClients: new Set(),
     pendingPermissions: new Map(),
     isRunning: false,
     turnActive: false,
+    turnActiveSince: 0,
     messageQueue: new AsyncMessageQueue(),
+    activeQuery: null,
   };
 
   sessions.set(id, session);

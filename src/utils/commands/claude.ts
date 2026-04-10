@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { logEvent } from './logging';
 
 export async function generateSlug(description: string): Promise<string> {
   return invoke('generate_slug', { description });
@@ -18,7 +19,26 @@ export async function runClaudeCli(args: string[]): Promise<string> {
 }
 
 export async function sendClaudeMessage(sessionId: string, message: string): Promise<void> {
-  return invoke('send_message', { sessionId, message });
+  logEvent({
+    sessionId,
+    functionArea: 'claude-chat',
+    level: 'info',
+    operation: 'user-message',
+    message: `User → Claude: ${message.slice(0, 200)}${message.length > 200 ? '...' : ''}`,
+    details: `length=${message.length}`,
+  }).catch(() => {});
+  try {
+    await invoke('send_message', { sessionId, message });
+  } catch (e) {
+    logEvent({
+      sessionId,
+      functionArea: 'claude-chat',
+      level: 'error',
+      operation: 'user-message',
+      message: `Failed to send message: ${e}`,
+    }).catch(() => {});
+    throw e;
+  }
 }
 
 export async function getClaudeSessionStatus(sessionId: string): Promise<string> {
@@ -42,7 +62,26 @@ export async function listClaudeSessions(): Promise<string[]> {
 }
 
 export async function respondToPermission(sessionId: string, requestId: string, approved: boolean, toolInput?: Record<string, unknown>): Promise<void> {
-  return invoke('respond_to_permission', { sessionId, requestId, approved, toolInput: toolInput || null });
+  logEvent({
+    sessionId,
+    functionArea: 'claude-chat',
+    level: 'info',
+    operation: 'permission-response',
+    message: `Permission ${approved ? 'APPROVED' : 'DENIED'} (requestId=${requestId})`,
+    details: toolInput ? JSON.stringify(toolInput).slice(0, 300) : undefined,
+  }).catch(() => {});
+  try {
+    await invoke('respond_to_permission', { sessionId, requestId, approved, toolInput: toolInput || null });
+  } catch (e) {
+    logEvent({
+      sessionId,
+      functionArea: 'claude-chat',
+      level: 'error',
+      operation: 'permission-response',
+      message: `Failed to send permission response: ${e}`,
+    }).catch(() => {});
+    throw e;
+  }
 }
 
 /**
@@ -85,7 +124,26 @@ export interface ImageAttachment {
 }
 
 export async function sendClaudeMessageWithImages(sessionId: string, text: string, images: ImageAttachment[]): Promise<void> {
-  return invoke('send_message_with_images', { sessionId, text, images });
+  logEvent({
+    sessionId,
+    functionArea: 'claude-chat',
+    level: 'info',
+    operation: 'user-message',
+    message: `User → Claude: ${text.slice(0, 200)}${text.length > 200 ? '...' : ''} (+${images.length} image${images.length === 1 ? '' : 's'})`,
+    details: `length=${text.length} images=${images.length}`,
+  }).catch(() => {});
+  try {
+    await invoke('send_message_with_images', { sessionId, text, images });
+  } catch (e) {
+    logEvent({
+      sessionId,
+      functionArea: 'claude-chat',
+      level: 'error',
+      operation: 'user-message',
+      message: `Failed to send message with images: ${e}`,
+    }).catch(() => {});
+    throw e;
+  }
 }
 
 export async function readFileBase64(path: string): Promise<[string, string]> {

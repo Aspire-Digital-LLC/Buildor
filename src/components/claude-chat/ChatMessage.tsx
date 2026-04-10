@@ -50,7 +50,7 @@ const toolIcons: Record<string, string> = {
   TodoWrite: '📋',
 };
 
-export function ChatMessage({ message, isVerbose, sessionId, activePermissionId }: ChatMessageProps) {
+export function ChatMessage({ message, isVerbose, sessionId, activePermissionId: _activePermissionId }: ChatMessageProps) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   if (message.role === 'user') {
@@ -592,18 +592,11 @@ function PermissionCard({ toolName, description, input, toolUseId, requestId, se
             <button
               onClick={async () => {
                 await handleResponse(true);
-                if (sessionId) {
-                  try {
-                    const { addPermissionRule } = await import('@/utils/commands/claude');
-                    let rule = toolName;
-                    if (toolName === 'Bash' && input?.command) {
-                      const cmd = String(input.command);
-                      const baseCmd = cmd.split(' ')[0];
-                      rule = `Bash(${baseCmd}:*)`;
-                    }
-                    await addPermissionRule(sessionId, rule);
-                  } catch { /* best-effort */ }
-                }
+                try {
+                  const { addAutoApproveRule, deriveAutoApproveRule } = await import('@/utils/autoApprove');
+                  const rule = deriveAutoApproveRule(toolName, input as Record<string, unknown> | undefined);
+                  await addAutoApproveRule(rule);
+                } catch { /* best-effort */ }
               }}
               style={{
                 background: 'var(--border-primary)',

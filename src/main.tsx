@@ -4,6 +4,8 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { MainApp } from './windows/main/MainApp';
 import { BreakoutApp } from './windows/breakout/BreakoutApp';
 import { ClaudeChatWindow } from './windows/claude/ClaudeChatWindow';
+import { getAppInfo } from './utils/commands/config';
+import { setAppInfoForPrompt } from './utils/buildSystemPrompt';
 import type { PanelType } from './types';
 import './styles/global.css';
 
@@ -16,6 +18,12 @@ function parsePanelType(label: string): PanelType {
 }
 
 async function init() {
+  // Cache app info for system prompts before rendering
+  try {
+    const info = await getAppInfo();
+    setAppInfoForPrompt(info);
+  } catch { /* non-fatal */ }
+
   const root = ReactDOM.createRoot(document.getElementById('root')!);
 
   try {
